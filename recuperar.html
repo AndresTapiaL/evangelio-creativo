@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Recuperar contraseña</title>
+  <link rel="stylesheet" href="styles/main.css">
+  <style>
+    body {
+        background-image: url('images/Fondo-blanco.jpeg');
+        background-size: cover;
+        margin: 0;
+        font-family: Arial, sans-serif;
+    }
+    .recuperar-container {
+        width: 100%;
+        max-width: 400px;
+        margin: 5rem auto;
+        background-color: #fff;
+        padding: 2rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        text-align: center;
+        box-sizing: border-box;
+    }
+    .recuperar-container img {
+        width: 90px;
+        margin-bottom: 1rem;
+    }
+    .recuperar-container form {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .recuperar-container input,
+    .recuperar-container button {
+        width: 100%;
+        max-width: 320px;
+        box-sizing: border-box;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+    }
+    .recuperar-container button {
+        background-color: #d90429;
+        border: none;
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .recuperar-container button:hover {
+        background-color: #a9031e;
+    }
+    .recuperar-container a {
+        font-size: 0.9rem;
+        color: #0066cc;
+        text-decoration: none;
+    }
+    .recuperar-container a:hover {
+        text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <main class="recuperar-container">
+    <img src="images/LogoEC.png" alt="Logo EC">
+    <h2>Recuperar contraseña</h2>
+    <form action="recuperar_password.php" method="POST">
+      <input type="email" name="correo" placeholder="Correo electrónico" required>
+      <button type="submit">Enviar contraseña temporal</button>
+      <a href="login.html">Volver al login</a>
+    </form>
+  </main>
+</body>
+</html>

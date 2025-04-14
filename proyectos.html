@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proyectos - Evangelio Creativo</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="icon" href="images/logo-1.png">
+    <script src="scripts/proyectos.js" defer></script>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo-container">
+                <img src="images/logo-1.png" alt="Logo de Evangelio Creativo" class="logo">
+                <img src="images/Frase-Logo.png" alt="Frase Logo" class="titulo-logo">
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Inicio</a></li>
+                    <li><a href="equipos.html">Equipos</a></li>
+                    <li><a href="equipos.html" onclick="mostrarDirectorio()">Directorio</a></li>
+                    <li><a href="proyectos.html" class="active">Proyectos</a></li>
+                    <li><a href="sobrenosotros.html">Sobre Nosotros</a></li>
+                    <li><a href="https://linktr.ee/evangeliocreativo?utm_source=linktree_profile_share&ltsid=21208a88-c72b-49a9-921e-484b0cd20042" target="_blank">Contacto</a></li>
+                    <li><a href="escribenos.html">Escríbenos</a></li>
+                    <li><a href="ofrendar.html" class="donar-link">Ofrendar</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <div class="contenedor">
+            <section id="proyectos-sidebar">
+                <h2>Proyectos</h2>
+                <ul>
+                    <li><a href="#" data-proyecto="misionJoven" onclick="seleccionarOpcion('misionJoven')"><img src="images/icon/Embajadores.png" alt="Misión Joven"> Misión Joven/Embajadores</a></li>
+                    <li><a href="#" data-proyecto="alabanza" onclick="seleccionarOpcion('alabanza')"><img src="images/icon/Alabanza.png" alt="Equipo de Alabanza"> Equipo de Alabanza</a></li>
+                    <li><a href="#" data-proyecto="kidsioneros" onclick="seleccionarOpcion('kidsioneros')"><img src="images/icon/Kidsioneros.png" alt="Kidsioneros"> Kidsioneros</a></li>
+                    <li><a href="#" data-proyecto="danzaTeatro" onclick="seleccionarOpcion('danzaTeatro')"><img src="images/icon/Danza.png" alt="Danza y Teatro"> Danza y Teatro</a></li>
+                    <li><a href="#" data-proyecto="feEnMovimiento" onclick="seleccionarOpcion('feEnMovimiento')"><img src="images/icon/Feenmov.png" alt="Fe en Movimiento"> Fe en Movimiento</a></li>
+                    <li><a href="#" data-proyecto="comunicaciones" onclick="seleccionarOpcion('comunicaciones')"><img src="images/icon/Comunicaciones.png" alt="Comunicaciones"> Comunicaciones</a></li>
+                    <li><a href="#" data-proyecto="profesionales" onclick="seleccionarOpcion('profesionales')"><img src="images/icon/Profesionales.png" alt="Profesionales al servicio de Evangelio Creativo"> Profesionales al servicio de Evangelio Creativo</a></li>
+                    <li><a href="#" data-proyecto="difusion" onclick="seleccionarOpcion('difusion')"><img src="images/icon/Difusion.png" alt="Difusión"> Difusión</a></li>
+                    <li><a href="#" data-proyecto="admision" onclick="seleccionarOpcion('admision')"><img src="images/icon/Admision.png" alt="Admisión"> Admisión</a></li>
+                </ul>
+            </section>
+            <section id="detalles-proyectos">
+                <div id="proyectoInfo"></div>
+            </section>
+        </div>
+    </main>
+    <footer>
+        <p>&copy; 2024 Evangelio Creativo. Todos los derechos reservados.</p>
+    </footer>
+</body>
+</html>

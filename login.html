@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Iniciar sesión</title>
+  <link rel="stylesheet" href="styles/main.css">
+  <style>
+    body {
+        background-image: url('images/Fondo-blanco.jpeg');
+        background-size: cover;
+        margin: 0;
+        font-family: Arial, sans-serif;
+    }
+    .login-container {
+        width: 100%;
+        max-width: 400px;
+        margin: 5rem auto;
+        background-color: #fff;
+        padding: 2rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        text-align: center;
+        box-sizing: border-box;
+    }
+    .login-container img {
+        width: 90px;
+        margin-bottom: 1rem;
+    }
+    .login-container form {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .login-container input,
+    .login-container button {
+        width: 100%;
+        max-width: 320px;
+        box-sizing: border-box;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+    }
+    .login-container button {
+        background-color: #d90429;
+        border: none;
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .login-container button:hover {
+        background-color: #a9031e;
+    }
+    .login-container a {
+        font-size: 0.9rem;
+        color: #0066cc;
+        text-decoration: none;
+        margin-top: -0.5rem;
+    }
+    .login-container a:hover {
+        text-decoration: underline;
+    }
+  </style>
+  <script>
+    function iniciarSesion(event) {
+        event.preventDefault();
+
+        const correo = document.getElementById('correo').value;
+        const clave = document.getElementById('clave').value;
+
+        fetch('login.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `correo=${encodeURIComponent(correo)}&clave=${encodeURIComponent(clave)}`
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('roles_equipos', JSON.stringify(data.roles_equipos));
+                window.location.href = 'home.php';
+            } else {
+                document.getElementById('resultado').innerText = data.error;
+            }
+        });
+    }
+  </script>
+</head>
+<body>
+  <main class="login-container">
+    <img src="images/LogoEC.png" alt="Logo EC">
+    <h2>Iniciar sesión</h2>
+    <form onsubmit="iniciarSesion(event)">
+      <input type="email" id="correo" placeholder="Correo electrónico" required>
+      <input type="password" id="clave" placeholder="Contraseña" required>
+      <button type="submit">Entrar</button>
+      <a href="recuperar.html">¿Olvidaste tu contraseña?</a>
+    </form>
+    <div id="resultado" style="color: red; margin-top: 1rem;"></div>
+  </main>
+</body>
+</html>
