@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $clave_temporal = substr(bin2hex(random_bytes(3)), 0, 6);
         $hash = password_hash($clave_temporal, PASSWORD_DEFAULT);
 
-        $update = $pdo->prepare("UPDATE usuarios SET password_hash = :hash WHERE id_usuario = :id");
+        $update = $pdo->prepare("UPDATE usuarios SET password = :hash WHERE id_usuario = :id");
         $update->execute(['hash' => $hash, 'id' => $usuario['id_usuario']]);
 
         $mail = new PHPMailer(true);

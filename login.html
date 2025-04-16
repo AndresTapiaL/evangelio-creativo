@@ -77,8 +77,8 @@
         .then(res => res.json())
         .then(data => {
             if (data.token) {
+                localStorage.clear();
                 localStorage.setItem('token', data.token);
-                localStorage.setItem('roles_equipos', JSON.stringify(data.roles_equipos));
                 window.location.href = 'home.php';
             } else {
                 document.getElementById('resultado').innerText = data.error;

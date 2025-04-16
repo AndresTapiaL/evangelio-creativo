@@ -7,7 +7,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $clave = $_POST['clave'];
 
     $stmt = $pdo->prepare("
-        SELECT u.id_usuario, u.password_hash 
+        SELECT u.id_usuario, u.password, u.nombres, u.foto_perfil
         FROM usuarios u
         JOIN correos_electronicos c ON u.id_usuario = c.id_usuario 
         WHERE c.correo_electronico = :correo
@@ -15,10 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->execute(['correo' => $correo]);
     $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($usuario && password_verify($clave, $usuario['password_hash'])) {
+    if ($usuario && password_verify($clave, $usuario['password'])) {
         $id_usuario = $usuario['id_usuario'];
 
-        // Obtener todos los roles y equipos del usuario
         $info = $pdo->prepare("
             SELECT r.nombre_rol AS rol, ep.nombre_equipo_proyecto AS equipo
             FROM integrantes_equipos_proyectos iep
@@ -45,7 +44,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode([
             'mensaje' => '¡Login exitoso!',
             'token' => $token,
-            'roles_equipos' => $roles_equipos
+            'roles_equipos' => $roles_equipos,
+            'usuario' => [
+                'nombres' => $usuario['nombres'],
+                'foto_perfil' => $usuario['foto_perfil']
+            ]
         ]);
     } else {
         echo json_encode(['error' => 'Correo o contraseña incorrectos.']);

@@ -8,6 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Inicio</title>
   <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     nav {
       background-color: #f0f0f0;
@@ -15,12 +16,29 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+    }
+    nav .menu {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
     }
     nav a {
-      margin-right: 15px;
       text-decoration: none;
       color: #222;
       font-weight: bold;
+    }
+    .perfil {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .perfil img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
     }
     .container {
       max-width: 900px;
@@ -40,15 +58,10 @@
       text-align: left;
       border-bottom: 1px solid #ddd;
     }
-    .oculto {
-      display: none;
-    }
   </style>
   <script>
     document.addEventListener("DOMContentLoaded", () => {
         const token = localStorage.getItem('token');
-        const rolesEquipos = JSON.parse(localStorage.getItem('roles_equipos') || '[]');
-
         if (!token) {
             localStorage.clear();
             return window.location.replace('login.html');
@@ -61,12 +74,22 @@
                     localStorage.clear();
                     window.location.replace('login.html');
                 } else {
-                    const tabla = document.getElementById("tabla-roles");
-                    rolesEquipos.forEach(({ rol, equipo }) => {
-                        const fila = document.createElement("tr");
-                        fila.innerHTML = `<td>${rol}</td><td>${equipo}</td>`;
-                        tabla.appendChild(fila);
-                    });
+                    fetch(`get_usuario.php?token=${token}`)
+                        .then(res => res.json())
+                        .then(usuario => {
+                            document.getElementById("nombre-usuario").innerText = usuario.nombres || "Usuario";
+                            if (usuario.foto_perfil) {
+                                const img = document.getElementById("foto-perfil");
+                                img.src = usuario.foto_perfil;
+                                img.alt = usuario.nombres || "Foto perfil";
+                            }
+                            const tabla = document.getElementById("tabla-roles");
+                            usuario.roles_equipos.forEach(({ rol, equipo }) => {
+                                const fila = document.createElement("tr");
+                                fila.innerHTML = `<td>${rol}</td><td>${equipo}</td>`;
+                                tabla.appendChild(fila);
+                            });
+                        });
                 }
             });
     });
@@ -85,12 +108,20 @@
 </head>
 <body style="background-image: url('images/Fondo-blanco.jpeg'); background-size: cover;">
   <nav>
-    <div>
-      <a href="index.html">Inicio</a>
-      <a href="#">Integrantes</a>
+    <div class="menu">
+      <a href="home.php">Inicio</a>
       <a href="#">Eventos</a>
+      <a href="#">Integrantes</a>
+      <a href="#">Mis datos</a>
+      <a href="#">Reportes</a>
+      <a href="#">Admisión</a>
+      <a href="#"><i class="fas fa-bell"></i></a>
     </div>
-    <a href="#" onclick="cerrarSesion()">Cerrar sesión</a>
+    <div class="perfil">
+      <span id="nombre-usuario">Usuario</span>
+      <img id="foto-perfil" src="images/default-profile.png" alt="Foto de perfil">
+      <a href="#" onclick="cerrarSesion()" title="Cerrar sesión">🚪</a>
+    </div>
   </nav>
 
   <main class="container">
