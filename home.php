@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Cache-Control" content="no-store" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Inicio</title>
   <link rel="stylesheet" href="styles/main.css">
@@ -96,13 +95,13 @@
 
     function cerrarSesion() {
         const token = localStorage.getItem('token');
-        if (!token) return window.location.href = 'login.html';
-
-        fetch(`cerrar_sesion.php?token=${token}`)
-            .then(() => {
-                localStorage.clear();
-                window.location.replace('login.html');
-            });
+        if (token) {
+            fetch(`cerrar_sesion.php?token=${token}`)
+                .then(() => {
+                    localStorage.clear();
+                    window.location.replace('login.html');
+                });
+        }
     }
   </script>
 </head>
@@ -112,14 +111,14 @@
       <a href="home.php">Inicio</a>
       <a href="#">Eventos</a>
       <a href="#">Integrantes</a>
-      <a href="#">Mis datos</a>
+      <a href="ver_mis_datos.php">Mis datos</a>
       <a href="#">Reportes</a>
       <a href="#">Admisión</a>
       <a href="#"><i class="fas fa-bell"></i></a>
     </div>
     <div class="perfil">
       <span id="nombre-usuario">Usuario</span>
-      <img id="foto-perfil" src="images/default-profile.png" alt="Foto de perfil">
+      <img id="foto-perfil" src="uploads/fotos/default.png" alt="Foto de perfil">
       <a href="#" onclick="cerrarSesion()" title="Cerrar sesión">🚪</a>
     </div>
   </nav>
