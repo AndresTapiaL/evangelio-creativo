@@ -1,62 +1,69 @@
 <?php
+/* -------------------------------------------------------------
+   Actualiza datos + lista de ocupaciones (muchos-a-muchos)
+------------------------------------------------------------- */
 require 'conexion.php';
 header('Content-Type: application/json');
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-  echo json_encode(['error' => 'Método no permitido']);
-  exit;
-}
+try{
+  $tok = $_POST['token'] ?? '';
+  if(!$tok) throw new Exception('Token faltante');
 
-$token = $_POST['token'] ?? '';
-if (!$token) {
-  echo json_encode(['error' => 'Token no recibido']);
-  exit;
-}
+  $id = $pdo->prepare("
+      SELECT id_usuario
+        FROM tokens_usuarios
+       WHERE token = ? AND expira_en > NOW()");
+  $id->execute([$tok]); $id=$id->fetchColumn();
+  if(!$id) throw new Exception('Token inválido');
 
-// Obtener el ID del usuario desde el token
-$stmt = $pdo->prepare("SELECT id_usuario FROM tokens_usuarios WHERE token = :token AND expira_en > NOW()");
-$stmt->execute(['token' => $token]);
-$id_usuario = $stmt->fetchColumn();
+  /* —— actualizar tabla usuarios —— */
+  $f = fn($k)=>($_POST[$k]??'')!=''?$_POST[$k]:null;
+  $pdo->prepare("
+    UPDATE usuarios SET
+      fecha_nacimiento           = :fn,
+      rut_dni                    = :rut,
+      id_pais                    = :pais,
+      id_region_estado           = :reg,
+      id_ciudad_comuna           = :ciu,
+      direccion                  = :dir,
+      iglesia_ministerio         = :igl,
+      profesion_oficio_estudio   = :prof,
+      ultima_actualizacion       = NOW()
+    WHERE id_usuario = :id
+  ")->execute([
+      ':fn'=>$f('fecha_nacimiento'),
+      ':rut'=>$f('rut_dni'),
+      ':pais'=>$f('id_pais'),
+      ':reg'=>$f('id_region_estado'),
+      ':ciu'=>$f('id_ciudad_comuna'),
+      ':dir'=>$f('direccion'),
+      ':igl'=>$f('iglesia_ministerio'),
+      ':prof'=>$f('profesion_oficio_estudio'),
+      ':id'=>$id
+  ]);
 
-if (!$id_usuario) {
-  echo json_encode(['error' => 'Token inválido o expirado']);
-  exit;
-}
-
-// Recibir datos
-$campos = [
-  'fecha_nacimiento', 'rut_dni', 'id_pais', 'id_region_estado', 'id_ciudad_comuna',
-  'direccion', 'iglesia_ministerio', 'profesion_oficio_estudio', 'id_ocupacion'
-];
-
-$update = [];
-$valores = [];
-
-foreach ($campos as $campo) {
-  if (isset($_POST[$campo])) {
-    $update[] = "$campo = :$campo";
-    $valores[$campo] = $_POST[$campo];
+  /* —— ocupaciones múltiples —— */
+  $pdo->prepare("DELETE FROM usuarios_ocupaciones WHERE id_usuario=?")->execute([$id]);
+  if(isset($_POST['id_ocupacion']) && is_array($_POST['id_ocupacion'])){
+    $ins = $pdo->prepare("INSERT INTO usuarios_ocupaciones(id_usuario,id_ocupacion) VALUES(?,?)");
+    foreach($_POST['id_ocupacion'] as $oc)
+      if($oc!=='') $ins->execute([$id,$oc]);
   }
+
+  /* —— correo principal —— */
+  if(($correo=$f('correo'))!==null){
+    $bol = isset($_POST['boletin'])?1:0;
+    $pdo->prepare("
+      INSERT INTO correos_electronicos(correo_electronico,id_usuario,boletin)
+      VALUES(?,?,?)
+      ON DUPLICATE KEY UPDATE
+        correo_electronico = VALUES(correo_electronico),
+        boletin            = VALUES(boletin)
+    ")->execute([$correo,$id,$bol]);
+  }
+
+  echo json_encode(['mensaje'=>'Actualizado']);
+}catch(Exception $e){
+  http_response_code(400);
+  echo json_encode(['error'=>$e->getMessage()]);
 }
-
-if (!empty($update)) {
-  $valores['id_usuario'] = $id_usuario;
-  $sql = "UPDATE usuarios SET " . implode(', ', $update) . ", ultima_actualizacion = NOW() WHERE id_usuario = :id_usuario";
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute($valores);
-}
-
-// Actualizar correo
-if (isset($_POST['correo'])) {
-  $correo = $_POST['correo'];
-  $stmt = $pdo->prepare("UPDATE correos_electronicos SET correo_electronico = :correo WHERE id_usuario = :id");
-  $stmt->execute(['correo' => $correo, 'id' => $id_usuario]);
-}
-
-// Actualizar boletín
-$boletin = isset($_POST['boletin']) ? 1 : 0;
-$stmt = $pdo->prepare("UPDATE usuarios SET boletin = :boletin WHERE id_usuario = :id");
-$stmt->execute(['boletin' => $boletin, 'id' => $id_usuario]);
-
-echo json_encode(['mensaje' => 'Datos actualizados correctamente']);
-?>

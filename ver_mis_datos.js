@@ -1,65 +1,101 @@
+/* ================================================================
+   VER MIS DATOS – v 6.0
+   · Soporta lista de ocupaciones (muchos-a-muchos)
+   · Formatea RUT chileno y fechas
+   · Pop-up de foto  • Teléfonos y roles
+================================================================= */
+document.addEventListener('DOMContentLoaded', () => {
+  const token = localStorage.getItem('token');
+  if (!token) return;
 
-document.addEventListener("DOMContentLoaded", () => {
-  const token = localStorage.getItem("token");
-  if (!token) return window.location.replace("login.html");
+  /* ─── elementos del DOM ─── */
+  const $       = id => document.getElementById(id);
+  const overlay = $('overlay');
+  const bigImg  = $('big-img');
+  const navName = $('nombre-usuario');
+  const navPic  = $('foto-perfil-nav');
+  const fotoDom = $('foto_perfil');
 
-  fetch("get_usuario.php?token=" + token)
-    .then(res => res.json())
-    .then(data => {
-      if (data.error) return alert("Error al obtener datos del usuario.");
+  /* ─── helpers de formato ─── */
+  const fmtRut = v => {
+    const n = v.replace(/\./g, '').replace(/-/g, '').trim();
+    if (n.length < 2) return n;
+    const cuerpo = n.slice(0, -1), dv = n.slice(-1);
+    return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + '-' + dv;
+  };
+  const fmtDate = iso => iso ? iso.split('-').reverse().join('/') : '';
 
-      document.getElementById("nombres").innerText = data.nombres || "";
-      document.getElementById("apellido_paterno").innerText = data.apellido_paterno || "";
-      document.getElementById("apellido_materno").innerText = data.apellido_materno || "";
-      document.getElementById("fecha_nacimiento").innerText = data.fecha_nacimiento || "";
-      document.getElementById("rut_dni").innerText = data.rut_dni || "";
-      document.getElementById("direccion").innerText = data.direccion || "";
-      document.getElementById("iglesia").innerText = data.iglesia_ministerio || "";
-      document.getElementById("profesion").innerText = data.profesion_oficio_estudio || "";
-      document.getElementById("correo").innerText = data.correo || "";
-      document.getElementById("boletin").innerText = data.boletin ? "Sí" : "No";
+  /* helpers de nombres para ubicación */
+  const J       = u => fetch(u).then(r => r.json());
+  const nPais   = id       => id ? J('ubicacion.php?tipo=pais').then(l => l.find(o => o.id == id)?.nombre || '') : '';
+  const nRegion = (id, p)  => id && p ? J(`ubicacion.php?tipo=region&id=${p}`)
+                                       .then(l => l.find(o => o.id == id)?.nombre || '') : '';
+  const nCiudad = (id, r)  => id && r ? J(`ubicacion.php?tipo=ciudad&id=${r}`)
+                                       .then(l => l.find(o => o.id == id)?.nombre || '') : '';
 
-      const foto = data.foto_perfil || "uploads/fotos/default.png";
-      document.getElementById("foto_perfil").src = foto;
+  /* ─── carga principal ─── */
+  fetch(`get_usuario.php?token=${token}`)
+    .then(r => r.json())
+    .then(async u => {
+      if (u.error) { alert(u.error); return; }
 
-      cargarNombre("pais", "paises", "id_pais", data.id_pais);
-      cargarNombre("region", "region_estado", "id_region_estado", data.id_region_estado);
-      cargarNombre("ciudad", "ciudad_comuna", "id_ciudad_comuna", data.id_ciudad_comuna);
-      cargarNombre("ocupacion", "ocupaciones", "id_ocupacion", data.id_ocupacion);
+      /* nav */
+      navName.textContent = u.nombres || 'Usuario';
+      navPic.src          = u.foto_perfil || 'uploads/fotos/default.png';
 
-      const listaTelefonos = document.getElementById("telefonos");
-      (data.telefonos || []).forEach(t => {
-        const li = document.createElement("li");
-        const tipo = {
-          1: "Solo llamadas",
-          2: "Solo WhatsApp",
-          3: "Llamadas y WhatsApp"
-        }[t.descripcion_id] || "Sin tipo";
-        li.innerText = `${t.numero} (${tipo}${t.es_principal ? " - Principal" : ""})`;
-        listaTelefonos.appendChild(li);
+      /* foto + pop-up */
+      const foto = u.foto_perfil || 'uploads/fotos/default.png';
+      fotoDom.src      = foto;
+      fotoDom.onclick  = () => { bigImg.src = foto; overlay.style.display = 'flex'; };
+
+      /* texto plano */
+      $('nombre_completo').textContent =
+        [u.nombres, u.apellido_paterno, u.apellido_materno].filter(Boolean).join(' ');
+      $('rut_dni').textContent =
+        u.id_pais == 1 ? fmtRut(u.rut_dni)               // 🇨🇱 RUT con puntos-y-guion
+                       : u.rut_dni.replace(/\D/g, '');   // 🌐 solo dígitos sin formato
+      $('fecha_nacimiento').textContent = fmtDate(u.fecha_nacimiento);
+      $('fecha_ingreso').textContent    = fmtDate(u.fecha_registro);
+
+      $('pais').textContent   = await nPais(u.id_pais);
+      $('region').textContent = await nRegion(u.id_region_estado, u.id_pais);
+      $('ciudad').textContent = await nCiudad(u.id_ciudad_comuna, u.id_region_estado);
+
+      $('direccion').textContent = u.direccion || '';
+      $('iglesia').textContent   = u.iglesia_ministerio || '';
+      $('profesion').textContent = u.profesion_oficio_estudio || '';
+      $('correo').textContent    = u.correo || '';
+      $('boletin').textContent   = u.boletin ? 'Sí' : 'No';
+
+      /* ─── ocupaciones múltiples ─── */
+      $('ocupacion').textContent = u.ocupaciones.map(o => o.nombre).join(', ');
+
+      /* ─── teléfonos ─── */
+      const tbT = $('tabla-telefonos');
+      (u.telefonos || []).forEach(t => {
+        tbT.innerHTML += `<tr>
+          <td>${t.numero}</td>
+          <td>${t.descripcion || ''}${t.es_principal ? ' – Principal' : ''}</td>
+        </tr>`;
       });
 
-      const tablaRoles = document.querySelector("#tabla-equipos tbody");
-      (data.roles_equipos || []).forEach(r => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${r.equipo}</td><td>${r.rol}</td>`;
-        tablaRoles.appendChild(tr);
-      });
-
-      const tablaAct = document.querySelector("#tabla-actividad tbody");
-      (data.actividades || []).forEach(a => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${a.fecha}</td><td>${a.descripcion}</td>`;
-        tablaAct.appendChild(tr);
+      /* ─── roles / equipos ─── */
+      const tbR = $('tabla-roles');
+      (u.roles_equipos || []).forEach(r => {
+        tbR.innerHTML += `<tr><td>${r.rol}</td><td>${r.equipo}</td></tr>`;
       });
     });
 
-  function cargarNombre(campo, tabla, columna, valor) {
-    if (!valor) return;
-    fetch(`get_nombre.php?tabla=${tabla}&columna=${columna}&id=${valor}`)
-      .then(res => res.json())
-      .then(res => {
-        document.getElementById(campo).innerText = res.nombre || "";
-      });
-  }
+  /* ─── cerrar sesión ─── */
+  window.cerrarSesion = () => {
+    fetch(`cerrar_sesion.php?token=${token}`).finally(() => {
+      localStorage.clear();
+      location.replace('login.html');
+    });
+  };
+
+  /* cerrar pop-up */
+  window.addEventListener('click', e => {
+    if (e.target === overlay) overlay.style.display = 'none';
+  });
 });

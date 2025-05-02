@@ -1,142 +1,169 @@
+<?php
+/*  EDITAR MIS DATOS  –  Soporta:
+    · Cascada País → Región → Ciudad
+    · Varias ocupaciones con checkbox
+---------------------------------------------------------------- */
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <meta charset="UTF-8">
+  <title>Editar mis datos</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store">
   <link rel="stylesheet" href="styles/main.css">
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Mis Datos</title>
-  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/css/intlTelInput.min.css">
   <style>
-    .container {
-      max-width: 1000px;
-      margin: 2rem auto;
-      background-color: white;
-      padding: 2rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      font-family: Arial, sans-serif;
-    }
-    h2 {
-      margin-bottom: 1rem;
-      border-bottom: 2px solid #eee;
-      padding-bottom: 0.5rem;
-    }
-    .campo {
-      margin-bottom: 1rem;
-    }
-    label {
-      font-weight: bold;
-      display: block;
-      margin-bottom: 0.25rem;
-    }
-    input[type="text"], input[type="email"], input[type="date"], select {
-      width: 100%;
-      padding: 0.5rem;
-      border-radius: 4px;
-      border: 1px solid #ccc;
-    }
-    .foto {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-    .foto img {
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-    .telefonos {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1rem;
-    }
-    th, td {
-      padding: 0.5rem;
-      border-bottom: 1px solid #ccc;
-      text-align: left;
-    }
+    /* ---- layout básico ---- */
+    nav{background:#f0f0f0;padding:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
+    nav .menu{display:flex;gap:1rem;flex-wrap:wrap}
+    nav a{text-decoration:none;color:#222;font-weight:bold}
+    .perfil{display:flex;align-items:center;gap:.5rem}
+    .perfil img{width:32px;height:32px;border-radius:50%;object-fit:cover}
+    body{font-family:sans-serif;margin:0;background:#f6f6f6;padding:2rem}
+    .container{max-width:840px;margin:auto;background:#fff;padding:2rem;border-radius:10px;box-shadow:0 0 12px rgba(0,0,0,.1)}
+    h1{margin-top:0}
+
+    .grupo{display:flex;flex-direction:column;margin-bottom:1rem}
+    .grupo label{font-weight:bold;margin-bottom:.25rem}
+    .grupo input,.grupo select{padding:.55rem;border:1px solid #ccc;border-radius:6px;font-size:1rem}
+
+    /* foto */
+    .foto-wrapper{display:flex;align-items:center;gap:.8rem;margin-bottom:.5rem}
+    .foto-wrapper img{width:120px;height:120px;border-radius:50%;object-fit:cover}
+    .delete-btn{cursor:pointer;color:#e11d48;font-weight:bold;font-size:1.3rem}
+
+    /* ocupaciones */
+    .ocups{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.3rem .8rem;margin-top:.3rem}
+    .ocups label{font-weight:normal;display:flex;align-items:center;gap:.4rem}
+
+    /* teléfonos */
+    .tel-row{display:grid;grid-template-columns:220px 1fr 40px;gap:.5rem;align-items:center}
+    .tel-row input{width:100%}
+
+    .error-msg{color:#e11d48;font-size:.85rem;display:none}
+
+    .botones{display:flex;justify-content:center;gap:1rem;margin-top:2rem}
+    .btn-primario{background:#ff5722;color:#fff;border:none;padding:.75rem 2.5rem;font-weight:bold;border-radius:8px;cursor:pointer}
+    .btn-secundario{background:#ddd;border:none;padding:.75rem 2.5rem;border-radius:8px;cursor:pointer}
   </style>
+
+  <script>
+    /* esconde hasta validar token */
+    document.documentElement.style.display='none';
+    (async()=>{
+      const t=localStorage.getItem('token');
+      if(!t) return location.replace('login.html');
+      const ok=await fetch(`validar_token.php?token=${t}`).then(r=>r.text()).catch(()=>null);
+      if(!ok||!ok.startsWith('Token válido')){
+        localStorage.clear();location.replace('login.html');
+      }else document.documentElement.style.display='';
+    })();
+  </script>
 </head>
+
 <body>
-  <main class="container">
-    <h2>Mis Datos</h2>
+  <!-- NAV -->
+  <nav>
+    <div class="menu">
+      <a href="home.php">Inicio</a><a href="#">Eventos</a><a href="#">Integrantes</a>
+      <a href="ver_mis_datos.php">Mis datos</a>
+    </div>
+    <div class="perfil">
+      <span id="nombre-usuario">Usuario</span>
+      <img id="foto-perfil-nav" src="uploads/fotos/default.png" alt="Foto">
+      <a href="#" onclick="cerrarSesion()" title="Cerrar sesión">🚪</a>
+    </div>
+  </nav>
 
-    <div class="campo"><label>Nombres:</label><div id="nombres"></div></div>
-    <div class="campo"><label>Apellido paterno:</label><div id="apellido_paterno"></div></div>
-    <div class="campo"><label>Apellido materno:</label><div id="apellido_materno"></div></div>
-
-    <div class="campo foto">
-      <img id="foto_perfil" src="images/default-profile.png" alt="Foto de perfil">
-      <div>
-        <label for="nueva_foto">Cambiar foto de perfil:</label>
+  <!-- FORM -->
+  <div class="container">
+    <h1>Editar mis datos</h1>
+    <form id="form-editar" novalidate>
+      <!-- FOTO -->
+      <div class="grupo">
+        <label>Foto de perfil:</label>
+        <div class="foto-wrapper">
+          <img id="foto_perfil" src="uploads/fotos/default.png" alt="Foto">
+          <span id="eliminar_foto" class="delete-btn" title="Eliminar">✕</span>
+        </div>
         <input type="file" id="nueva_foto" accept="image/*">
+        <small class="error-msg" id="error_foto"></small>
       </div>
-    </div>
 
-    <div class="campo"><label for="fecha_nacimiento">Fecha de nacimiento:</label><input type="date" id="fecha_nacimiento"></div>
-    <div class="campo"><label for="rut_dni">RUT / DNI:</label><input type="text" id="rut_dni"></div>
+      <!-- FECHA -->
+      <div class="grupo"><label for="fecha_nacimiento">Fecha de nacimiento:</label>
+        <input type="date" id="fecha_nacimiento" max="<?=date('Y-m-d')?>">
+        <small class="error-msg" id="error_fecha"></small></div>
 
-    <div class="campo"><label for="pais">País:</label><select id="pais"></select></div>
-    <div class="campo"><label for="region">Región / Estado:</label><select id="region"></select></div>
-    <div class="campo"><label for="ciudad">Ciudad / Comuna:</label><select id="ciudad"></select></div>
-
-    <div class="campo"><label for="direccion">Dirección:</label><input type="text" id="direccion"></div>
-    <div class="campo"><label for="iglesia">Iglesia o Ministerio:</label><input type="text" id="iglesia"></div>
-    <div class="campo"><label for="profesion">Profesión / Oficio / Estudio:</label><input type="text" id="profesion"></div>
-    <div class="campo"><label for="ocupacion">Ocupación:</label><select id="ocupacion"></select></div>
-
-    <div class="campo"><label for="correo">Correo electrónico:</label><input type="email" id="correo"></div>
-    <div class="campo"><label><input type="checkbox" id="boletin"> Recibir boletines informativos</label></div>
-
-    <div class="campo">
-      <label>Teléfonos (máximo 3):</label>
-      <div class="telefonos" id="lista_telefonos">
-        <!-- Teléfonos se cargan dinámicamente -->
+      <!-- DOC -->
+      <div class="grupo">
+        <label for="rut_dni">Documento de identidad:</label>
+        <select id="tipo_doc"><option value="rut">RUT (Chile)</option><option value="int">Internacional</option></select>
+        <input type="text" id="rut_dni" placeholder="Solo números">
+        <small class="error-msg" id="error_rut"></small>
       </div>
-    </div>
 
-    <div class="campo">
-      <h3>Equipos y roles</h3>
-      <table id="tabla-equipos">
-        <thead><tr><th>Equipo / Proyecto</th><th>Rol</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
+      <!-- UBICACIÓN -->
+      <div class="grupo"><label for="pais">País:</label><select id="pais"></select><small class="error-msg" id="error_pais"></small></div>
+      <div class="grupo"><label for="region">Región / Estado:</label><select id="region"></select><small class="error-msg" id="error_region"></small></div>
+      <div class="grupo"><label for="ciudad">Ciudad / Comuna:</label><select id="ciudad"></select><small class="error-msg" id="error_ciudad"></small></div>
 
-    <div class="campo">
-      <h3>Últimas actividades</h3>
-      <table id="tabla-actividad">
-        <thead><tr><th>Fecha</th><th>Actividad</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
+      <!-- VARIOS -->
+      <div class="grupo"><label for="direccion">Dirección:</label><input type="text" id="direccion"><small class="error-msg" id="error_direccion"></small></div>
+      <div class="grupo"><label for="iglesia">Iglesia o Ministerio:</label><input type="text" id="iglesia"><small class="error-msg" id="error_iglesia"></small></div>
+      <div class="grupo"><label for="profesion">Profesión / Oficio / Estudio:</label><input type="text" id="profesion"><small class="error-msg" id="error_profesion"></small></div>
 
-    <div class="campo" style="margin-top:2rem;">
-      <button type="submit">Guardar cambios</button> <button onclick="document.getElementById('modal-password').style.display='flex'">Cambiar contraseña</button>
-      <button onclick="window.location.href='home.php'">Cancelar</button>
-    </div>
+      <!-- OCUPACIONES -->
+      <div class="grupo">
+        <label>Ocupación(es):</label>
+        <div id="ocupaciones-wrapper" class="ocups"></div>
+        <small class="error-msg" id="error_ocupacion"></small>
+      </div>
 
-  </main>
+      <!-- CORREO -->
+      <div class="grupo"><label for="correo">Correo electrónico:</label><input type="email" id="correo"><small class="error-msg" id="error_correo"></small></div>
+      <div class="grupo"><label><input type="checkbox" id="boletin"> Recibir boletines</label></div>
 
-<!-- Modal Cambiar Contraseña -->
-<div id="modal-password" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000000aa; justify-content:center; align-items:center;">
-  <div style="background:#fff; padding:2rem; border-radius:8px; max-width:400px; width:100%;">
-    <h3>Cambiar contraseña</h3>
-    <div class="campo"><label>Contraseña actual:</label><input type="password" id="clave_actual"></div>
-    <div class="campo"><label>Nueva contraseña:</label><input type="password" id="clave_nueva"></div>
-    <div class="campo"><label>Confirmar nueva contraseña:</label><input type="password" id="clave_nueva2"></div>
-    <div style="text-align:right; margin-top:1rem;">
-      <button onclick="document.getElementById('modal-password').style.display='none'">Cancelar</button>
-      <button onclick="cambiarPassword()">Guardar</button>
-    </div>
+      <!-- TELÉFONOS -->
+<?php
+require 'conexion.php';
+$token=$_GET['token']??'';$uid=0;
+if($token){
+  $q=$pdo->prepare("SELECT id_usuario FROM tokens_usuarios WHERE token=?");$q->execute([$token]);$uid=$q->fetchColumn();
+}
+$desc=$pdo->query("SELECT id_descripcion_telefono,nombre_descripcion_telefono FROM descripcion_telefonos ORDER BY nombre_descripcion_telefono")->fetchAll(PDO::FETCH_ASSOC);
+$t=[];
+if($uid){
+  $z=$pdo->prepare("SELECT telefono,id_descripcion_telefono FROM telefonos WHERE id_usuario=? ORDER BY es_principal DESC");$z->execute([$uid]);$t=$z->fetchAll(PDO::FETCH_ASSOC);
+}
+for($i=0;$i<3;$i++):
+  $tel=$t[$i]['telefono']??'';$ds=$t[$i]['id_descripcion_telefono']??'';
+?>
+      <div class="grupo tel-row">
+        <input type="tel" id="telefono_<?=$i+1?>" value="<?=htmlspecialchars($tel)?>" placeholder="Teléfono <?=($i?'secundario':'principal')?>">
+        <select id="tipo_telefono_<?=$i+1?>">
+<?php foreach($desc as $d):?>
+          <option value="<?=$d['id_descripcion_telefono']?>" <?=$ds==$d['id_descripcion_telefono']?'selected':''?>><?=$d['nombre_descripcion_telefono']?></option>
+<?php endforeach;?>
+        </select>
+        <span class="delete-btn delete-telefono" data-indice="<?=$i+1?>">✕</span>
+      </div>
+      <small class="error-msg" id="error_tel<?=$i+1?>"></small>
+<?php endfor; ?>
+
+      <!-- BOTONES -->
+      <div class="botones">
+        <button type="submit" class="btn-primario">Guardar cambios</button>
+        <a href="ver_mis_datos.php"><button type="button" class="btn-secundario">Cancelar</button></a>
+      </div>
+    </form>
   </div>
-</div>
 
+  <!-- LIBRERÍAS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/intlTelInput.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.js"></script>
+  <script src="editar_mis_datos.js?v=6.4"></script>
 </body>
 </html>

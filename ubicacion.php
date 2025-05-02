@@ -16,7 +16,7 @@ switch ($tipo) {
             echo json_encode([]);
             exit;
         }
-        $stmt = $pdo->prepare("SELECT id_region_estado AS id, nombre_region_estado AS nombre FROM regiones_estados WHERE id_pais = :id ORDER BY nombre_region_estado ASC");
+        $stmt = $pdo->prepare("SELECT id_region_estado AS id, nombre_region_estado AS nombre FROM region_estado WHERE id_pais = :id ORDER BY nombre_region_estado ASC");
         $stmt->execute(['id' => $id]);
         echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
         break;
@@ -26,7 +26,7 @@ switch ($tipo) {
             echo json_encode([]);
             exit;
         }
-        $stmt = $pdo->prepare("SELECT id_ciudad_comuna AS id, nombre_ciudad_comuna AS nombre FROM ciudades_comunas WHERE id_region_estado = :id ORDER BY nombre_ciudad_comuna ASC");
+        $stmt = $pdo->prepare("SELECT id_ciudad_comuna AS id, nombre_ciudad_comuna AS nombre FROM ciudad_comuna WHERE id_region_estado = :id ORDER BY nombre_ciudad_comuna ASC");
         $stmt->execute(['id' => $id]);
         echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
         break;
