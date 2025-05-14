@@ -1,84 +1,111 @@
 <?php
-/**
- * Sube una nueva foto de perfil o reemplaza la existente.
- *  • Guarda el archivo en uploads/fotos/
- *  • Actualiza la columna foto_perfil en la tabla usuarios
- *  • Elimina del disco la foto anterior (si existe y no es la de “default”)
- */
-require 'conexion.php';
-header('Content-Type: application/json');
+ini_set('display_errors',        0);
+ini_set('display_startup_errors',0);
+error_reporting(0);
 
-// 1. Validar token y archivo ⇢ obtener $id_usuario
+header('Content-Type: application/json; charset=utf-8');
+// subir_foto.php
+require 'conexion.php';
+
+// 1) Validar token y obtener usuario
 $token = $_POST['token'] ?? '';
 if (!$token) {
-  echo json_encode(['error' => 'Token no recibido.']);
-  exit;
+    echo json_encode(['error' => 'Token no recibido.']);
+    exit;
 }
-if (!isset($_FILES['foto'])) {
-  echo json_encode(['error' => 'Archivo no recibido.']);
-  exit;
-}
-
-$stmt = $pdo->prepare(
-  "SELECT u.id_usuario
-   FROM tokens_usuarios t
-   JOIN usuarios u ON u.id_usuario = t.id_usuario
-   WHERE t.token = :token AND t.expira_en >  NOW()"
-);
+$stmt = $pdo->prepare("
+  SELECT u.id_usuario 
+    FROM tokens_usuarios t
+    JOIN usuarios u ON u.id_usuario = t.id_usuario
+   WHERE t.token = :token 
+     AND t.expira_en > NOW()
+");
 $stmt->execute(['token' => $token]);
 $id_usuario = $stmt->fetchColumn();
-
 if (!$id_usuario) {
-  echo json_encode(['error' => 'Token inválido o expirado.']);
-  exit;
+    echo json_encode(['error' => 'Token inválido o expirado.']);
+    exit;
 }
 
-// 2. Validar archivo (extensión, tamaño, MIME)
-$archivo = $_FILES['foto'];
-$tmp      = $archivo['tmp_name'];
-$ext      = strtolower(pathinfo($archivo['name'], PATHINFO_EXTENSION));
-$permitidosExt = ['jpg', 'jpeg', 'png', 'gif'];
-$permitidosMime = ['image/jpeg', 'image/png', 'image/gif'];
+// 2) Manejar eliminación de foto si se solicitó
+$delete = $_POST['delete_foto'] ?? '0';
+if ($delete === '1') {
+    // 2.1) Obtener la ruta actual de la foto en BD
+    $stmt = $pdo->prepare("
+      SELECT foto_perfil 
+        FROM usuarios 
+       WHERE id_usuario = :id
+    ");
+    $stmt->execute(['id' => $id_usuario]);
+    $prev = $stmt->fetchColumn();
 
-$mime = finfo_file(finfo_open(FILEINFO_MIME_TYPE), $tmp);
-if (!in_array($ext, $permitidosExt) || !in_array($mime, $permitidosMime)) {
-  echo json_encode(['error' => 'Formato de imagen no válido.']);
-  exit;
+    // 2.2) Actualizar en la BD para que apunte a la default
+    $pdo->prepare("
+      UPDATE usuarios 
+         SET foto_perfil = 'uploads/fotos/default.png' 
+       WHERE id_usuario = :id
+    ")->execute(['id' => $id_usuario]);
+
+    // 2.3) Borrar el archivo anterior del disco (si existía y no era la default)
+    if ($prev 
+        && $prev !== 'uploads/fotos/default.png' 
+        && file_exists(__DIR__ . '/' . $prev)
+    ) {
+        @unlink(__DIR__ . '/' . $prev);
+    }
+
+    // 2.4) Responder al cliente
+    echo json_encode([
+      'mensaje' => 'Foto eliminada.',
+      'ruta'    => 'uploads/fotos/default.png'
+    ]);
+    exit;
 }
-if ($archivo['size'] > 5 * 1024 * 1024) { // 5 MB
-  echo json_encode(['error' => 'La imagen supera el tamaño máximo de 5 MB.']);
-  exit;
+
+
+// Límite de peso: 5 MB
+$maxSize = 5 * 1024 * 1024;  // en bytes
+
+// 3) Si no hay archivo, error
+if (empty($_FILES['foto']) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK) {
+    echo json_encode(['error' => 'No se recibió ninguna imagen.']);
+    exit;
 }
 
-// 3. Ruta final + creación de carpeta si no existe
-$carpeta = 'uploads/fotos/';
-if (!is_dir($carpeta) && !mkdir($carpeta, 0777, true)) {
-  echo json_encode(['error' => 'No se pudo crear la carpeta de destino.']);
-  exit;
-}
-$nombre_final  = 'foto_' . $id_usuario . '_' . time() . '.' . $ext;
-$ruta_destino  = $carpeta . $nombre_final;
-
-// 4. Mover archivo
-if (!move_uploaded_file($tmp, $ruta_destino)) {
-  echo json_encode(['error' => 'No se pudo guardar la imagen.']);
-  exit;
+if ($_FILES['foto']['size'] > $maxSize) {
+    echo json_encode(['error' => 'El archivo excede el tamaño máximo de 2 MB.']);
+    exit;
 }
 
-// 5. Eliminar foto anterior (del disco y BD)
-$oldPath = $pdo->prepare("SELECT foto_perfil FROM usuarios WHERE id_usuario = :id");
-$oldPath->execute(['id' => $id_usuario]);
-$anterior = $oldPath->fetchColumn();
+// 4) Validar tipo y guardar nuevo archivo
+$allowed = ['image/jpeg','image/png','image/gif','image/webp','image/jpg'];
+if (!in_array($_FILES['foto']['type'], $allowed)) {
+    echo json_encode(['error' => 'Formato de imagen no permitido.']);
+    exit;
+}
+$ext = pathinfo($_FILES['foto']['name'], PATHINFO_EXTENSION);
+$ruta = 'uploads/fotos/' . uniqid('f_', true) . "." . $ext;
+if (!move_uploaded_file($_FILES['foto']['tmp_name'], $ruta)) {
+    echo json_encode(['error' => 'No se pudo guardar la imagen.']);
+    exit;
+}
 
-$pdo->prepare("UPDATE usuarios SET foto_perfil = :ruta WHERE id_usuario = :id")
-    ->execute(['ruta' => $ruta_destino, 'id' => $id_usuario]);
+// 5) Actualizar BD y borrar anterior
+$old = $pdo->prepare("SELECT foto_perfil FROM usuarios WHERE id_usuario = :id");
+$old->execute(['id' => $id_usuario]);
+$prev = $old->fetchColumn();
 
-if ($anterior && $anterior !== 'uploads/fotos/default.png' && file_exists($anterior)) {
-  @unlink($anterior); // silencioso
+$pdo->prepare("
+  UPDATE usuarios 
+     SET foto_perfil = :ruta 
+   WHERE id_usuario = :id
+")->execute(['ruta' => $ruta, 'id' => $id_usuario]);
+
+if ($prev && $prev !== 'uploads/fotos/default.png' && file_exists($prev)) {
+    @unlink($prev);
 }
 
 echo json_encode([
-  'mensaje' => 'Foto de perfil actualizada.',
-  'ruta'    => $ruta_destino
+  'mensaje' => 'Foto actualizada.',
+  'ruta'    => $ruta
 ]);
-?>

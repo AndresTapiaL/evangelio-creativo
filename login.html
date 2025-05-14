@@ -62,17 +62,31 @@
         text-decoration: underline;
     }
   </style>
+
+  <!-- ───────── NUEVO:  redirección si ya hay token válido ───────── -->
   <script>
-    function iniciarSesion(event) {
+    document.addEventListener('DOMContentLoaded', () => {
+      const t = localStorage.getItem('token');
+      if (!t) return;
+      fetch(`validar_token.php?token=${t}`)
+        .then(r => r.json())
+        .then(d => { if (d.ok) location.replace('home.php'); })
+        .catch(()=>localStorage.clear());
+    });
+  </script>
+  <!-- ─────────────────────────────────────────────────────────────── -->
+
+  <script>
+    function iniciarSesion(event) {                /* ya lo tenías */
         event.preventDefault();
 
         const correo = document.getElementById('correo').value;
-        const clave = document.getElementById('clave').value;
+        const clave  = document.getElementById('clave').value;
 
         fetch('login.php', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: `correo=${encodeURIComponent(correo)}&clave=${encodeURIComponent(clave)}`
+            method : 'POST',
+            headers: {'Content-Type':'application/x-www-form-urlencoded'},
+            body   : `correo=${encodeURIComponent(correo)}&clave=${encodeURIComponent(clave)}`
         })
         .then(res => res.json())
         .then(data => {
@@ -83,20 +97,24 @@
             } else {
                 document.getElementById('resultado').innerText = data.error;
             }
-        });
+        })
+        .catch(()=>{document.getElementById('resultado').innerText='Error de red';});
     }
   </script>
 </head>
+
 <body>
   <main class="login-container">
     <img src="images/LogoEC.png" alt="Logo EC">
     <h2>Iniciar sesión</h2>
+
     <form onsubmit="iniciarSesion(event)">
-      <input type="email" id="correo" placeholder="Correo electrónico" required>
-      <input type="password" id="clave" placeholder="Contraseña" required>
+      <input type="email"    id="correo" placeholder="Correo electrónico" required>
+      <input type="password" id="clave"  placeholder="Contraseña"        required>
       <button type="submit">Entrar</button>
       <a href="recuperar.html">¿Olvidaste tu contraseña?</a>
     </form>
+
     <div id="resultado" style="color: red; margin-top: 1rem;"></div>
   </main>
 </body>

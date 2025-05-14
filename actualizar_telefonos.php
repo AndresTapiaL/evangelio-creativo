@@ -1,6 +1,10 @@
 <?php
+ini_set('display_errors',        0);
+ini_set('display_startup_errors',0);
+error_reporting(0);
+
+header('Content-Type: application/json; charset=utf-8');
 require 'conexion.php';
-header('Content-Type: application/json');
 
 $token = $_POST['token'] ?? '';
 if (!$token) {
