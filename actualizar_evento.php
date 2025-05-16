@@ -1,68 +1,75 @@
 <?php
+ob_start();
 require 'conexion.php';
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-  // Validar token/session como en actualizar_usuario.php
   session_start();
   if (empty($_SESSION['id_usuario'])) throw new Exception('No autorizado');
 
-  // convertir a DateTime para comparar
-  $ini = $_POST['fecha_hora_inicio']   ?? '';
-  $fin = $_POST['fecha_hora_termino']  ?? '';
+  /* ───── Datos recibidos ───── */
+  $idEvento  = $_POST['id_evento'] ?? null;
+  $projArr   = $_POST['id_equipo_proyecto'] ?? [];       // ← viene del form
+  $esGeneral = in_array('', $projArr, true);             // checkbox “General”
 
+  /* ───── Validaciones simples ───── */
+  $ini = $_POST['fecha_hora_inicio']  ?? '';
+  $fin = $_POST['fecha_hora_termino'] ?? '';
   if ($fin && strtotime($fin) < strtotime($ini)) {
-  throw new Exception('La fecha y hora de término no puede ser anterior a la de inicio.');
+      throw new Exception('La fecha y hora de término no puede ser anterior a la de inicio.');
   }
 
-  // Obtener campos
-  $id   = $_POST['id_evento'];
-  $f    = fn($k)=>($_POST[$k]??null) !== '' ? $_POST[$k] : null;
-
-  // 1) Actualizar tabla eventos
+  /* ───── 1) Actualizar tabla eventos ───── */
+  $f = fn($k) => ($_POST[$k] ?? null) !== '' ? $_POST[$k] : null;
   $stmt = $pdo->prepare("
-  UPDATE eventos SET
-      nombre_evento     = :nombre,
-      lugar             = :lugar,
-      descripcion       = :descripcion,
-      observacion       = :observacion,
-      fecha_hora_inicio = :start,
-      fecha_hora_termino= :end,
-      id_estado_previo  = :previo,
-      id_tipo           = :tipo,
-      id_estado_final   = :final,
-      encargado         = :enc
-  WHERE id_evento = :id
+    UPDATE eventos SET
+      nombre_evento      = :nombre,
+      lugar              = :lugar,
+      descripcion        = :desc,
+      observacion        = :obs,
+      fecha_hora_inicio  = :ini,
+      fecha_hora_termino = :fin,
+      id_estado_previo   = :prev,
+      id_tipo            = :tipo,
+      id_estado_final    = :finest,
+      encargado          = :enc,
+      es_general         = :gen
+    WHERE id_evento = :id
   ");
   $stmt->execute([
-  ':nombre'      => $f('nombre_evento'),
-  ':lugar'       => $f('lugar'),
-  ':descripcion' => $f('descripcion'),
-  ':observacion' => $f('observacion'),
-  ':start'       => $f('fecha_hora_inicio'),
-  ':end'         => $f('fecha_hora_termino'),
-  ':previo'      => $f('id_estado_previo'),
-  ':tipo'        => $f('id_tipo'),
-  ':final'       => $f('id_estado_final'),
-  ':enc'         => $f('encargado'),
-  ':id'          => $id
+    ':nombre'   => $f('nombre_evento'),
+    ':lugar'    => $f('lugar'),
+    ':desc'     => $f('descripcion'),
+    ':obs'      => $f('observacion'),
+    ':ini'      => $f('fecha_hora_inicio'),
+    ':fin'      => $f('fecha_hora_termino'),
+    ':prev'     => $f('id_estado_previo'),
+    ':tipo'     => $f('id_tipo'),
+    ':finest'   => $f('id_estado_final'),
+    ':enc'      => $f('encargado'),
+    ':gen'      => $esGeneral ? 1 : 0,
+    ':id'       => $idEvento
   ]);
 
-  // 2) Actualizar relación muchos-a-muchos
-  $pdo->prepare("DELETE FROM equipos_proyectos_eventos WHERE id_evento=?")
-      ->execute([$id]);
-  if (!empty($_POST['equipo_ids']) && is_array($_POST['equipo_ids'])) {
+  /* ───── 2) Actualizar relación N-a-N ───── */
+  $pdo->prepare("DELETE FROM equipos_proyectos_eventos WHERE id_evento = ?")
+      ->execute([$idEvento]);
+
+  if (!$esGeneral) {                       // solo si NO es general
     $ins = $pdo->prepare("
-      INSERT INTO equipos_proyectos_eventos(id_evento,id_equipo_proyecto)
-      VALUES(?,?)
+      INSERT INTO equipos_proyectos_eventos (id_evento, id_equipo_proyecto)
+      VALUES (?, ?)
     ");
-    foreach ($_POST['equipo_ids'] as $eid) {
-      $ins->execute([$id, $eid]);
+    foreach ($projArr as $eid) {
+      if ($eid === '') continue;           // ignoro casilla vacía por seguridad
+      $ins->execute([$idEvento, $eid]);
     }
   }
 
-  echo json_encode(['mensaje'=>'OK']);
-} catch(Exception $e) {
+  ob_clean();
+  echo json_encode(['mensaje' => 'OK']);
+} catch (Exception $e) {
   http_response_code(400);
-  echo json_encode(['error'=>$e->getMessage()]);
+  ob_clean();
+  echo json_encode(['error' => $e->getMessage()]);
 }

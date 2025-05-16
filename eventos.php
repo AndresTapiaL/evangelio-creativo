@@ -31,6 +31,12 @@ $qEq = $pdo->prepare("
 $qEq->execute(['uid'=>$id_usuario]);
 $userTeams = $qEq->fetchAll(PDO::FETCH_ASSOC);
 
+$allProjects = $pdo
+  ->query("SELECT id_equipo_proyecto, nombre_equipo_proyecto
+            FROM equipos_proyectos
+           ORDER BY nombre_equipo_proyecto")
+  ->fetchAll(PDO::FETCH_ASSOC);
+
 // 2.2) Extraer solamente los IDs para validar
 $userTeamIds = array_column($userTeams, 'id_equipo_proyecto');
 
@@ -88,7 +94,7 @@ else {  // ya validaste arriba que sea un ID de equipo válido
 $sql = "
   SELECT
     e.id_evento,
-    e.encargado,
+    e.encargado       AS encargado_id,
     e.nombre_evento,
     e.lugar,
     e.descripcion,
@@ -163,27 +169,36 @@ $stmtEv->execute($params);
 
 $rows = $stmtEv->fetchAll(PDO::FETCH_ASSOC);
 
-// Traer usuarios con rol 4 o 6, o que estén en el proyecto 1
+/* ─── Líderes y coordinadores disponibles ─── */
+/* ─── líderes y coordinadores ─── */
+/* ─── líderes y coordinadores ─── */
 $ldrStmt = $pdo->prepare("
   SELECT 
     u.id_usuario,
-    CONCAT(
-      u.nombres, ' ',
-      u.apellido_paterno, ' ',
-      u.apellido_materno
-    ) AS full_name,
-    GROUP_CONCAT(DISTINCT iep.id_equipo_proyecto) AS project_ids
-  FROM usuarios u
-  JOIN integrantes_equipos_proyectos iep
-    ON u.id_usuario = iep.id_usuario
-  WHERE 
-    iep.id_rol IN (4,6)
-    OR iep.id_equipo_proyecto = 1
+    CONCAT(u.nombres,' ',u.apellido_paterno,' ',u.apellido_materno)               AS full_name,
+
+    /*  lista de proyectos SÓLO si tiene alguno → '' en caso contrario   */
+    COALESCE(
+      GROUP_CONCAT(
+        DISTINCT iep.id_equipo_proyecto
+        ORDER BY iep.id_equipo_proyecto
+        SEPARATOR ','
+      ),
+      ''
+    )                                                                            AS project_ids
+
+  FROM usuarios               u
+  LEFT JOIN integrantes_equipos_proyectos iep
+         ON iep.id_usuario = u.id_usuario
+
+  WHERE iep.id_rol IN (4,6)                       -- Líder / Coordinador
+     OR iep.id_equipo_proyecto = 1                -- Liderazgo nacional (id 1)
+     OR iep.id_equipo_proyecto IS NULL            -- Líder “general” sin proyectos
+
   GROUP BY u.id_usuario
 ");
 $ldrStmt->execute();
 $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
-
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -625,9 +640,9 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
 
     /* ─── Botón Guardar ─── */
     #btn-save-evento {
-      width: 100%;
+      width: 50%;
       padding: .75rem;
-      background: #28a745;
+      background:rgb(255, 102, 32);
       color: #fff;
       border: none;
       border-radius: 6px;
@@ -637,11 +652,11 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       transition: background .2s;
     }
     #btn-save-evento:disabled {
-      background: #94d3a2;
+      background:rgb(211, 163, 148);
       cursor: not-allowed;
     }
     #btn-save-evento:hover:not(:disabled) {
-      background: #218838;
+      background:rgb(219, 122, 42);
     }
 
     /* Lista de Equipos/Proyectos en la tabla */
@@ -660,6 +675,39 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       font-size: 0.875rem;
       margin-top: 0.25rem;
       display: none;
+    }
+
+    .err-inline{
+      display:none;
+      color: #dc3545;
+      margin-top: 0.25rem;
+      font-size: 0.875rem;
+    }
+
+    .checkboxes-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr; /* dos columnas */
+      gap: .75rem .5rem;              /* 0.75rem fila, 0.5rem columna */
+    }
+
+    .checkbox-item {
+      display: inline-flex;
+      align-items: center;
+      padding: .4rem .6rem;
+      background: #f0f0f0;
+      border-radius: 4px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-item input {
+      margin-right: .5rem;
+    }
+
+    #modal-edit .card-footer{
+      background: transparent !important;
+      border-top: none !important;
+      padding: 0 1rem 1rem;
     }
   </style>
 
@@ -855,7 +903,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
                       data-id="<?= $e['id_evento'] ?>"
                       data-nombre="<?= htmlspecialchars($e['nombre_evento'] ?? '') ?>"
                       data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
-                      data-encargado="<?= htmlspecialchars($e['encargado']  ?? '') ?>"
+                      data-encargado="<?= (int)$e['encargado_id'] ?>"
                       data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
                       data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
                       data-start="<?= $e['fecha_hora_inicio'] ?>"
@@ -979,43 +1027,36 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
           <div class="form-group">
             <label>Nombre:</label>
             <input type="text" name="nombre_evento" id="edit-nombre" required>
+            <small id="err-required-nombre" class="err-inline">* obligatorio</small>
+            <small id="err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
           <div class="form-group">
             <label>Lugar:</label>
             <input type="text" name="lugar" id="edit-lugar">
-          </div>
-          <div class="form-group">
-            <label>Encargado:</label>
-            <select name="encargado" id="edit-encargado" required>
-              <option value="">— selecciona —</option>
-              <?php foreach($leaders as $ldr): ?>
-                <option 
-                  value="<?= htmlspecialchars($ldr['id_usuario']) ?>" 
-                  data-projects="<?= htmlspecialchars($ldr['project_ids']) ?>"
-                >
-                  <?= htmlspecialchars($ldr['full_name']) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
+            <small id="err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
           <div class="form-group">
             <label>Descripción:</label>
             <textarea name="descripcion" id="edit-descripcion"></textarea>
+            <small id="err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
           <div class="form-group">
             <label>Observación:</label>
             <textarea name="observacion" id="edit-observacion"></textarea>
+            <small id="err-regex-observacion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
           <div class="form-group">
             <label>Fecha y hora inicio:</label>
             <input type="datetime-local" name="fecha_hora_inicio" id="edit-start" required>
+            <small id="err-required-start" class="err-inline">* fecha y hora requeridas</small>
           </div>
           <div class="form-group">
             <label>Fecha y hora término:</label>
             <input type="datetime-local" name="fecha_hora_termino" id="edit-end">
+            <small id="err-required-end" class="err-inline">* fecha y hora requeridas</small>
               <!-- Mensaje de error inline -->
               <div id="end-error" class="input-error" style="display:none; color:#dc3545; font-size:0.875rem; margin-top:0.25rem;">
-                La fecha y hora de término debe ser igual o posterior al inicio.
+                * La fecha y hora de término debe ser igual o posterior al inicio.
               </div>
           </div>
           <div class="form-group">
@@ -1042,21 +1083,51 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
               <?php endforeach; ?>
             </select>
           </div>
-          <div class="form-group checkbox-group">
+          <div class="form-group">
             <label>Equipos/Proyectos:</label>
-            <div class="checkbox-list">
-              <?php foreach($allEq as $eq): ?>
+            <div class="checkboxes-grid">
+              <!-- Opción General -->
+              <label class="checkbox-item">
+                <input 
+                  type="checkbox" 
+                  id="edit-general" 
+                  name="id_equipo_proyecto[]" 
+                  value=""
+                >
+                General
+              </label>
+
+              <!-- Tus proyectos -->
+              <?php foreach($allProjects as $p): ?>
                 <label class="checkbox-item">
                   <input 
-                    type="checkbox" 
-                    name="equipo_ids[]" 
-                    value="<?= $eq['id_equipo_proyecto'] ?>" 
-                    id="eq-<?= $eq['id_equipo_proyecto'] ?>"
+                    type="checkbox"
+                    class="edit-project-chk"
+                    name="id_equipo_proyecto[]"
+                    value="<?= $p['id_equipo_proyecto'] ?>"
                   >
-                  <span><?= htmlspecialchars($eq['nombre_equipo_proyecto']) ?></span>
+                  <?= htmlspecialchars($p['nombre_equipo_proyecto']) ?>
                 </label>
               <?php endforeach; ?>
             </div>
+            <!-- Mensaje inline de error -->
+            <div id="projects-error" class="input-error" tabindex="-1">
+              * Debes marcar al menos “General” o un equipo/proyecto.
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Encargado:</label>
+            <select id="edit-encargado" name="encargado">
+              <option value="">— sin encargado —</option>
+              <?php foreach ($leaders as $ldr): ?>
+                <option
+                  value="<?= $ldr['id_usuario'] ?>"
+                  data-projects="<?= trim($ldr['project_ids'], ',') ?>"
+                >
+                  <?= htmlspecialchars($ldr['full_name']) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
           </div>
         </form>
       </div>
