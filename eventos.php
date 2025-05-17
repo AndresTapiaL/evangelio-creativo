@@ -709,6 +709,41 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       border-top: none !important;
       padding: 0 1rem 1rem;
     }
+
+    /* —— contenedor de proyectos en modo grid ——————————— */
+    #grp-projects{
+      display:grid;                         /* ↩ cambia de flex a grid        */
+      grid-template-columns: repeat(2, 1fr);/* 2 columnas de igual ancho       */
+      gap:.5rem;                            /* espacio entre casillas          */
+    }
+
+    #grp-projects label{
+      display:block;                        /* cada label ocupa 1 columna      */
+    }
+
+    #grp-projects .proj-error{              /* mensaje de error                */
+      grid-column:1 / -1;                   /* abarca de la col 1 a la última  */
+      color:#e74c3c;
+      margin-top:.25rem;
+    }
+
+    /* 2 columnas iguales + mensaje que “ocupa” la fila completa */
+    .checkboxes-grid{
+      display:grid;                       /* ← cambia a GRID                 */
+      grid-template-columns:repeat(2,1fr);/* 2 columnas del mismo ancho       */
+      gap:.5rem;                           /* mismo espacio que antes          */
+    }
+
+    .checkboxes-grid .checkbox-item{
+      display:block;                      /* cada label = 1 celda             */
+    }
+
+    .checkboxes-grid .proj-error{         /* mensaje de error                 */
+      grid-column:1 / -1;                 /* se estira por las 2 columnas      */
+      color:#e74c3c;
+      margin-top:.25rem;
+      font-size:.875rem;
+    }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -1109,10 +1144,9 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
                   <?= htmlspecialchars($p['nombre_equipo_proyecto']) ?>
                 </label>
               <?php endforeach; ?>
-            </div>
-            <!-- Mensaje inline de error -->
-            <div id="projects-error" class="input-error" tabindex="-1">
-              * Debes marcar al menos “General” o un equipo/proyecto.
+              <small id="projects-error" class="err-inline proj-error">
+                * Debes marcar al menos “General” o un equipo/proyecto.
+              </small>
             </div>
           </div>
           <div class="form-group">

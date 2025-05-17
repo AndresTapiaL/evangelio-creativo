@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     {inp:'edit-end',   req:'err-required-end'}
   ];
   const allowedRE = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,\-()]+$/;
+  const modalBody = modalEdit.querySelector('.card-body');   // ← tu clase real
 
   // —— dispara validación al instante ——
   [...txtRules, ...dtRules].forEach(({inp})=>{
@@ -209,6 +210,15 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById(id).style.display = 'none';
   }
 
+  function scrollToTarget(el){
+    const y = el.getBoundingClientRect().top
+            - modalBody.getBoundingClientRect().top
+            + modalBody.scrollTop
+            - 40;                                    // margen superior
+    modalBody.scrollTo({top: y, behavior:'smooth'});
+    el.focus();                                     // opcional
+  }
+
   function validateField(id){
     // text inputs ------------------------------------------------------------
     const txt = txtRules.find(r=>r.inp===id);
@@ -248,32 +258,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const orig = saveBtn.textContent;
     saveBtn.textContent = 'Guardando…';
 
-    if(!validateAll()){                       // hay errores
-      firstInvalid.scrollIntoView({behavior:'smooth',block:'center'});
-      saveBtn.disabled = false;               // re-habilita botón
-      saveBtn.textContent = orig;
-      return;                                 // ⁂ aborta envío ⁂
-    }
-
-    // Validación de proyectos
-    if (!validateProjects()) {
-      projectsErr.scrollIntoView({behavior:'smooth', block:'center'});
-      projectsErr.focus();
-      saveBtn.disabled = false;      // <-- restauro
-      saveBtn.textContent = orig;     // <-- restauro
-      return;
-    }
-
-    // Validación final de fechas
-    const startInp = document.getElementById('edit-start');
-    const endInp   = document.getElementById('edit-end');
-    if (endInp.value && endInp.value < startInp.value) {
-      errEnd.style.display = 'block';
-      endInp.focus();
+    if (!validateAll()) {                       // hay errores en campos normales
+      scrollToTarget(firstInvalid);             // ← desplazamiento suave
       saveBtn.disabled = false;
       saveBtn.textContent = orig;
       return;
     }
+
+    // Validación de proyectos
+    if (!validateProjects()) {                   // ⇒ falta “General” o equipo
+      projectsErr.style.display = 'block';       // muestra el mensaje
+
+      firstInvalid = projectsErr;          // ahora el propio <small> es el destino
+      scrollToTarget(projectsErr);
+
+      saveBtn.disabled = false;
+      saveBtn.textContent = orig;
+      return;
+    }
+    projectsErr.style.display = 'none';          // limpia si ya está bien
+
+    // Validación final de fechas
+    const startInp = document.getElementById('edit-start');
+    const endInp   = document.getElementById('edit-end');
+
+    if (endInp.value && endInp.value < startInp.value) {
+      errEnd.style.display = 'block';            // ‹ small id="err-end" …›
+      firstInvalid = projectsErr;                //  o  errEnd   según el caso
+      scrollToTarget(errEnd);                    // ⬅ desplazamos al MENSAJE
+      saveBtn.disabled = false;
+      saveBtn.textContent = orig;
+      return;
+    }
+    errEnd.style.display = 'none';               // limpia si ya está bien
 
     // Envío AJAX
     const form = document.getElementById('form-edit-evento');
