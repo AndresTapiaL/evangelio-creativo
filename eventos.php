@@ -116,7 +116,14 @@ $sql = "
     COALESCE(ap.cnt_presente, 0) AS cnt_presente,
 
     -- 2) Total de usuarios únicos en los equipos/proyectos de este evento
-    COALESCE(tu.total_integrantes, 0) AS total_integrantes
+    COALESCE(
+      CASE
+        WHEN e.es_general = 1                 -- evento General
+            THEN allu.cnt_all                -- ⇒ todos los usuarios únicos
+        ELSE tu.total_integrantes             -- ⇒ solo los de sus equipos
+      END,
+      0
+    ) AS total_integrantes
 
   FROM eventos e
 
@@ -158,6 +165,12 @@ $sql = "
       ON epe.id_equipo_proyecto = iep.id_equipo_proyecto
     GROUP BY epe.id_evento
   ) tu ON tu.id_evento = e.id_evento
+
+  /* —— Subconsulta 3: total global de usuarios con ≥1 equipo —— */
+  LEFT JOIN (
+    SELECT COUNT(DISTINCT id_usuario) AS cnt_all
+    FROM integrantes_equipos_proyectos
+  ) allu ON 1 = 1            -- se une siempre, devuelve 1 fila fijo
 
   ".(count($where) ? 'WHERE '.implode(' AND ', $where) : '')."
 
@@ -659,6 +672,27 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       background:rgb(219, 122, 42);
     }
 
+        /* ─── Botón Duplicar ─── */
+    #btn-create-evento {
+      width: 50%;
+      padding: .75rem;
+      background:rgb(255, 102, 32);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    #btn-create-evento:disabled {
+      background:rgb(211, 163, 148);
+      cursor: not-allowed;
+    }
+    #btn-create-evento:hover:not(:disabled) {
+      background:rgb(219, 122, 42);
+    }
+
     /* Lista de Equipos/Proyectos en la tabla */
     .equipos-list {
       margin: 0;
@@ -708,6 +742,13 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       background: transparent !important;
       border-top: none !important;
       padding: 0 1rem 1rem;
+    }
+
+    /* —— Modal Editar: quitar franja negra ————————————— */
+    #modal-copy .card-footer{
+      background: transparent !important;  /* elimina el negro               */
+      border-top: none !important;         /* quita línea divisora (opcional) */
+      padding: 0 1rem 1rem;                /* mismo padding que el card-body  */
     }
 
     /* —— contenedor de proyectos en modo grid ——————————— */
@@ -952,13 +993,31 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
                     </button>
 
                     <!-- 3) Duplicar -->
-                    <button title="Duplicar" class="action-btn copy-btn">
+                    <button
+                      title="Duplicar"
+                      class="action-btn copy-btn"
+                      data-id="<?= $e['id_evento'] ?>"
+                      data-nombre="<?= htmlspecialchars($e['nombre_evento'] ?? '') ?>"
+                      data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
+                      data-encargado="<?= (int)$e['encargado_id'] ?>"
+                      data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
+                      data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
+                      data-start="<?= $e['fecha_hora_inicio'] ?>"
+                      data-end="<?= $e['fecha_hora_termino'] ?>"
+                      data-previo="<?= $e['id_estado_previo'] ?>"
+                      data-tipo="<?= $e['id_tipo'] ?>"
+                      data-final="<?= $e['id_estado_final'] ?>"
+                      data-equipos="<?= htmlspecialchars($e['equipo_ids']) ?>"
+                    >
                       <i class="fas fa-copy"></i>
                     </button>
 
                     <!-- 4) Eliminar -->
-                    <button title="Eliminar" class="action-btn delete-btn">
-                      <i class="fas fa-trash"></i>
+                    <button
+                      class="action-btn delete-btn"
+                      data-id="<?= $e['id_evento'] ?>"
+                      title="Eliminar">
+                      <i class="fas fa-trash-alt"></i>
                     </button>
 
                     <!-- 5) Notificar -->
@@ -1167,6 +1226,139 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
       <footer class="card-footer">
         <button id="btn-save-evento" class="btn btn-primary">Guardar cambios</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ═════════ Modal Duplicar Evento ═════════ -->
+  <div id="modal-copy" class="modal-overlay" style="display:none">
+    <div class="modal-content card">
+      <header class="card-header">
+        <h2 class="card-title">Duplicar Evento</h2>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </header>
+
+      <div class="card-body">
+        <form id="form-copy-evento">
+          <!-- Id oculto por si algún día lo necesitas (vacío) -->
+          <input type="hidden" name="id_evento_original" id="copy-orig-id">
+
+          <!-- 1) Nombre -->
+          <div class="form-group">
+            <label>Nombre:</label>
+            <input type="text" name="nombre_evento" id="copy-nombre" required>
+            <small id="copy-err-required-nombre" class="err-inline">* obligatorio</small>
+            <small id="copy-err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 2) Lugar -->
+          <div class="form-group">
+            <label>Lugar:</label>
+            <input type="text" name="lugar" id="copy-lugar">
+            <small id="copy-err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 3) Descripción -->
+          <div class="form-group">
+            <label>Descripción:</label>
+            <textarea name="descripcion" id="copy-descripcion"></textarea>
+            <small id="copy-err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 4) Observación -->
+          <div class="form-group">
+            <label>Observación:</label>
+            <textarea name="observacion" id="copy-observacion"></textarea>
+            <small id="copy-err-regex-observacion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 5) Fechas -->
+          <div class="form-group">
+            <label>Fecha y hora inicio:</label>
+            <input type="datetime-local" name="fecha_hora_inicio" id="copy-start" required>
+            <small id="copy-err-required-start" class="err-inline">* fecha y hora requeridas</small>
+          </div>
+          <div class="form-group">
+            <label>Fecha y hora término:</label>
+            <input type="datetime-local" name="fecha_hora_termino" id="copy-end">
+            <small id="copy-err-required-end" class="err-inline">* fecha y hora requeridas</small>
+            <div id="copy-end-error" class="input-error">
+              * La fecha y hora de término debe ser igual o posterior al inicio.
+            </div>
+          </div>
+
+          <!-- 6) Selects Estado previo / Tipo / Estado final -->
+          <div class="form-group">
+            <label>Estado previo:</label>
+            <select name="id_estado_previo" id="copy-previo">
+              <?php foreach($estPrev as $v): ?>
+                <option value="<?= $v['id_estado_previo'] ?>"><?= htmlspecialchars($v['nombre_estado_previo']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo:</label>
+            <select name="id_tipo" id="copy-tipo">
+              <?php foreach($tipos as $t): ?>
+                <option value="<?= $t['id_tipo'] ?>"><?= htmlspecialchars($t['nombre_tipo']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Estado final:</label>
+            <select name="id_estado_final" id="copy-final">
+              <?php foreach($estFin as $f): ?>
+                <option value="<?= $f['id_estado_final'] ?>"><?= htmlspecialchars($f['nombre_estado_final']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+
+          <!-- 7) Equipos / Proyectos + “General” -->
+          <div class="form-group">
+            <label>Equipos/Proyectos:</label>
+            <div class="checkboxes-grid">
+              <!-- General -->
+              <label class="checkbox-item">
+                <input type="checkbox" id="copy-general"
+                      name="id_equipo_proyecto[]" value="">
+                General
+              </label>
+              <!-- Listado dinámico -->
+              <?php foreach($allEq as $p): ?>
+                <label class="checkbox-item">
+                  <input type="checkbox"
+                        class="copy-project-chk"
+                        name="id_equipo_proyecto[]"
+                        value="<?= $p['id_equipo_proyecto'] ?>">
+                  <?= htmlspecialchars($p['nombre_equipo_proyecto']) ?>
+                </label>
+              <?php endforeach; ?>
+              <small id="copy-projects-error" class="err-inline proj-error">
+                * Debes marcar “General” o al menos un equipo/proyecto.
+              </small>
+            </div>
+          </div>
+
+          <!-- 8) Encargado -->
+          <div class="form-group">
+            <label>Encargado:</label>
+            <select id="copy-encargado" name="encargado">
+              <option value="">— sin encargado —</option>
+              <?php foreach ($leaders as $ldr): ?>
+                <option value="<?= $ldr['id_usuario'] ?>"
+                        data-projects="<?= trim($ldr['project_ids'], ',') ?>">
+                  <?= htmlspecialchars($ldr['full_name']) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </form>
+      </div>
+
+      <footer class="card-footer bg-transparent border-0 p-0 mt-3">
+        <button id="btn-create-evento" class="btn btn-primary">
+          Crear evento
+        </button>
       </footer>
     </div>
   </div>

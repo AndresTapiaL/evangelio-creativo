@@ -198,6 +198,192 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // ——— Modal de Duplicar ———
+  const modalCopy  = document.getElementById('modal-copy');
+  const closeCopy  = modalCopy.querySelector('.modal-close');
+  const saveCopyBt = document.getElementById('btn-create-evento');
+
+  /* ——— Reglas de validación SOLO para modal-copy ——— */
+  const copyTxtRules = [
+    {inp:'copy-nombre',      req:'copy-err-required-nombre',  rgx:'copy-err-regex-nombre'},
+    {inp:'copy-lugar',       req:null,                        rgx:'copy-err-regex-lugar'},
+    {inp:'copy-descripcion', req:null,                        rgx:'copy-err-regex-descripcion'},
+    {inp:'copy-observacion', req:null,                        rgx:'copy-err-regex-observacion'}
+  ];
+  const copyDtRules = [
+    {inp:'copy-start', req:'copy-err-required-start'},
+    {inp:'copy-end',   req:'copy-err-required-end'}
+  ];
+  const copyAllowedRE = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,\-()]+$/;
+  const copyModalBody = modalCopy.querySelector('.card-body');      // container scroll
+  const copyGeneralChk  = document.getElementById('copy-general');
+  const copyProjectChks = Array.from(document.querySelectorAll('.copy-project-chk'));
+  const copyProjectsErr = document.getElementById('copy-projects-error');
+  const copyEncSelect   = document.getElementById('copy-encargado');
+
+  /* dispara validación instantánea en inputs del modal-copy */
+  [...copyTxtRules, ...copyDtRules].forEach(({inp})=>{
+    const el = document.getElementById(inp);
+    if(!el) return;
+    const ev = el.type === 'datetime-local' ? 'change' : 'input';
+    el.addEventListener(ev , ()=>copyValidateField(inp));
+    el.addEventListener('blur', ()=>copyValidateField(inp));
+  });
+
+  /* —— helpers de validación SOLO modal-copy ——————————— */
+  let copyFirstInvalid = null;
+
+  function copyShow(id){
+    const el = document.getElementById(id);
+    el.style.display = 'inline';
+    if(!copyFirstInvalid) copyFirstInvalid = el.closest('.form-group');
+  }
+  function copyHide(id){
+    document.getElementById(id).style.display = 'none';
+  }
+
+  function copyScrollToTarget(el){
+    const y = el.getBoundingClientRect().top
+            - copyModalBody.getBoundingClientRect().top
+            + copyModalBody.scrollTop - 40;
+    copyModalBody.scrollTo({top:y, behavior:'smooth'});
+    el.focus();
+  }
+
+  function copyValidateField(id){
+    // text inputs -----------------------------------------------------------
+    const txt = copyTxtRules.find(r=>r.inp===id);
+    if(txt){
+      const v = document.getElementById(id).value.trim();
+      if(txt.req) (v ? copyHide(txt.req) : copyShow(txt.req));
+      if(v && !copyAllowedRE.test(v)) { copyShow(txt.rgx); } else { copyHide(txt.rgx); }
+    }
+    // datetime inputs -------------------------------------------------------
+    const dt = copyDtRules.find(r=>r.inp===id);
+    if(dt){
+      const v = document.getElementById(id).value;
+      v ? copyHide(dt.req) : copyShow(dt.req);
+    }
+  }
+
+  function copyValidateAll(){
+    copyFirstInvalid = null;
+    copyTxtRules.forEach(r=>copyValidateField(r.inp));
+    copyDtRules .forEach(r=>copyValidateField(r.inp));
+    return !copyFirstInvalid;
+  }
+
+  function copyValidateProjects(){
+    const any = copyGeneralChk.checked || copyProjectChks.some(c=>c.checked);
+    copyProjectsErr.style.display = any ? 'none' : 'block';
+    return any;
+  }
+
+  // ———————————————————————————————
+  // Filtra encargados SOLO para modal-copy
+  // ———————————————————————————————
+  function filterEncargadosCopy(selectedProjects){
+    const selSet     = new Set(selectedProjects.map(String));
+    const selectEl   = copyEncSelect;             // id="copy-encargado"
+    let keepCurrent  = false;
+
+    Array.from(selectEl.options).forEach(opt=>{
+      if(!opt.value) return;                      // — sin encargado —
+
+      const optProjects = cleanList(opt.dataset.projects); // ["3","7"]
+
+      const visible =
+          selSet.size === 0                     // “General” => ver todos
+        || optProjects.length === 0              // líder global
+        || optProjects.some(p => selSet.has(p)); // comparte algún proyecto
+
+      opt.hidden = !visible;
+      if(opt.value === selectEl.value && visible) keepCurrent = true;
+    });
+
+    if(!keepCurrent) selectEl.value = '';        // limpia si quedó oculto
+  }
+
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // 0) Limpiar errores
+      modalCopy.querySelectorAll('.err-inline').forEach(e=>e.style.display='none');
+      document.getElementById('copy-projects-error').style.display='none';
+
+      // 1) Rellenar campos
+      document.getElementById('copy-nombre').value        = btn.dataset.nombre;
+      document.getElementById('copy-lugar').value         = btn.dataset.lugar;
+      document.getElementById('copy-descripcion').value   = btn.dataset.descripcion;
+      document.getElementById('copy-observacion').value   = btn.dataset.observacion;
+      document.getElementById('copy-previo').value        = btn.dataset.previo;
+      document.getElementById('copy-tipo').value          = btn.dataset.tipo;
+      document.getElementById('copy-final').value         = btn.dataset.final;
+
+      // 2) Fechas
+      const st = document.getElementById('copy-start');
+      const en = document.getElementById('copy-end');
+      st.value = btn.dataset.start.replace(' ', 'T');
+      en.value = btn.dataset.end.replace(' ', 'T');
+      en.min   = st.value;
+
+      // 3) Proyectos / General
+      const eqArr = (btn.dataset.equipos || '').split(',').map(s=>s.trim()).filter(Boolean);
+      const chkProjects = modalCopy.querySelectorAll('.copy-project-chk');
+      chkProjects.forEach(c=>c.checked = eqArr.includes(c.value));
+      const chkGeneral  = document.getElementById('copy-general');
+      chkGeneral.checked = chkProjects.length === 0 || [...chkProjects].every(c => !c.checked);
+
+      // 4) Encargado
+      const selEnc = document.getElementById('copy-encargado');
+      selEnc.value = btn.dataset.encargado || '';
+      filterEncargadosCopy(chkGeneral.checked ? [] : eqArr, selEnc.value);
+
+      /* sincronizar checks y encargado */
+      copyGeneralChk.onchange = () => {
+        if (copyGeneralChk.checked){
+          copyProjectChks.forEach(c=>c.checked = false);
+          filterEncargadosCopy([], copyEncSelect.value);
+          copyValidateProjects();
+        }
+      };
+      copyProjectChks.forEach(chk => chk.onchange = () => {
+        const sel = copyProjectChks.filter(c=>c.checked).map(c=>c.value);
+        copyGeneralChk.checked = sel.length === 0;
+        filterEncargadosCopy(sel, copyEncSelect.value);
+        copyValidateProjects();
+      });
+
+      // 5) Mostrar
+      modalCopy.style.display = 'flex';
+    });
+  });
+
+  closeCopy.addEventListener('click', ()=> modalCopy.style.display='none');
+  modalCopy.addEventListener('click', e=>{
+    if(e.target === modalCopy) modalCopy.style.display='none';
+  });
+
+  // ——— Botón Eliminar ———
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+
+      if (!confirm('¿Seguro que deseas eliminar este evento y TODOS sus datos asociados?')) return;
+
+      fetch('eliminar_evento.php', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/x-www-form-urlencoded' },
+        body: 'id_evento=' + encodeURIComponent(id)
+      })
+      .then(r => r.json())
+      .then(j => {
+        if (j.mensaje === 'OK') location.reload();
+        else alert('Error: ' + (j.error || 'No se pudo eliminar.'));
+      })
+      .catch(() => alert('Error de conexión al intentar eliminar.'));
+    });
+  });
+
   /* —— helpers de validación ————————————————————— */
   let firstInvalid = null;                                 // ← para el scroll
 
@@ -304,6 +490,57 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Error: ' + err.message);
       saveBtn.disabled = false;
       saveBtn.textContent = orig;
+    }
+  });
+
+  saveCopyBt.addEventListener('click', async () => {
+    const errEnd = document.getElementById('copy-end-error');
+    errEnd.style.display = 'none';
+
+    if (saveCopyBt.disabled) return;
+    saveCopyBt.disabled = true;
+    const orig = saveCopyBt.textContent;
+    saveCopyBt.textContent = 'Guardando…';
+
+    /* 1) Validación campos + proyectos */
+    if (!copyValidateAll()) {
+      copyScrollToTarget(copyFirstInvalid);
+      restore();
+      return;
+    }
+    if (!copyValidateProjects()) {
+      copyFirstInvalid = copyProjectsErr;
+      copyScrollToTarget(copyProjectsErr);
+      restore();
+      return;
+    }
+
+    /* 2) Validación final de fechas */
+    const st = document.getElementById('copy-start');
+    const en = document.getElementById('copy-end');
+    if (en.value && en.value < st.value) {
+      errEnd.style.display = 'block';
+      copyScrollToTarget(errEnd);
+      restore();
+      return;
+    }
+
+    /* 3) Envío AJAX */
+    const fd = new FormData(document.getElementById('form-copy-evento'));
+    try {
+      const r = await fetch('crear_evento.php', { method:'POST', body: fd });
+      const j = await r.json();
+      if (!j.mensaje) throw new Error(j.error || 'Error al guardar');
+      location.reload();
+    } catch (err) {
+      alert('Error: ' + err.message);
+      restore();
+    }
+
+    /* helper interno */
+    function restore(){
+      saveCopyBt.disabled = false;
+      saveCopyBt.textContent = orig;
     }
   });
 });
