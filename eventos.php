@@ -10,6 +10,39 @@ if (empty($_SESSION['id_usuario'])) {
 }
 $id_usuario = $_SESSION['id_usuario'];
 
+/* ─── Permisos para mostrar los botones ────────────────────────── */
+$canCreate  = false;   // botón “Crear evento”
+$canRequest = false;   // botón “Solicitar evento”
+
+// (a) ¿Pertenece al Liderazgo nacional?  (equipo 1)
+$stmt = $pdo->prepare("
+    SELECT 1
+    FROM integrantes_equipos_proyectos
+    WHERE id_usuario = ? AND id_equipo_proyecto = 1
+    LIMIT 1
+");
+$stmt->execute([$id_usuario]);
+$canCreate = (bool)$stmt->fetchColumn();
+
+// (b) ¿Tiene rol Líder (4) o Coordinador/a (6) en cualquier equipo?
+$stmt = $pdo->prepare("
+    SELECT 1
+    FROM integrantes_equipos_proyectos
+    WHERE id_usuario = ?
+      AND id_rol IN (4,6)
+    LIMIT 1
+");
+$stmt->execute([$id_usuario]);
+$canRequest = (bool)$stmt->fetchColumn();
+
+/* ── Permisos globales ─────────────────────────────────────────────── */
+$stmtLiderNacional = $pdo->prepare(
+  'SELECT 1 FROM integrantes_equipos_proyectos
+   WHERE id_usuario = ? AND id_equipo_proyecto = 1 LIMIT 1'
+);
+$stmtLiderNacional->execute([$id_usuario]);
+$isLiderNacional = (bool)$stmtLiderNacional->fetchColumn();
+
 // 1.2) Traer para el nav: nombre + foto
 $stmtNav = $pdo->prepare("
   SELECT nombres, foto_perfil
@@ -94,6 +127,7 @@ else {  // ya validaste arriba que sea un ID de equipo válido
 $sql = "
   SELECT
     e.id_evento,
+    e.es_general,
     e.encargado       AS encargado_id,
     e.nombre_evento,
     e.lugar,
@@ -181,6 +215,26 @@ $stmtEv = $pdo->prepare($sql);
 $stmtEv->execute($params);
 
 $rows = $stmtEv->fetchAll(PDO::FETCH_ASSOC);
+
+// ─── Determinar eventos asociados a equipos donde el usuario es Líder (4) o Coordinador/a (6)
+$obsStmt = $pdo->prepare("
+  SELECT DISTINCT epe.id_evento
+    FROM equipos_proyectos_eventos epe
+    JOIN integrantes_equipos_proyectos iep
+      ON epe.id_equipo_proyecto = iep.id_equipo_proyecto
+   WHERE iep.id_usuario = :uid
+     AND iep.id_rol IN (4,6)
+");
+$obsStmt->execute(['uid'=>$id_usuario]);
+$obsEventIds = $obsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+// ─── Anotar en cada fila si mostrar observación
+foreach ($rows as &$e) {
+    $e['show_observacion'] =
+        $isLiderNacional                                // siempre si es Liderazgo nacional
+     || in_array($e['id_evento'], $obsEventIds, true);  // o si es líder/coordinador de ese equipo
+}
+unset($e);
 
 /* ─── Líderes y coordinadores disponibles ─── */
 /* ─── líderes y coordinadores ─── */
@@ -887,6 +941,21 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
     ?>
 
     <div>
+      <div class="d-flex justify-content-end mb-2">
+        <?php if ($canCreate): ?>
+          <button id="btn-new-event" class="btn btn-success">
+            <i class="fas fa-plus"></i> Crear evento
+          </button>
+        <?php endif; ?>
+
+        <?php if ($canRequest): ?>
+          <button id="btn-request-event"
+                  class="btn btn-primary <?= $canCreate ? 'ms-2' : '' ?>">
+            <i class="fas fa-envelope-open-text"></i> Solicitar evento
+          </button>
+        <?php endif; ?>
+      </div>
+
       <nav class="month-nav">
         <!-- Mes anterior -->
         <form method="POST" style="display:inline-block">
@@ -924,6 +993,10 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
                   $si = strtotime($e['fecha_hora_inicio']);
                   $st = strtotime($e['fecha_hora_termino']);
                 ?>
+                <?php
+                  /* ── Puede gestionar (Editar / Duplicar / Eliminar) ── */
+                  $canManage = $isLiderNacional;
+                ?>
                 <tr>
                   <td>
                     <?= $dias[date('w',$si)] . ' ' . date('d',$si) ?><br>
@@ -952,12 +1025,13 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
                   </td>
                   <td><?= htmlspecialchars($e['nombre_estado_final']) ?></td>
                   <td class="actions" style="white-space:nowrap">
-                    <!-- 1) Ver detalles -->
+
+                    <!-- Ver detalles: siempre -->
                     <button
                       title="Ver detalles"
                       class="action-btn detail-btn"
-                      data-fi="<?= $dias[date('w',$si)] . ' ' . date('d',$si) . ' | ' . date('H.i',$si) . ' horas' ?>"
-                      data-ft="<?= $dias[date('w',$si)] . ' ' . date('d',$si) . ' | ' . date('H.i',$si) . ' horas' ?>"
+                      data-fi="<?= $dias[date('w',$si)].' '.date('d',$si).' | '.date('H.i',$si).' horas' ?>"
+                      data-ft="<?= $dias[date('w',$st)].' '.date('d',$st).' | '.date('H.i',$st).' horas' ?>"
                       data-nombre="<?= htmlspecialchars($e['nombre_evento']) ?>"
                       data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
                       data-encargado="<?= htmlspecialchars($e['encargado_nombre_completo'] ?? '') ?>"
@@ -965,65 +1039,70 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
                       data-equipos="<?= htmlspecialchars($e['equipos'] ?: 'General') ?>"
                       data-previo="<?= htmlspecialchars($e['nombre_estado_previo'] ?? '') ?>"
                       data-tipo="<?= htmlspecialchars($e['nombre_tipo'] ?? '') ?>"
-                      data-asist="<?= (int)$e['cnt_presente'] . ' de ' . (int)$e['total_integrantes'] ?>"
-                      data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
+                      data-asist="<?= (int)$e['cnt_presente'].' de '.(int)$e['total_integrantes'] ?>"
+                      data-observacion="<?= 
+                          htmlspecialchars($e['observacion'] ?? '', ENT_QUOTES)
+                      ?>"
+                      data-can-see-observacion="<?= $e['show_observacion'] ? '1' : '0' ?>"
                       data-final="<?= htmlspecialchars($e['nombre_estado_final'] ?? '') ?>"
                     >
                       <i class="fas fa-eye"></i>
                     </button>
 
-                    <!-- 2) Editar -->
-                    <button
-                      title="Editar"
-                      class="action-btn edit-btn"
-                      data-id="<?= $e['id_evento'] ?>"
-                      data-nombre="<?= htmlspecialchars($e['nombre_evento'] ?? '') ?>"
-                      data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
-                      data-encargado="<?= (int)$e['encargado_id'] ?>"
-                      data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
-                      data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
-                      data-start="<?= $e['fecha_hora_inicio'] ?>"
-                      data-end="<?= $e['fecha_hora_termino'] ?>"
-                      data-previo="<?= $e['id_estado_previo'] ?>"
-                      data-tipo="<?= $e['id_tipo'] ?>"
-                      data-final="<?= $e['id_estado_final'] ?>"
-                      data-equipos="<?= htmlspecialchars($e['equipo_ids']) ?>"
-                    >
-                      <i class="fas fa-pen"></i>
-                    </button>
-
-                    <!-- 3) Duplicar -->
-                    <button
-                      title="Duplicar"
-                      class="action-btn copy-btn"
-                      data-id="<?= $e['id_evento'] ?>"
-                      data-nombre="<?= htmlspecialchars($e['nombre_evento'] ?? '') ?>"
-                      data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
-                      data-encargado="<?= (int)$e['encargado_id'] ?>"
-                      data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
-                      data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
-                      data-start="<?= $e['fecha_hora_inicio'] ?>"
-                      data-end="<?= $e['fecha_hora_termino'] ?>"
-                      data-previo="<?= $e['id_estado_previo'] ?>"
-                      data-tipo="<?= $e['id_tipo'] ?>"
-                      data-final="<?= $e['id_estado_final'] ?>"
-                      data-equipos="<?= htmlspecialchars($e['equipo_ids']) ?>"
-                    >
-                      <i class="fas fa-copy"></i>
-                    </button>
-
-                    <!-- 4) Eliminar -->
-                    <button
-                      class="action-btn delete-btn"
-                      data-id="<?= $e['id_evento'] ?>"
-                      title="Eliminar">
-                      <i class="fas fa-trash-alt"></i>
-                    </button>
-
-                    <!-- 5) Notificar -->
-                    <button title="Notificar" class="action-btn notify-btn">
+                    <!-- Notificar: siempre -->
+                    <button title="Notificar" class="action-btn notify-btn"
+                            data-id="<?= $e['id_evento'] ?>">
                       <i class="fas fa-bell"></i>
                     </button>
+
+                    <?php if ($canManage): ?>
+                      <!-- Editar -->
+                      <button
+                        title="Editar" class="action-btn edit-btn"
+                        data-id="<?= $e['id_evento'] ?>"
+                        data-nombre="<?= htmlspecialchars($e['nombre_evento'] ?? '') ?>"
+                        data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
+                        data-encargado="<?= (int)$e['encargado_id'] ?>"
+                        data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
+                        data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
+                        data-start="<?= $e['fecha_hora_inicio'] ?>"
+                        data-end="<?= $e['fecha_hora_termino'] ?>"
+                        data-previo="<?= $e['id_estado_previo'] ?>"
+                        data-tipo="<?= $e['id_tipo'] ?>"
+                        data-final="<?= $e['id_estado_final'] ?>"
+                        data-equipos="<?= htmlspecialchars($e['equipo_ids']) ?>"
+                      >
+                        <i class="fas fa-pen"></i>
+                      </button>
+
+                      <!-- 3) Duplicar -->
+                      <button
+                        title="Duplicar"
+                        class="action-btn copy-btn"
+                        data-id="<?= $e['id_evento'] ?>"
+                        data-nombre="<?= htmlspecialchars($e['nombre_evento'] ?? '') ?>"
+                        data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
+                        data-encargado="<?= (int)$e['encargado_id'] ?>"
+                        data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
+                        data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
+                        data-start="<?= $e['fecha_hora_inicio'] ?>"
+                        data-end="<?= $e['fecha_hora_termino'] ?>"
+                        data-previo="<?= $e['id_estado_previo'] ?>"
+                        data-tipo="<?= $e['id_tipo'] ?>"
+                        data-final="<?= $e['id_estado_final'] ?>"
+                        data-equipos="<?= htmlspecialchars($e['equipo_ids']) ?>"
+                      >
+                        <i class="fas fa-copy"></i>
+                      </button>
+
+                      <!-- 4) Eliminar -->
+                      <button
+                        class="action-btn delete-btn"
+                        data-id="<?= $e['id_evento'] ?>"
+                        title="Eliminar">
+                        <i class="fas fa-trash-alt"></i>
+                      </button>
+                    <?php endif; ?>
                   </td>
                 </tr>
                 <?php endforeach; ?>
@@ -1090,7 +1169,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
           <div class="detail-item">
             <dt>Asistencia previa</dt><dd id="md-asist"></dd>
           </div>
-          <div class="detail-item">
+          <div class="detail-item" id="row-observacion">
             <dt>Observación</dt><dd id="md-observacion"></dd>
           </div>
           <div class="detail-item">
@@ -1358,6 +1437,245 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       <footer class="card-footer bg-transparent border-0 p-0 mt-3">
         <button id="btn-create-evento" class="btn btn-primary">
           Crear evento
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ═════════ Modal Crear Evento ═════════ -->
+  <div id="modal-create" class="modal-overlay" style="display:none">
+    <div class="modal-content card">
+      <header class="card-header">
+        <h2 class="card-title">Crear Evento</h2>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </header>
+
+      <div class="card-body">
+        <form id="form-create-evento">
+          <!-- 1) Nombre -->
+          <div class="form-group">
+            <label>Nombre:</label>
+            <input type="text" name="nombre_evento" id="create-nombre" required>
+            <small id="create-err-required-nombre" class="err-inline">* obligatorio</small>
+            <small id="create-err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 2) Lugar -->
+          <div class="form-group">
+            <label>Lugar:</label>
+            <input type="text" name="lugar" id="create-lugar">
+            <small id="create-err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 3) Descripción -->
+          <div class="form-group">
+            <label>Descripción:</label>
+            <textarea name="descripcion" id="create-descripcion"></textarea>
+            <small id="create-err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 4) Observación -->
+          <div class="form-group">
+            <label>Observación:</label>
+            <textarea name="observacion" id="create-observacion"></textarea>
+            <small id="create-err-regex-observacion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 5) Fechas -->
+          <div class="form-group">
+            <label>Fecha y hora inicio:</label>
+            <input type="datetime-local" name="fecha_hora_inicio" id="create-start" required>
+            <small id="create-err-required-start" class="err-inline">* fecha y hora requeridas</small>
+          </div>
+          <div class="form-group">
+            <label>Fecha y hora término:</label>
+            <input type="datetime-local" name="fecha_hora_termino" id="create-end">
+            <small id="create-err-required-end" class="err-inline">* fecha y hora requeridas</small>
+            <div id="create-end-error" class="input-error" style="display:none">
+              * La fecha y hora de término debe ser igual o posterior al inicio.
+            </div>
+          </div>
+
+          <!-- 6) Selects Estado previo / Tipo / Estado final -->
+          <div class="form-group">
+            <label>Estado previo:</label>
+            <select name="id_estado_previo" id="create-previo">
+              <?php foreach($estPrev as $v): ?>
+                <option value="<?= $v['id_estado_previo'] ?>"><?= htmlspecialchars($v['nombre_estado_previo']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo:</label>
+            <select name="id_tipo" id="create-tipo">
+              <?php foreach($tipos as $t): ?>
+                <option value="<?= $t['id_tipo'] ?>"><?= htmlspecialchars($t['nombre_tipo']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Estado final:</label>
+            <select name="id_estado_final" id="create-final">
+              <?php foreach($estFin as $f): ?>
+                <option value="<?= $f['id_estado_final'] ?>"><?= htmlspecialchars($f['nombre_estado_final']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+
+          <!-- 7) Equipos / Proyectos + “General” -->
+          <div class="form-group">
+            <label>Equipos/Proyectos:</label>
+            <div class="checkboxes-grid">
+              <!-- General -->
+              <label class="checkbox-item">
+                <input type="checkbox" id="create-general"
+                      name="id_equipo_proyecto[]" value="">
+                General
+              </label>
+              <!-- Listado dinámico -->
+              <?php foreach($allEq as $p): ?>
+                <label class="checkbox-item">
+                  <input type="checkbox"
+                        class="create-project-chk"
+                        name="id_equipo_proyecto[]"
+                        value="<?= $p['id_equipo_proyecto'] ?>">
+                  <?= htmlspecialchars($p['nombre_equipo_proyecto']) ?>
+                </label>
+              <?php endforeach; ?>
+              <small id="create-projects-error" class="err-inline proj-error">
+                * Debes marcar “General” o al menos un equipo/proyecto.
+              </small>
+            </div>
+          </div>
+
+          <!-- 8) Encargado -->
+          <div class="form-group">
+            <label>Encargado:</label>
+            <select id="create-encargado" name="encargado">
+              <option value="">— sin encargado —</option>
+              <?php foreach ($leaders as $ldr): ?>
+                <option value="<?= $ldr['id_usuario'] ?>"
+                        data-projects="<?= trim($ldr['project_ids'], ',') ?>">
+                  <?= htmlspecialchars($ldr['full_name']) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </form>
+      </div>
+
+      <footer class="card-footer bg-transparent border-0 p-0 mt-3">
+        <button id="btn-store-evento" class="btn btn-success w-100">
+          Crear evento
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ═════════ Modal Solicitar Evento ═════════ -->
+  <div id="modal-request" class="modal-overlay" style="display:none">
+    <div class="modal-content card">
+      <header class="card-header">
+        <h2 class="card-title">Solicitar Evento</h2>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </header>
+
+      <div class="card-body">
+        <form id="form-request-evento">
+          <!-- 0) Hidden defaults -->
+          <input type="hidden" name="id_estado_previo" value="3"><!-- En espera -->
+          <input type="hidden" name="id_estado_final"  value="3"><!-- En pausa  -->
+
+          <!-- 1) Nombre -->
+          <div class="form-group">
+            <label>Nombre:</label>
+            <input type="text" name="nombre_evento" id="req-nombre" required>
+            <small id="req-err-required-nombre" class="err-inline">* obligatorio</small>
+            <small id="req-err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 2) Lugar -->
+          <div class="form-group">
+            <label>Lugar:</label>
+            <input type="text" name="lugar" id="req-lugar">
+            <small id="req-err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 3) Descripción -->
+          <div class="form-group">
+            <label>Descripción:</label>
+            <textarea name="descripcion" id="req-descripcion"></textarea>
+            <small id="req-err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+          </div>
+
+          <!-- 4) Fechas -->
+          <div class="form-group">
+            <label>Fecha y hora inicio:</label>
+            <input type="datetime-local" name="fecha_hora_inicio" id="req-start" required>
+            <small id="req-err-required-start" class="err-inline">* fecha y hora requeridas</small>
+          </div>
+          <div class="form-group">
+            <label>Fecha y hora término:</label>
+            <input type="datetime-local" name="fecha_hora_termino" id="req-end">
+            <small id="req-err-required-end" class="err-inline">* fecha y hora requeridas</small>
+            <div id="req-end-error" class="input-error" style="display:none">
+              * La fecha y hora de término debe ser igual o posterior al inicio.
+            </div>
+          </div>
+
+          <!-- 5) Tipo -->
+          <div class="form-group">
+            <label>Tipo:</label>
+            <select name="id_tipo" id="req-tipo">
+              <?php foreach($tipos as $t): ?>
+                <option value="<?= $t['id_tipo'] ?>"><?= htmlspecialchars($t['nombre_tipo']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+
+          <!-- 6) Equipos / Proyectos + “General” -->
+          <div class="form-group">
+            <label>Equipos/Proyectos:</label>
+            <div class="checkboxes-grid">
+              <label class="checkbox-item">
+                <input type="checkbox" id="req-general"
+                      name="id_equipo_proyecto[]" value="">
+                General
+              </label>
+              <?php foreach($allEq as $p): ?>
+                <label class="checkbox-item">
+                  <input type="checkbox"
+                        class="req-project-chk"
+                        name="id_equipo_proyecto[]"
+                        value="<?= $p['id_equipo_proyecto'] ?>">
+                  <?= htmlspecialchars($p['nombre_equipo_proyecto']) ?>
+                </label>
+              <?php endforeach; ?>
+              <small id="req-projects-error" class="err-inline proj-error">
+                * Debes marcar “General” o al menos un equipo/proyecto.
+              </small>
+            </div>
+          </div>
+
+          <!-- 7) Encargado -->
+          <div class="form-group">
+            <label>Encargado:</label>
+            <select id="req-encargado" name="encargado">
+              <option value="">— sin encargado —</option>
+              <?php foreach ($leaders as $ldr): ?>
+                <option value="<?= $ldr['id_usuario'] ?>"
+                        data-projects="<?= trim($ldr['project_ids'], ',') ?>">
+                  <?= htmlspecialchars($ldr['full_name']) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </form>
+      </div>
+
+      <footer class="card-footer bg-transparent border-0 p-0 mt-3">
+        <button id="btn-send-request" class="btn btn-primary w-100">
+          Solicitar evento
         </button>
       </footer>
     </div>

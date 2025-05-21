@@ -22,6 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
       modalDetail.querySelector('#md-tipo').textContent        = btn.dataset.tipo;
       modalDetail.querySelector('#md-asist').textContent       = btn.dataset.asist;
       modalDetail.querySelector('#md-observacion').textContent = btn.dataset.observacion;
+      // ─── Mostrar siempre el título si el usuario tiene permiso ───
+      const obsRow = modalDetail.querySelector('#row-observacion');
+      const canSee = btn.dataset.canSeeObservacion === '1';
+      obsRow.style.display = canSee ? '' : 'none';
       modalDetail.querySelector('#md-final').textContent       = btn.dataset.final;
       modalDetail.style.display = 'flex';
     });
@@ -361,6 +365,288 @@ document.addEventListener('DOMContentLoaded', () => {
   closeCopy.addEventListener('click', ()=> modalCopy.style.display='none');
   modalCopy.addEventListener('click', e=>{
     if(e.target === modalCopy) modalCopy.style.display='none';
+  });
+
+  /* ——— Modal CREAR ——— */
+  const modalCreate   = document.getElementById('modal-create');
+  const btnNewEvent   = document.getElementById('btn-new-event');
+  const closeCreate   = modalCreate.querySelector('.modal-close');
+  const saveCreateBt  = document.getElementById('btn-store-evento');
+
+  const createTxtRules = [
+    {inp:'create-nombre', req:'create-err-required-nombre', rgx:'create-err-regex-nombre'},
+    {inp:'create-lugar',  req:null,                         rgx:'create-err-regex-lugar'},
+    {inp:'create-descripcion', req:null,                   rgx:'create-err-regex-descripcion'},
+    {inp:'create-observacion', req:null,                   rgx:'create-err-regex-observacion'}
+  ];
+  const createDtRules = [
+    {inp:'create-start', req:'create-err-required-start'},
+    {inp:'create-end',   req:'create-err-required-end'}
+  ];
+  const createAllowedRE  = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()-]+$/;
+  const createBody       = modalCreate.querySelector('.card-body');
+  const createGeneralChk = document.getElementById('create-general');
+  const createProjChks   = Array.from(document.querySelectorAll('.create-project-chk'));
+  const createProjErr    = document.getElementById('create-projects-error');
+  const createEncSel     = document.getElementById('create-encargado');
+
+  /* —— Validación modal-create —— */
+  let createFirstInvalid = null;
+  function showCreate(id){ document.getElementById(id).style.display='inline'; }
+  function hideCreate(id){ document.getElementById(id).style.display='none'; }
+
+  function scrollCreate(el){
+    const y = el.getBoundingClientRect().top
+            - createBody.getBoundingClientRect().top
+            + createBody.scrollTop - 40;
+    createBody.scrollTo({top:y,behavior:'smooth'});
+    el.focus();
+  }
+
+  function validateCreateField(id){
+    const txt = createTxtRules.find(r=>r.inp===id);
+    if (txt){
+      const v = document.getElementById(id).value.trim();
+      if (txt.req) (v ? hideCreate(txt.req) : (showCreate(txt.req), createFirstInvalid ??= id));
+      if (v && !createAllowedRE.test(v)) showCreate(txt.rgx); else hideCreate(txt.rgx);
+    }
+    const dt = createDtRules.find(r=>r.inp===id);
+    if (dt){
+      const v = document.getElementById(id).value;
+      v ? hideCreate(dt.req) : (showCreate(dt.req), createFirstInvalid ??= id);
+    }
+  }
+
+  function validateCreateAll(){
+    createFirstInvalid = null;
+    createTxtRules.forEach(r=>validateCreateField(r.inp));
+    createDtRules .forEach(r=>validateCreateField(r.inp));
+    return !createFirstInvalid;
+  }
+  function validateCreateProjects(){
+    const ok = createGeneralChk.checked || createProjChks.some(c=>c.checked);
+    createProjErr.style.display = ok ? 'none' : 'block';
+    return ok;
+  }
+
+  /* Filtrar encargados según equipos */
+  function filterEncCreate(selProjects){
+    const selSet = new Set(selProjects.map(String));
+    let keep = false;
+    Array.from(createEncSel.options).forEach(opt=>{
+      if(!opt.value) return;
+      const optProj = cleanList(opt.dataset.projects);
+      const vis = selSet.size===0 || optProj.length===0 || optProj.some(p=>selSet.has(p));
+      opt.hidden = !vis;
+      if(opt.value===createEncSel.value && vis) keep=true;
+    });
+    if(!keep) createEncSel.value='';
+  }
+
+  /* disparar validación inmediata */
+  [...createTxtRules, ...createDtRules].forEach(({inp})=>{
+    const el = document.getElementById(inp);
+    const ev = el.type === 'datetime-local' ? 'change' : 'input';
+    el.addEventListener(ev , ()=>validateCreateField(inp));
+    el.addEventListener('blur', ()=>validateCreateField(inp));
+  });
+
+  /* abrir modal vacío */
+  if (btnNewEvent) {
+    btnNewEvent.addEventListener('click', ()=>{
+      document.getElementById('form-create-evento').reset();
+      createProjErr.style.display='none';
+      createBody.scrollTop = 0;
+      modalCreate.style.display='flex';
+    });
+  }
+
+  /* cerrar */
+  closeCreate.addEventListener('click', ()=> modalCreate.style.display='none');
+  modalCreate.addEventListener('click', e=>{
+    if(e.target===modalCreate) modalCreate.style.display='none';
+  });
+
+  /* sincronizar checks y encargado */
+  createGeneralChk.onchange = ()=>{
+    if(createGeneralChk.checked){
+      createProjChks.forEach(c=>c.checked=false);
+      filterEncCreate([]);
+      validateCreateProjects();
+    }
+  };
+  createProjChks.forEach(chk=>chk.onchange=()=>{
+    const sel = createProjChks.filter(c=>c.checked).map(c=>c.value);
+    createGeneralChk.checked = sel.length===0;
+    filterEncCreate(sel);
+    validateCreateProjects();
+  });
+
+  /* guardar */
+  saveCreateBt.addEventListener('click', async ()=>{
+    const errEnd = document.getElementById('create-end-error');
+    errEnd.style.display='none';
+
+    if(!validateCreateAll() || !validateCreateProjects()){
+      scrollCreate(document.getElementById(createFirstInvalid) || createProjErr);
+      return;
+    }
+    const st=document.getElementById('create-start');
+    const en=document.getElementById('create-end');
+    if(en.value && en.value<st.value){
+      errEnd.style.display='block';
+      scrollCreate(errEnd);
+      return;
+    }
+
+    saveCreateBt.disabled=true;
+    const orig=saveCreateBt.textContent;
+    saveCreateBt.textContent='Guardando…';
+
+    const fd=new FormData(document.getElementById('form-create-evento'));
+    try{
+      const r=await fetch('crear_evento.php',{method:'POST',body:fd});
+      const j=await r.json();
+      if(!j.mensaje) throw new Error(j.error||'Error');
+      location.reload();
+    }catch(e){
+      alert('Error: '+e.message);
+      saveCreateBt.disabled=false;
+      saveCreateBt.textContent=orig;
+    }
+  });
+
+  /* ——— Modal SOLICITAR ——— */
+  const modalReq    = document.getElementById('modal-request');
+  const btnReqOpen  = document.getElementById('btn-request-event');
+  const closeReq    = modalReq.querySelector('.modal-close');
+  const btnReqSend  = document.getElementById('btn-send-request');
+
+  /* Reglas de validación */
+  const reqTxtRules = [
+    {inp:'req-nombre',      req:'req-err-required-nombre',  rgx:'req-err-regex-nombre'},
+    {inp:'req-lugar',       req:null,                       rgx:'req-err-regex-lugar'},
+    {inp:'req-descripcion', req:null,                       rgx:'req-err-regex-descripcion'}
+  ];
+  const reqDtRules = [
+    {inp:'req-start', req:'req-err-required-start'},
+    {inp:'req-end',   req:'req-err-required-end'}
+  ];
+  const reqAllowedRE = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()-]+$/;
+  const reqBody      = modalReq.querySelector('.card-body');
+  const reqGeneral   = document.getElementById('req-general');
+  const reqProjChks  = Array.from(document.querySelectorAll('.req-project-chk'));
+  const reqProjErr   = document.getElementById('req-projects-error');
+  const reqEncSel    = document.getElementById('req-encargado');
+
+  /* helpers */
+  let reqFirstInvalid = null;
+  const rs = id=>document.getElementById(id);
+  function reqShow(id){ rs(id).style.display='inline'; }
+  function reqHide(id){ rs(id).style.display='none'; }
+  function reqScroll(el){
+    const y = el.getBoundingClientRect().top
+            - reqBody.getBoundingClientRect().top
+            + reqBody.scrollTop - 40;
+    reqBody.scrollTo({top:y,behavior:'smooth'});
+    el.focus();
+  }
+  function reqValidateField(id){
+    const txt = reqTxtRules.find(r=>r.inp===id);
+    if(txt){
+      const v = rs(id).value.trim();
+      if(txt.req) (v ? reqHide(txt.req) : (reqShow(txt.req), reqFirstInvalid ??= id));
+      if(v && !reqAllowedRE.test(v)) reqShow(txt.rgx); else reqHide(txt.rgx);
+    }
+    const dt = reqDtRules.find(r=>r.inp===id);
+    if(dt){
+      const v = rs(id).value;
+      v ? reqHide(dt.req) : (reqShow(dt.req), reqFirstInvalid ??= id);
+    }
+  }
+  function reqValidateAll(){
+    reqFirstInvalid=null;
+    reqTxtRules.forEach(r=>reqValidateField(r.inp));
+    reqDtRules .forEach(r=>reqValidateField(r.inp));
+    return !reqFirstInvalid;
+  }
+  function reqValidateProjects(){
+    const ok = reqGeneral.checked || reqProjChks.some(c=>c.checked);
+    reqProjErr.style.display = ok ? 'none' : 'block';
+    return ok;
+  }
+  function filterEncReq(selProjects){
+    const set=new Set(selProjects.map(String)); let keep=false;
+    Array.from(reqEncSel.options).forEach(opt=>{
+      if(!opt.value) return;
+      const optProj = cleanList(opt.dataset.projects);
+      const vis = set.size===0 || optProj.length===0 || optProj.some(p=>set.has(p));
+      opt.hidden=!vis;
+      if(opt.value===reqEncSel.value && vis) keep=true;
+    });
+    if(!keep) reqEncSel.value='';
+  }
+
+  /* dispara validación inmediata */
+  [...reqTxtRules,...reqDtRules].forEach(({inp})=>{
+    const el = rs(inp);
+    const ev = el.type==='datetime-local'?'change':'input';
+    el.addEventListener(ev ,()=>reqValidateField(inp));
+    el.addEventListener('blur',()=>reqValidateField(inp));
+  });
+
+  /* abrir */
+  btnReqOpen.addEventListener('click', ()=>{
+    rs('form-request-evento').reset();
+    reqProjErr.style.display='none';
+    reqBody.scrollTop=0;
+    modalReq.style.display='flex';
+  });
+  /* cerrar */
+  closeReq.addEventListener('click', ()=> modalReq.style.display='none');
+  modalReq.addEventListener('click',e=>{
+    if(e.target===modalReq) modalReq.style.display='none';
+  });
+
+  /* sincronizar checks */
+  reqGeneral.onchange = ()=>{
+    if(reqGeneral.checked){
+      reqProjChks.forEach(c=>c.checked=false);
+      filterEncReq([]);
+      reqValidateProjects();
+    }
+  };
+  reqProjChks.forEach(chk=>chk.onchange=()=>{
+    const sel=reqProjChks.filter(c=>c.checked).map(c=>c.value);
+    reqGeneral.checked = sel.length===0;
+    filterEncReq(sel);
+    reqValidateProjects();
+  });
+
+  /* enviar */
+  btnReqSend.addEventListener('click', async ()=>{
+    const errEnd = rs('req-end-error'); errEnd.style.display='none';
+
+    if(!reqValidateAll()||!reqValidateProjects()){
+      reqScroll(rs(reqFirstInvalid)||reqProjErr); return;
+    }
+    const st=rs('req-start'); const en=rs('req-end');
+    if(en.value&&en.value<st.value){
+      errEnd.style.display='block'; reqScroll(errEnd); return;
+    }
+
+    btnReqSend.disabled=true; const orig=btnReqSend.textContent;
+    btnReqSend.textContent='Enviando…';
+    const fd=new FormData(rs('form-request-evento'));
+    try{
+      const r=await fetch('crear_evento.php',{method:'POST',body:fd});
+      const j=await r.json();
+      if(!j.mensaje) throw new Error(j.error||'Error al solicitar');
+      location.reload();
+    }catch(e){
+      alert('Error: '+e.message);
+      btnReqSend.disabled=false; btnReqSend.textContent=orig;
+    }
   });
 
   // ——— Botón Eliminar ———
