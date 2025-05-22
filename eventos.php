@@ -43,6 +43,22 @@ $stmtLiderNacional = $pdo->prepare(
 $stmtLiderNacional->execute([$id_usuario]);
 $isLiderNacional = (bool)$stmtLiderNacional->fetchColumn();
 
+// ─── Equipos donde el usuario es Líder (4) o Coordinador/a (6) ───
+$leadStmt = $pdo->prepare("
+  SELECT DISTINCT id_equipo_proyecto
+    FROM integrantes_equipos_proyectos
+   WHERE id_usuario = :uid
+     AND id_rol IN (4,6)
+");
+$leadStmt->execute(['uid'=>$id_usuario]);
+$myLeadTeams = $leadStmt->fetchAll(PDO::FETCH_COLUMN);
+
+// evento_buscar: término de búsqueda (puede venir por GET o POST)
+$busqueda = trim($_REQUEST['busqueda'] ?? '');
+
+// ¿Está activo el filtro “Aprobar eventos”?
+$showAprob = ($_REQUEST['aprobados'] ?? '') === '1';
+
 // 1.2) Traer para el nav: nombre + foto
 $stmtNav = $pdo->prepare("
   SELECT nombres, foto_perfil
@@ -79,13 +95,15 @@ $mesParam = $_POST['mes']     ?? date('Y-m');
 
 list($year, $month) = explode('-', $mesParam);
 
-// 2.4) Validar: solo “calendario”, “general” o un ID en tu lista
+// 2.4) Validar: solo “calendario”, “general” o un ID válido
 if ($filtro !== 'calendario' && $filtro !== 'general') {
     $fid = (int)$filtro;
-    if (!in_array($fid, $userTeamIds, true)) {
+    // Si NO eres Liderazgo nacional y no estás en ese equipo, redirige
+    if (!$isLiderNacional && !in_array($fid, $userTeamIds, true)) {
         header('Location: eventos.php?filtro=calendario');
         exit;
     }
+    // Si eres Liderazgo nacional, aceptas cualquier $fid
     $filtro = $fid;
 }
 
@@ -108,6 +126,41 @@ $where[]          = "YEAR(e.fecha_hora_inicio) = :year";
 $where[]          = "MONTH(e.fecha_hora_inicio) = :month";
 $params['year']   = $year;
 $params['month']  = $month;
+
+if ($busqueda !== '') {
+    $where[] = "(
+        e.nombre_evento LIKE :busqueda
+     OR CONCAT(u.nombres,' ',u.apellido_paterno,' ',u.apellido_materno) LIKE :busqueda
+     OR e.lugar LIKE :busqueda
+     OR e.descripcion LIKE :busqueda
+     OR e.observacion LIKE :busqueda
+     OR tipe.nombre_tipo LIKE :busqueda
+     OR prev.nombre_estado_previo LIKE :busqueda
+     OR fin.nombre_estado_final LIKE :busqueda
+     OR epj.nombre_equipo_proyecto LIKE :busqueda
+    )";
+    $params['busqueda'] = "%{$busqueda}%";
+}
+
+// ─── Filtrar por id_estado_previo según rol ───
+if (!$isLiderNacional) {
+    if (!empty($myLeadTeams)) {
+        // Puedes ver Aprobados (1) siempre, y Rechazados (2)/En espera (3)
+//     ──────────────────────────────────────────────────────────────────────
+        $where[] = "(
+            e.id_estado_previo = 1
+          OR (
+               e.id_estado_previo IN (2,3)
+            AND e.es_general = 0
+            AND ep.id_equipo_proyecto IN (".implode(',', array_map('intval',$myLeadTeams)).")
+          )
+        )";
+    } else {
+        // Sin rol 4/6 y no nacional: solo Aprobados
+        $where[] = "e.id_estado_previo = 1";
+    }
+}
+// si $isLiderNacional === true, no agregamos nada: ve todos los estados
 
 // Calendario: todo, no agregamos condición
 if ($filtro === 'calendario') {
@@ -215,6 +268,22 @@ $stmtEv = $pdo->prepare($sql);
 $stmtEv->execute($params);
 
 $rows = $stmtEv->fetchAll(PDO::FETCH_ASSOC);
+
+// ─── 1) Contar globalmente todos los eventos “En espera” (estado_previo = 3)
+$pendingCount = 0;
+if ($isLiderNacional) {
+    $cntStmt = $pdo->query("
+      SELECT COUNT(*) 
+        FROM eventos 
+       WHERE id_estado_previo = 3
+    ");
+    $pendingCount = (int)$cntStmt->fetchColumn();
+}
+
+// ─── 2) Si soy Liderazgo nacional y activo “Aprobar”, filtrar solo estado_previo = 3
+if ($isLiderNacional && $showAprob) {
+    $rows = array_filter($rows, fn($e)=> (int)$e['id_estado_previo'] === 3);
+}
 
 // ─── Determinar eventos asociados a equipos donde el usuario es Líder (4) o Coordinador/a (6)
 $obsStmt = $pdo->prepare("
@@ -839,6 +908,10 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       margin-top:.25rem;
       font-size:.875rem;
     }
+
+    .btn-warning.active{
+      background:#e69500; 
+    }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -905,28 +978,47 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
   <main>
     <div class="container" style="display:grid; grid-template-columns:200px 1fr; gap:1rem">
     <!-- 4.1) Panel izquierdo -->
-    <aside style="background:#fafafa; padding:1rem; border-radius:6px">
-      <!-- General wrapper para todos los forms -->
-      <?php foreach ([
-          'calendario' => 'Calendario',
-          'general'    => 'Eventos Generales'
-        ] + array_column($userTeams, 'nombre_equipo_proyecto', 'id_equipo_proyecto')
-          as $key => $label): ?>
+    <?php
+      // ─── Armar lista de filtros para el sidebar ───
+      $sidebarOpts = [
+        'calendario' => 'Calendario',
+        'general'    => 'Eventos Generales',
+      ];
 
+      if ($isLiderNacional) {
+          // Liderazgo nacional ve TODOS los proyectos
+          $projectsForSidebar = $allProjects;
+      } else {
+          // Usuarios “normales” solo ven sus equipos/proyectos
+          $projectsForSidebar = $userTeams;
+      }
+
+      // Convertir a [id => nombre]
+      $sidebarOpts += array_column(
+        $projectsForSidebar,
+        'nombre_equipo_proyecto',
+        'id_equipo_proyecto'
+      );
+    ?>
+    <aside style="background:#fafafa; padding:1rem; border-radius:6px">
+      <?php foreach ($sidebarOpts as $key => $label): ?>
         <form method="POST" style="margin:0 0 .5rem">
-          <!-- conserva el mes actual -->
-          <input type="hidden" name="mes"   value="<?= htmlspecialchars($mesParam) ?>">
-          <button 
-            name="filtro" 
-            value="<?= htmlspecialchars($key) ?>"
-            style="width:100%; text-align:left; 
-                  background:<?= $filtro===$key?'#e0e0e0':'transparent' ?>;
-                  font-weight:<?= $filtro===$key?'bold':'normal' ?>;
-                  border:none; padding:.5rem; cursor:pointer;">
-            <?= htmlspecialchars($label) ?>
+          <input type="hidden" name="mes"      value="<?=htmlspecialchars($mesParam)?>">
+          <input type="hidden" name="busqueda" value="<?=htmlspecialchars($busqueda)?>">
+          <button
+            name="filtro"
+            value="<?=htmlspecialchars($key)?>"
+            style="
+              width:100%;
+              text-align:left;
+              background:<?= $filtro===$key ? '#e0e0e0':'transparent'?>;
+              font-weight:<?= $filtro===$key ? 'bold':'normal'?>;
+              border:none; padding:.5rem; cursor:pointer;
+            "
+          >
+            <?=htmlspecialchars($label)?>
           </button>
         </form>
-
       <?php endforeach; ?>
     </aside>
 
@@ -942,6 +1034,62 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
 
     <div>
       <div class="d-flex justify-content-end mb-2">
+        <form class="d-flex me-auto" method="POST" action="eventos.php">
+          <input
+            type="text"
+            name="busqueda"
+            placeholder="Buscar..."
+            value="<?= htmlspecialchars($busqueda) ?>"
+            style="padding:.4rem .6rem; border:1px solid #ccc; border-radius:4px;"
+          >
+          <input type="hidden" name="filtro" value="<?= htmlspecialchars($filtro) ?>">
+          <input type="hidden" name="mes"    value="<?= htmlspecialchars($mesParam) ?>">
+          <button type="submit" class="btn btn-outline-secondary ms-2">
+            🔍 Buscar
+          </button>
+        </form>
+
+        <?php
+          // Rango de meses por defecto: mismo mes en start y end
+          $mesStart = $_REQUEST['mesStart'] ?? $mesParam;
+          $mesEnd   = $_REQUEST['mesEnd']   ?? $mesParam;
+        ?>
+        <form 
+          id="form-download" 
+          method="GET" 
+          action="export.php" 
+          class="d-flex align-items-center me-2"
+        >
+          <input type="hidden" name="filtro"    value="<?= htmlspecialchars($filtro) ?>">
+          <input type="hidden" name="busqueda"  value="<?= htmlspecialchars($busqueda) ?>">
+          <input type="hidden" name="aprobados" value="<?= $showAprob ? '1' : '0' ?>">
+          
+          <!-- Rango de meses -->
+          <input 
+            type="month" 
+            name="mesStart" 
+            value="<?= htmlspecialchars($mesStart) ?>"
+            class="form-control form-control-sm me-1"
+          >
+          <span class="me-1">–</span>
+          <input 
+            type="month" 
+            name="mesEnd" 
+            value="<?= htmlspecialchars($mesEnd) ?>"
+            class="form-control form-control-sm me-2"
+          >
+
+          <!-- Formato -->
+          <select name="format" class="form-select form-select-sm me-2">
+            <option value="excel">Excel</option>
+            <option value="pdf">PDF</option>
+          </select>
+
+          <button type="submit" class="btn btn-success btn-sm">
+            ↓ Descargar
+          </button>
+        </form>
+
         <?php if ($canCreate): ?>
           <button id="btn-new-event" class="btn btn-success">
             <i class="fas fa-plus"></i> Crear evento
@@ -956,11 +1104,37 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
         <?php endif; ?>
       </div>
 
+      <?php if ($isLiderNacional): ?>
+        <button
+          id="btn-aprobar-eventos"
+          class="btn btn-warning <?= $showAprob ? 'active' : '' ?>"
+          style="position: relative; margin-right: .5rem;"
+        >
+          Aprobar eventos
+          <?php if ($pendingCount > 0): ?>
+            <span
+              style="
+                position: absolute;
+                top: -6px; right: -6px;
+                background: red;
+                color: white;
+                border-radius: 50%;
+                padding: 2px 6px;
+                font-size: 0.75rem;
+              "
+            >
+              <?= $pendingCount ?>
+            </span>
+          <?php endif; ?>
+        </button>
+      <?php endif; ?>
+
       <nav class="month-nav">
         <!-- Mes anterior -->
         <form method="POST" style="display:inline-block">
           <input type="hidden" name="filtro" value="<?=htmlspecialchars($filtro)?>">
           <input type="hidden" name="mes"    value="<?= $prevMonth ?>">
+          <input type="hidden" name="busqueda" value="<?= htmlspecialchars($busqueda) ?>">
           <button type="submit" class="nav-arrow">&larr;</button>
         </form>
 
@@ -970,6 +1144,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
         <form method="POST" style="display:inline-block">
           <input type="hidden" name="filtro" value="<?=htmlspecialchars($filtro)?>">
           <input type="hidden" name="mes"    value="<?= $nextMonth ?>">
+          <input type="hidden" name="busqueda" value="<?= htmlspecialchars($busqueda) ?>">
           <button type="submit" class="nav-arrow">&rarr;</button>
         </form>
       </nav>

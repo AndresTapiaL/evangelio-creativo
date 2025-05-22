@@ -829,4 +829,20 @@ document.addEventListener('DOMContentLoaded', () => {
       saveCopyBt.textContent = orig;
     }
   });
+
+  // ─── Toggle botón “Aprobar eventos” ───
+  const btnAprob = document.getElementById('btn-aprobar-eventos');
+  if (btnAprob) {
+    btnAprob.addEventListener('click', () => {
+      const params = new URLSearchParams(window.location.search);
+      // Conservar busqueda, filtro, mes, etc., y toggle aprobas
+      if (params.get('aprobados') === '1') {
+        params.delete('aprobados');
+      } else {
+        params.set('aprobados', '1');
+      }
+      // Recargar con la nueva query string
+      window.location.search = params.toString();
+    });
+  }
 });
