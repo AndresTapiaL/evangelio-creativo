@@ -845,4 +845,84 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.search = params.toString();
     });
   }
+
+  // ——————— VALIDACIÓN BUSCADOR ————————
+  const searchInput  = document.getElementById('search-input');
+  const btnSearch    = document.getElementById('btn-search');
+  const searchError  = document.getElementById('search-error');
+  const searchRE     = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,\-()]*$/;
+
+  function validateSearch() {
+    const ok = searchRE.test(searchInput.value);
+    searchError.style.display = ok ? 'none' : 'block';
+    btnSearch.disabled = !ok;
+    return ok;
+  }
+
+  searchInput.addEventListener('input', validateSearch);
+  // validar al cargar
+  validateSearch();
+
+
+  // ——————— VALIDACIÓN DESCARGA ————————
+  const mesStart       = document.getElementById('mesStart');
+  const mesEnd         = document.getElementById('mesEnd');
+  const btnDownload    = document.getElementById('btn-download');
+  const errStart       = document.getElementById('mesStart-error');
+  const errEnd         = document.getElementById('mesEnd-error');
+  const errOrder       = document.getElementById('dateOrder-error');
+  const errRange       = document.getElementById('dateRange-error');
+
+  function validateDownload() {
+    let ok = true;
+
+    const vStart = mesStart.value;
+    const vEnd   = mesEnd.value;
+
+    // 1) No vacíos
+    if (!vStart) { errStart.style.display = 'block'; ok = false; }
+    else         { errStart.style.display = 'none'; }
+
+    if (!vEnd)   { errEnd.style.display   = 'block'; ok = false; }
+    else         { errEnd.style.display   = 'none'; }
+
+    if (!vStart || !vEnd) {
+      // si falta alguno, no seguimos con resto
+      errOrder.style.display = 'none';
+      errRange.style.display = 'none';
+      btnDownload.disabled = !ok;
+      return ok;
+    }
+
+    // convertir a Date (usamos día 1 de cada mes)
+    const [ys, ms] = vStart.split('-').map(Number);
+    const [ye, me] = vEnd.split('-').map(Number);
+    const dStart = new Date(ys, ms-1, 1);
+    const dEnd   = new Date(ye, me-1, 1);
+
+    // 2) vEnd >= vStart
+    if (dEnd < dStart) {
+      errOrder.style.display = 'block';
+      ok = false;
+    } else {
+      errOrder.style.display = 'none';
+    }
+
+    // 3) no más de 2 años de diferencia
+    const twoYearsLater = new Date(ys + 2, ms-1, 1);
+    if (dEnd > twoYearsLater) {
+      errRange.style.display = 'block';
+      ok = false;
+    } else {
+      errRange.style.display = 'none';
+    }
+
+    btnDownload.disabled = !ok;
+    return ok;
+  }
+
+  mesStart.addEventListener('change', validateDownload);
+  mesEnd.addEventListener('change', validateDownload);
+  // validar al cargar
+  validateDownload();
 });

@@ -11,6 +11,13 @@ try{
   $esGeneral = in_array('', $projArr, true) ? 1 : 0;               // "" ⇒ general
   $projArr   = array_filter($projArr, fn($v) => $v !== '');        // limpia los ""
 
+  // ── convertir "" a null ──
+if (isset($_POST['encargado']) && $_POST['encargado'] !== '') {
+    $encargado = (int) $_POST['encargado'];
+} else {
+    $encargado = null;
+}
+
   /* 1. Insertar evento */
   $stmt = $pdo->prepare("
     INSERT INTO eventos(
@@ -30,7 +37,7 @@ try{
     $_POST['id_estado_previo']   ?? null,
     $_POST['id_tipo']            ?? null,
     $_POST['id_estado_final']    ?? null,
-    $_POST['encargado']          ?? null,
+    $encargado,
     $esGeneral                          // ← ahora correcto
   ]);
   $newId = $pdo->lastInsertId();

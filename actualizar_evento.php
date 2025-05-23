@@ -19,6 +19,13 @@ try {
       throw new Exception('La fecha y hora de término no puede ser anterior a la de inicio.');
   }
 
+  // convertir "" a null para el encargado
+if (isset($_POST['encargado']) && $_POST['encargado'] !== '') {
+    $encargado = (int) $_POST['encargado'];
+} else {
+    $encargado = null;
+}
+
   /* ───── 1) Actualizar tabla eventos ───── */
   $f = fn($k) => ($_POST[$k] ?? null) !== '' ? $_POST[$k] : null;
   $stmt = $pdo->prepare("
@@ -46,7 +53,7 @@ try {
     ':prev'     => $f('id_estado_previo'),
     ':tipo'     => $f('id_tipo'),
     ':finest'   => $f('id_estado_final'),
-    ':enc'      => $f('encargado'),
+    ':enc'      => $encargado,
     ':gen'      => $esGeneral ? 1 : 0,
     ':id'       => $idEvento
   ]);

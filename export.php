@@ -136,7 +136,7 @@ $endDate   = date('Y-m-t 23:59:59', strtotime("{$ye}-{$me}-01"));
 $where  = [];
 $params = [];
 
-// 6.1) Permisos por estado previo
+// 6.1) Permisos por estado previo (usando sub‐select para no recortar el JOIN)
 if (! $isLiderNacional) {
     if (!empty($myLeadTeams)) {
         $inLeads = implode(',', array_map('intval',$myLeadTeams));
@@ -145,7 +145,11 @@ if (! $isLiderNacional) {
           OR (
                e.id_estado_previo IN (2,3)
             AND e.es_general = 0
-            AND ep.id_equipo_proyecto IN ({$inLeads})
+            AND e.id_evento IN (
+                 SELECT id_evento
+                   FROM equipos_proyectos_eventos
+                  WHERE id_equipo_proyecto IN ({$inLeads})
+            )
           )
         )";
     } else {
@@ -232,6 +236,8 @@ if ($isLiderNacional && $showAprob) {
 // 7) Preparar y ejecutar SQL
 $sql = "
   SELECT
+    e.id_evento,
+    e.es_general,
     e.fecha_hora_inicio,
     e.fecha_hora_termino,
     e.nombre_evento,
@@ -240,6 +246,7 @@ $sql = "
       GROUP_CONCAT(DISTINCT epj.nombre_equipo_proyecto SEPARATOR ', '),
       'General'
     ) AS equipos,
+    GROUP_CONCAT(DISTINCT ep.id_equipo_proyecto) AS equipo_ids,
 
     prev.nombre_estado_previo,
     fin.nombre_estado_final,
@@ -300,6 +307,46 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// ─── Misma lógica que en eventos.php para show_observacion y equipos_usuario ───
+$obsStmt = $pdo->prepare("
+  SELECT DISTINCT epe.id_evento
+    FROM equipos_proyectos_eventos epe
+    JOIN integrantes_equipos_proyectos iep
+      ON epe.id_equipo_proyecto = iep.id_equipo_proyecto
+   WHERE iep.id_usuario = :uid
+     AND iep.id_rol IN (4,6)
+");
+$obsStmt->execute(['uid'=>$id_usuario]);
+$obsEventIds = $obsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+foreach ($rows as &$e) {
+    // 1) ocultar o mostrar Observación
+    $e['show_observacion'] =
+         $isLiderNacional
+      || in_array((int)$e['id_evento'], $obsEventIds, true);
+
+    // recalcular equipos_usuario (idéntico al fragmento anterior)
+    $rawNames = $e['equipos'] ?: 'General';
+    if ($isLiderNacional) {
+        $e['equipos_usuario'] = $rawNames;
+    } else {
+        if ($e['es_general']) {
+            $e['equipos_usuario'] = 'General';
+        } else {
+            $allIds = array_filter(explode(',', $e['equipo_ids']));
+            $common = array_intersect($allIds, $userTeamIds);
+            $names  = [];
+            foreach ($userTeams as $t) {
+                if (in_array($t['id_equipo_proyecto'], $common, true)) {
+                    $names[] = $t['nombre_equipo_proyecto'];
+                }
+            }
+            $e['equipos_usuario'] = $names ? implode(', ', $names) : 'General';
+        }
+    }
+}
+unset($e);
+
 // 8) Exportar a Excel
 if ($format === 'excel') {
     // BOM para Excel y tildes
@@ -332,7 +379,7 @@ if ($format === 'excel') {
              "<td>".htmlspecialchars($e['encargado'])."</td>",
              "<td>{$asistText}</td>",
              "<td>".htmlspecialchars($e['descripcion']   ?? '')."</td>",
-             "<td>".htmlspecialchars($e['observacion']   ?? '')."</td>",
+             "<td>".htmlspecialchars($e['show_observacion'] ? ($e['observacion'] ?? '') : '')."</td>",
              '</tr>';
     }
     echo "</tbody></table>";
@@ -394,7 +441,7 @@ foreach ($rows as $e) {
       $e['encargado']            ?? '',
       "{$e['cnt_presente']} de {$e['total_integrantes']}",
       $e['descripcion']          ?? '',
-      $e['observacion']          ?? ''
+      $e['show_observacion'] ? ($e['observacion'] ?? '') : ''
     ];
     // aplicar encoding WYSIWYG
     $fila = array_map(

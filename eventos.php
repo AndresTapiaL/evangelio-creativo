@@ -145,14 +145,17 @@ if ($busqueda !== '') {
 // ─── Filtrar por id_estado_previo según rol ───
 if (!$isLiderNacional) {
     if (!empty($myLeadTeams)) {
-        // Puedes ver Aprobados (1) siempre, y Rechazados (2)/En espera (3)
-//     ──────────────────────────────────────────────────────────────────────
+        $teamList = implode(',', array_map('intval',$myLeadTeams));
         $where[] = "(
-            e.id_estado_previo = 1
+          e.id_estado_previo = 1
           OR (
-               e.id_estado_previo IN (2,3)
+              e.id_estado_previo IN (2,3)
             AND e.es_general = 0
-            AND ep.id_equipo_proyecto IN (".implode(',', array_map('intval',$myLeadTeams)).")
+            AND e.id_evento IN (
+                SELECT id_evento
+                  FROM equipos_proyectos_eventos
+                  WHERE id_equipo_proyecto IN ($teamList)
+            )
           )
         )";
     } else {
@@ -162,18 +165,25 @@ if (!$isLiderNacional) {
 }
 // si $isLiderNacional === true, no agregamos nada: ve todos los estados
 
-// Calendario: todo, no agregamos condición
+// ─── Calendario: todo
 if ($filtro === 'calendario') {
-    // => no hacemos nada, trae todos los eventos
+    // nada
 }
-// General: solo eventos con es_general = 1
+// ─── General: sólo generales
 elseif ($filtro === 'general') {
     $where[] = "e.es_general = 1";
 }
-// Equipo específico: solo eventos asociados a ese equipo
-else {  // ya validaste arriba que sea un ID de equipo válido
-    $where[]        = "ep.id_equipo_proyecto = :filtro";
-    $params['filtro'] = $filtro;
+// ─── Equipo específico: sólo eventos de ese equipo
+else {
+    // filtramos sólo eventos, no restringimos el JOIN
+    $where[] = "
+      e.id_evento IN (
+        SELECT id_evento
+          FROM equipos_proyectos_eventos
+         WHERE id_equipo_proyecto = :filtro
+      )
+    ";
+    $params['filtro'] = (int)$filtro;
 }
 
 // 3.2) Query con joins + recuento de asistencia y total de integrantes
@@ -306,7 +316,6 @@ foreach ($rows as &$e) {
 unset($e);
 
 /* ─── Líderes y coordinadores disponibles ─── */
-/* ─── líderes y coordinadores ─── */
 /* ─── líderes y coordinadores ─── */
 $ldrStmt = $pdo->prepare("
   SELECT 
@@ -1034,58 +1043,73 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
 
     <div>
       <div class="d-flex justify-content-end mb-2">
-        <form class="d-flex me-auto" method="POST" action="eventos.php">
+        <form class="d-flex me-auto" method="POST" action="eventos.php" id="form-search">
           <input
             type="text"
             name="busqueda"
+            id="search-input"
             placeholder="Buscar..."
             value="<?= htmlspecialchars($busqueda) ?>"
             style="padding:.4rem .6rem; border:1px solid #ccc; border-radius:4px;"
           >
-          <input type="hidden" name="filtro" value="<?= htmlspecialchars($filtro) ?>">
-          <input type="hidden" name="mes"    value="<?= htmlspecialchars($mesParam) ?>">
-          <button type="submit" class="btn btn-outline-secondary ms-2">
+          <button type="submit" id="btn-search" class="btn btn-outline-secondary ms-2">
             🔍 Buscar
           </button>
         </form>
+        <small id="search-error" class="err-inline" style="display:none;">
+          * Sólo letras, números, espacios y . , ( ) -
+        </small>
 
         <?php
           // Rango de meses por defecto: mismo mes en start y end
           $mesStart = $_REQUEST['mesStart'] ?? $mesParam;
           $mesEnd   = $_REQUEST['mesEnd']   ?? $mesParam;
         ?>
-        <form 
-          id="form-download" 
-          method="GET" 
-          action="export.php" 
-          class="d-flex align-items-center me-2"
-        >
+
+        <form id="form-download" method="GET" action="export.php" class="d-flex align-items-center me-2">
           <input type="hidden" name="filtro"    value="<?= htmlspecialchars($filtro) ?>">
           <input type="hidden" name="busqueda"  value="<?= htmlspecialchars($busqueda) ?>">
           <input type="hidden" name="aprobados" value="<?= $showAprob ? '1' : '0' ?>">
-          
-          <!-- Rango de meses -->
-          <input 
-            type="month" 
-            name="mesStart" 
-            value="<?= htmlspecialchars($mesStart) ?>"
-            class="form-control form-control-sm me-1"
-          >
-          <span class="me-1">–</span>
-          <input 
-            type="month" 
-            name="mesEnd" 
-            value="<?= htmlspecialchars($mesEnd) ?>"
-            class="form-control form-control-sm me-2"
-          >
 
-          <!-- Formato -->
+          <div style="position:relative; margin-right:.5rem">
+            <input 
+              type="month" 
+              name="mesStart" 
+              id="mesStart"
+              value="<?= htmlspecialchars($mesStart) ?>"
+              class="form-control form-control-sm"
+            >
+            <small id="mesStart-error" class="err-inline" style="display:none; position:absolute; top:100%; left:0;">
+              * Fecha de inicio requerida
+            </small>
+          </div>
+
+          <div style="position:relative; margin-right:.5rem">
+            <input 
+              type="month" 
+              name="mesEnd" 
+              id="mesEnd"
+              value="<?= htmlspecialchars($mesEnd) ?>"
+              class="form-control form-control-sm"
+            >
+            <small id="mesEnd-error" class="err-inline" style="display:none; position:absolute; top:100%; left:0;">
+              * Fecha de término requerida
+            </small>
+          </div>
+
+          <small id="dateOrder-error" class="err-inline me-2" style="display:none;">
+            * La fecha de término debe ser mayor o igual a la de inicio
+          </small>
+          <small id="dateRange-error" class="err-inline me-2" style="display:none;">
+            * El rango no puede exceder 2 años
+          </small>
+
           <select name="format" class="form-select form-select-sm me-2">
             <option value="excel">Excel</option>
             <option value="pdf">PDF</option>
           </select>
 
-          <button type="submit" class="btn btn-success btn-sm">
+          <button type="submit" id="btn-download" class="btn btn-success btn-sm">
             ↓ Descargar
           </button>
         </form>
