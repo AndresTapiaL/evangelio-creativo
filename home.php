@@ -25,30 +25,58 @@ if (empty($userTeamIds)) {
     $userTeamIds = [0];
 }
 
-// 2. Query de eventos futuros asociados
+// 2. Query de próximos 3 eventos (tus equipos + generales) con estado previo = 1
 $placeholders = implode(',', array_fill(0, count($userTeamIds), '?'));
 $sqlUp = "
   SELECT
     e.id_evento,
     e.nombre_evento,
+    e.lugar,
+    e.descripcion,
+    e.observacion,
     e.fecha_hora_inicio,
     e.fecha_hora_termino,
+    e.encargado                      AS encargado_id,
+    CONCAT(u.nombres,' ',u.apellido_paterno,' ',u.apellido_materno)
+      AS encargado_nombre_completo,
+    tipe.nombre_tipo,
     prev.nombre_estado_previo,
     fin.nombre_estado_final,
     GROUP_CONCAT(DISTINCT epj.nombre_equipo_proyecto SEPARATOR ', ') AS equipos,
     COALESCE(ap.cnt_presente, 0)      AS cnt_presente,
-    COALESCE(tu.total_integrantes, 0) AS total_integrantes
-  FROM eventos e
-  JOIN equipos_proyectos_eventos epe
-    ON e.id_evento = epe.id_evento
-  JOIN equipos_proyectos epj
-    ON epe.id_equipo_proyecto = epj.id_equipo_proyecto
-  LEFT JOIN estados_previos_eventos prev
-    ON e.id_estado_previo = prev.id_estado_previo
-  LEFT JOIN estados_finales_eventos fin
-    ON e.id_estado_final  = fin.id_estado_final
 
-  /* asistentes “Presente” */
+    /* 2) Total de usuarios únicos en los equipos/proyectos de este evento */
+    COALESCE(
+      CASE
+        WHEN e.es_general = 1
+          THEN allu.cnt_all
+        ELSE tu.total_integrantes
+      END,
+      0
+    ) AS total_integrantes
+
+  FROM eventos e
+
+  /* 1) Filtrar tus equipos (LEFT para incluir generales) */
+  LEFT JOIN equipos_proyectos_eventos AS user_epe
+    ON e.id_evento = user_epe.id_evento
+   AND user_epe.id_equipo_proyecto IN ($placeholders)
+
+  /* 2) Encargado, tipo, estados… */
+  LEFT JOIN usuarios u        ON e.encargado = u.id_usuario
+  LEFT JOIN tipos_evento tipe ON e.id_tipo    = tipe.id_tipo
+  LEFT JOIN estados_previos_eventos prev
+           ON e.id_estado_previo = prev.id_estado_previo
+  LEFT JOIN estados_finales_eventos fin
+           ON e.id_estado_final  = fin.id_estado_final
+
+  /* 3) Para agrupar todos los equipos del evento */
+  LEFT JOIN equipos_proyectos_eventos AS all_epe
+    ON e.id_evento = all_epe.id_evento
+  LEFT JOIN equipos_proyectos AS epj
+    ON all_epe.id_equipo_proyecto = epj.id_equipo_proyecto
+
+  /* 4) Conteo de asistentes “Presente” */
   LEFT JOIN (
     SELECT id_evento, COUNT(*) AS cnt_presente
       FROM asistencias
@@ -56,7 +84,7 @@ $sqlUp = "
      GROUP BY id_evento
   ) ap ON ap.id_evento = e.id_evento
 
-  /* total integrantes únicos por evento */
+  /* 5) Total de integrantes únicos por evento */
   LEFT JOIN (
     SELECT epe.id_evento,
            COUNT(DISTINCT iep.id_usuario) AS total_integrantes
@@ -66,16 +94,60 @@ $sqlUp = "
      GROUP BY epe.id_evento
   ) tu ON tu.id_evento = e.id_evento
 
-  WHERE e.fecha_hora_inicio > NOW()
-    AND epe.id_equipo_proyecto IN ($placeholders)
+  /* 6) Conteo global de usuarios con ≥1 equipo (para generales) */
+  LEFT JOIN (
+    SELECT COUNT(DISTINCT id_usuario) AS cnt_all
+      FROM integrantes_equipos_proyectos
+  ) allu ON 1 = 1
+
+  WHERE
+    e.fecha_hora_inicio > NOW()
+    AND e.id_estado_previo = 1
+    /* sólo si participas en el equipo O es general */
+    AND (
+      user_epe.id_equipo_proyecto IS NOT NULL
+      OR e.es_general = 1
+    )
 
   GROUP BY e.id_evento
   ORDER BY e.fecha_hora_inicio ASC
-  LIMIT 5
+  LIMIT 3
 ";
 $stmtUp = $pdo->prepare($sqlUp);
 $stmtUp->execute($userTeamIds);
 $upcomingEvents = $stmtUp->fetchAll(PDO::FETCH_ASSOC);
+
+// 1) ¿Eres Liderazgo nacional? (equipo 1)
+$stmtLiderNacional = $pdo->prepare("
+    SELECT 1
+      FROM integrantes_equipos_proyectos
+     WHERE id_usuario = ?
+       AND id_equipo_proyecto = 1
+     LIMIT 1
+");
+$stmtLiderNacional->execute([$id_usuario]);
+$isLiderNacional = (bool) $stmtLiderNacional->fetchColumn();
+
+// 2) ¿Eres Líder o Coordinador en alguno de los equipos de este evento?
+$obsStmt = $pdo->prepare("
+    SELECT DISTINCT epe.id_evento
+      FROM equipos_proyectos_eventos epe
+      JOIN integrantes_equipos_proyectos iep
+        ON epe.id_equipo_proyecto = iep.id_equipo_proyecto
+     WHERE iep.id_usuario = ?
+       AND iep.id_rol IN (4,6)
+");
+$obsStmt->execute([$id_usuario]);
+$obsEventIds = $obsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+// 3) Añadimos a cada evento la bandera show_observacion
+foreach ($upcomingEvents as &$e) {
+    $e['show_observacion'] =
+         $isLiderNacional
+      || in_array($e['id_evento'], $obsEventIds, true);
+}
+unset($e);
+// ── Termina lógica de show_observacion ──
 
 // — Trae nombre y foto para el menú —
 $stmt = $pdo->prepare("
@@ -189,6 +261,78 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
     .att-item.selected .circle {
       background: currentColor;
     }
+
+    /* Overlay semi-transparente */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;               /* oculto por defecto */
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      z-index: 9999;
+    }
+
+    /* Contenedor tipo “card” */
+    .modal-content.card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header con fondo ligero */
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #fafafa;
+      padding: 1rem;
+      border-bottom: 1px solid #ddd;
+      position: relative;
+    }
+
+    /* Título y botón de cierre */
+    .card-title { margin: 0; font-size: 1.25rem; color: #333; }
+    .modal-close {
+      position: absolute; top: 1rem; right: 1rem;
+      background: none; border: none; font-size: 1.25rem;
+      color: #666; cursor: pointer; transition: color .2s;
+    }
+    .modal-close:hover { color: #333; }
+
+    /* Cuerpo con scroll interno si hace falta */
+    .card-body {
+      padding: 1.5rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* Lista de definiciones */
+    .vertical-list { margin: 0; padding: 0; list-style: none; }
+    .detail-item {
+      margin-bottom: 1rem;
+      padding-bottom: .5rem;
+      border-bottom: 1px solid #eee;
+    }
+    .detail-item:last-child { border-bottom: none; }
+    .detail-item dt {
+      font-weight: 600; color: #333; margin: 0 0 .25rem; font-size: 1rem;
+    }
+    .detail-item dd {
+      margin: 0; padding-left: 1rem; color: #555; font-size: .95rem; line-height: 1.4;
+    }
+
+    /* Alinea a la izquierda la lista de equipos */
+    .equipos-list {
+      margin: 0;
+      padding-left: 1rem;
+      list-style: disc outside;
+      text-align: left; /* fuerza alineación izquierda */
+    }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -270,6 +414,12 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
               </tr>
             </thead>
             <tbody>
+            <?php 
+              $dias = [
+                '0'=>'Domingo','1'=>'Lunes','2'=>'Martes','3'=>'Miércoles',
+                '4'=>'Jueves','5'=>'Viernes','6'=>'Sábado'
+              ];
+            ?>
             <?php foreach ($upcomingEvents as $ev):
               $si = strtotime($ev['fecha_hora_inicio']);
               $st = strtotime($ev['fecha_hora_termino']);
@@ -288,7 +438,18 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 <td><?= date('d/m/Y H:i', $si) ?></td>
                 <td><?= date('d/m/Y H:i', $st) ?></td>
                 <td><?= htmlspecialchars($ev['nombre_evento']) ?></td>
-                <td><?= htmlspecialchars($ev['equipos']) ?></td>
+                <td>
+                  <?php
+                    // Si no hay nada, 'General'
+                    $raw   = $ev['equipos'] ?: 'General';
+                    $teams = array_filter(array_map('trim', explode(',', $raw)));
+                  ?>
+                  <ul class="equipos-list">
+                    <?php foreach ($teams as $team): ?>
+                      <li><?= htmlspecialchars($team) ?></li>
+                    <?php endforeach; ?>
+                  </ul>
+                </td>
                 <td><?= htmlspecialchars($ev['nombre_estado_previo']) ?></td>
                 <td><?= (int)$ev['cnt_presente'] ?> de <?= (int)$ev['total_integrantes'] ?></td>
                 <td><?= htmlspecialchars($ev['nombre_estado_final']) ?></td>
@@ -297,7 +458,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                   <div class="attendance-options"
                       data-event-id="<?= $ev['id_evento'] ?>">
                     <?php
-                      $labels = [1=>'Presente', 2=>'Ausente', 3=>'No sé'];
+                      $labels = [1=>'Sí', 2=>'No', 3=>'No sé'];
                       for ($i = 1; $i <= 3; $i++):
                         $sel = $current === $i ? 'selected' : '';
                         $chk = $current === $i ? 'checked'  : '';
@@ -316,6 +477,42 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     <?php endfor; ?>
                   </div>
                 </td>
+                <!-- Acciones: Ver detalles + Notificar -->
+                <td class="actions">
+                  <!-- Ver detalles -->
+                  <?php 
+                    // formatea igual que en eventos.php
+                    $fi = $dias[date('w',$si)] . ' ' . date('d',$si) . ' | ' 
+                        . date('H.i',$si) . ' horas';
+                    $ft = $dias[date('w',$st)] . ' ' . date('d',$st) . ' | '
+                        . date('H.i',$st) . ' horas';
+                  ?>
+                  <button
+                    title="Ver detalles"
+                    class="action-btn detail-btn"
+                    data-fi="<?= $dias[date('w',$si)] . ' ' . date('d',$si) . ' | ' . date('H.i',$si) . ' horas' ?>"
+                    data-ft="<?= $dias[date('w',$st)] . ' ' . date('d',$st) . ' | ' . date('H.i',$st) . ' horas' ?>"
+                    data-nombre="<?= htmlspecialchars($ev['nombre_evento'], ENT_QUOTES) ?>"
+                    data-lugar="<?= htmlspecialchars($ev['lugar'] ?? '',         ENT_QUOTES) ?>"
+                    data-encargado="<?= htmlspecialchars($ev['encargado_nombre_completo'] ?? '', ENT_QUOTES) ?>"
+                    data-descripcion="<?= htmlspecialchars($ev['descripcion'] ?? '', ENT_QUOTES) ?>"
+                    data-equipos="<?= htmlspecialchars($ev['equipos'] ?: 'General', ENT_QUOTES) ?>"
+                    data-previo="<?= htmlspecialchars($ev['nombre_estado_previo'] ?? '', ENT_QUOTES) ?>"
+                    data-tipo="<?= htmlspecialchars($ev['nombre_tipo'] ?? '', ENT_QUOTES) ?>"
+                    data-asist="<?= (int)$ev['cnt_presente'] . ' de ' . (int)$ev['total_integrantes'] ?>"
+                    data-observacion="<?= htmlspecialchars($ev['observacion'] ?? '', ENT_QUOTES) ?>"
+                    data-can-see-observacion="<?= $ev['show_observacion'] ? '1':'0' ?>"
+                    data-final="<?= htmlspecialchars($ev['nombre_estado_final'] ?? '', ENT_QUOTES) ?>"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+
+                  <!-- Notificar -->
+                  <button title="Notificar" class="action-btn notify-btn"
+                          data-id="<?= $ev['id_evento'] ?>">
+                    <i class="fas fa-bell"></i>
+                  </button>
+                </td>
               </tr>
             <?php endforeach; ?>
             </tbody>
@@ -327,19 +524,38 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
   <!-- ═════════ utilidades ═════════ -->
   <script>
-    document.getElementById('logout').addEventListener('click', e => {
-      e.preventDefault();
-      const t = localStorage.getItem('token');
-      fetch('cerrar_sesion.php', {
-        headers: { 'Authorization': 'Bearer ' + t }
-      }).finally(() => {
+  document.getElementById('logout').addEventListener('click', async e => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (!token) {
+      // si no hay token, basta con redirigir
+      localStorage.clear();
+      return location.replace('login.html');
+    }
+    try {
+      const res = await fetch('cerrar_sesion.php', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token
+        }
+      });
+      const data = await res.json();
+      if (data.ok) {
         localStorage.clear();
         location.replace('login.html');
-      });
-    });
+      } else {
+        alert('No se pudo cerrar sesión: ' + (data.error||''));
+      }
+    } catch (err) {
+      console.error(err);
+      // aunque falle, limpiamos localStorage y redirigimos
+      localStorage.clear();
+      location.replace('login.html');
+    }
+  });
   </script>
 
-  <!-- Modal Detalles Evento (copiado de eventos.php) -->
+  <!-- Modal Detalles Evento -->
   <div id="modal-detalles" class="modal-overlay" style="display:none">
     <div class="modal-content card">
       <header class="card-header">

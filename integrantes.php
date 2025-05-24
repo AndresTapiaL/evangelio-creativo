@@ -143,16 +143,35 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
   <!-- ═════════ utilidades ═════════ -->
   <script>
-    document.getElementById('logout').addEventListener('click', e => {
-      e.preventDefault();
-      const t = localStorage.getItem('token');
-      fetch('cerrar_sesion.php', {
-        headers: { 'Authorization': 'Bearer ' + t }
-      }).finally(() => {
+  document.getElementById('logout').addEventListener('click', async e => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (!token) {
+      // si no hay token, basta con redirigir
+      localStorage.clear();
+      return location.replace('login.html');
+    }
+    try {
+      const res = await fetch('cerrar_sesion.php', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token
+        }
+      });
+      const data = await res.json();
+      if (data.ok) {
         localStorage.clear();
         location.replace('login.html');
-      });
-    });
+      } else {
+        alert('No se pudo cerrar sesión: ' + (data.error||''));
+      }
+    } catch (err) {
+      console.error(err);
+      // aunque falle, limpiamos localStorage y redirigimos
+      localStorage.clear();
+      location.replace('login.html');
+    }
+  });
   </script>
 
   <!-- ░░░░ Heartbeat automático cada 10 min ░░░░ -->

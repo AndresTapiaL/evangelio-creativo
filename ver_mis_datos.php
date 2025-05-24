@@ -466,6 +466,39 @@ $rolesEquipos = $restmt->fetchAll(PDO::FETCH_ASSOC);
     <img id="big-img" src="">
   </div>
 
+    <!-- ═════════ utilidades ═════════ -->
+  <script>
+  document.getElementById('logout').addEventListener('click', async e => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (!token) {
+      // si no hay token, basta con redirigir
+      localStorage.clear();
+      return location.replace('login.html');
+    }
+    try {
+      const res = await fetch('cerrar_sesion.php', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token
+        }
+      });
+      const data = await res.json();
+      if (data.ok) {
+        localStorage.clear();
+        location.replace('login.html');
+      } else {
+        alert('No se pudo cerrar sesión: ' + (data.error||''));
+      }
+    } catch (err) {
+      console.error(err);
+      // aunque falle, limpiamos localStorage y redirigimos
+      localStorage.clear();
+      location.replace('login.html');
+    }
+  });
+  </script>
+
   <!-- lógica de UI -->
   <script src="ver_mis_datos.js"></script>
   <!-- heartbeat -->
