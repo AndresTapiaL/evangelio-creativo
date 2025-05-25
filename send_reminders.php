@@ -137,11 +137,52 @@ foreach ($offsets as $days) {
 
             $fechaBonita = ucfirst("{$dias[$w]}, {$j} de {$meses[$n]} de {$Y} a las {$H}:{$i}");
 
-            // URLs para responder (si haces click desde el correo)
+            // 0) comprobación de token existente
+            $check = $pdo->prepare(<<<SQL
+              SELECT token, expires_at
+                FROM attendance_tokens
+              WHERE id_usuario = :uid
+                AND id_evento  = :eid
+                AND expires_at >= NOW()
+              LIMIT 1
+            SQL
+            );
+            $check->execute([
+              ':uid' => $r['id_usuario'],
+              ':eid' => $r['id_evento'],
+            ]);
+            $tk = $check->fetch(PDO::FETCH_ASSOC);
+
+            if ($tk) {
+              // ya hay uno activo → lo reutilizamos
+              $token    = $tk['token'];
+              $expires  = $tk['expires_at'];
+            } else {
+              // no existe → lo creamos
+              $token   = bin2hex(random_bytes(32));
+              // expires exactamente cuando empiece el evento
+              $expires = (new DateTime($r['fecha_hora_inicio']))
+                            ->format('Y-m-d H:i:s');
+
+              $insert = $pdo->prepare(<<<SQL
+                INSERT INTO attendance_tokens
+                  (token, id_usuario, id_evento, expires_at)
+                VALUES (?, ?, ?, ?)
+              SQL
+              );
+              $insert->execute([
+                $token, 
+                $r['id_usuario'], 
+                $r['id_evento'], 
+                $expires
+              ]);
+            }
+
+            // 1) ahora generas los enlaces con ese mismo $token
             $base = 'http://localhost/PW%20EC_Antes/marcar_asistencia.php';
-            $yes  = "{$base}?id_evento={$r['id_evento']}&id_estado_previo_asistencia=1";
-            $no   = "{$base}?id_evento={$r['id_evento']}&id_estado_previo_asistencia=2";
-            $unk  = "{$base}?id_evento={$r['id_evento']}&id_estado_previo_asistencia=3";
+            $yes  = "{$base}?token={$token}&estado=1";
+            $no   = "{$base}?token={$token}&estado=2";
+            $unk  = "{$base}?token={$token}&estado=3";
 
             $body = <<<HTML
 <!DOCTYPE html>
@@ -187,7 +228,8 @@ foreach ($offsets as $days) {
       </div>
     </div>
     <div class="footer">
-      Este es un mensaje automático. Por favor no respondas a este correo.
+      Este es un mensaje automático. Por favor no respondas a este correo.<br>
+      Puedes sobreescribir tu asistencia presionando nuevamente otra opción.
     </div>
   </div>
 </body>
@@ -201,6 +243,7 @@ HTML;
             $mail->send();
             $mail->clearAddresses();
             $mail->clearAttachments();
+            $mail->smtpClose();
             echo "   ✅ ¡Correo enviado!\n";
             sleep(1); // 1 segundo de pausa entre correos
         } catch (Exception $e) {
