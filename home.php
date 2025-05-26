@@ -103,6 +103,7 @@ $sqlUp = "
   WHERE
     e.fecha_hora_inicio > NOW()
     AND e.id_estado_previo = 1
+    AND e.id_estado_final NOT IN (5,6)    -- excluir “Suspendido” (5) y “Postergado” (6)
     /* sólo si participas en el equipo O es general */
     AND (
       user_epe.id_equipo_proyecto IS NOT NULL
@@ -333,6 +334,29 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
       list-style: disc outside;
       text-align: left; /* fuerza alineación izquierda */
     }
+
+    .past-attendance {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .past-attendance .attendance-options {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .past-attendance .extras {
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .past-attendance .past-other {
+      max-width: 200px;
+    }
+    .past-attendance .error-msg {
+      color: #E53935;
+      font-size: 0.85rem;
+      display: none;
+    }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -397,6 +421,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
   <!-- ░░░░ CONTENIDO PRINCIPAL ░░░░ -->
   <main style="padding:2rem">
+    <!-- ── Próximos eventos ── -->
     <section id="upcoming-attendance" style="margin-bottom:2rem">
       <h2>Próximos eventos</h2>
 
@@ -414,112 +439,379 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
               </tr>
             </thead>
             <tbody>
-            <?php 
-              $dias = [
-                '0'=>'Domingo','1'=>'Lunes','2'=>'Martes','3'=>'Miércoles',
-                '4'=>'Jueves','5'=>'Viernes','6'=>'Sábado'
-              ];
-            ?>
-            <?php foreach ($upcomingEvents as $ev):
-              $si = strtotime($ev['fecha_hora_inicio']);
-              $st = strtotime($ev['fecha_hora_termino']);
+              <?php 
+                $dias = [
+                  '0'=>'Domingo','1'=>'Lunes','2'=>'Martes','3'=>'Miércoles',
+                  '4'=>'Jueves','5'=>'Viernes','6'=>'Sábado'
+                ];
+              ?>
+              <?php foreach ($upcomingEvents as $ev): 
+                // -- fechas con fallback
+                $fi_raw = $ev['fecha_hora_inicio'] ?? null;
+                $fi = $fi_raw
+                  ? date('d/m/Y H:i', strtotime($fi_raw))
+                  : '—';
+                $ft_raw = $ev['fecha_hora_termino'] ?? null;
+                $ft = $ft_raw
+                  ? date('d/m/Y H:i', strtotime($ft_raw))
+                  : '—';
 
-              // dentro de tu foreach, antes del <tr>
-              $stmtA = $pdo->prepare("
-                SELECT id_estado_previo_asistencia
-                  FROM asistencias
-                WHERE id_usuario = ?
-                  AND id_evento  = ?
-              ");
-              $stmtA->execute([$id_usuario, $ev['id_evento']]);
-              $current = (int)$stmtA->fetchColumn();  // 1,2,3 o 0 si no existe
-            ?>
+                // -- otros campos null-safe
+                $nombre   = htmlspecialchars($ev['nombre_evento'] ?? '', ENT_QUOTES);
+                $lugar    = htmlspecialchars($ev['lugar']          ?? '', ENT_QUOTES);
+                $desc     = htmlspecialchars($ev['descripcion']    ?? '', ENT_QUOTES);
+                $obs      = htmlspecialchars($ev['observacion']    ?? '', ENT_QUOTES);
+                $previo   = htmlspecialchars($ev['nombre_estado_previo'] ?? '', ENT_QUOTES);
+                $final    = htmlspecialchars($ev['nombre_estado_final']  ?? '', ENT_QUOTES);
+
+                // -- asistentes
+                $cnt_pres = (int)($ev['cnt_presente']      ?? 0);
+                $cnt_tot  = (int)($ev['total_integrantes'] ?? 0);
+
+                // -- equipos
+                $rawTeams = $ev['equipos'] ?? '';
+                $teams    = array_filter(array_map('trim', explode(',', $rawTeams)));
+                // -- estado actual del usuario
+                $stmtA = $pdo->prepare("
+                  SELECT id_estado_previo_asistencia
+                    FROM asistencias
+                   WHERE id_usuario = ?
+                     AND id_evento  = ?
+                ");
+                $stmtA->execute([$id_usuario, $ev['id_evento']]);
+                $current = (int)$stmtA->fetchColumn(); // 1,2,3 o 0
+              ?>
               <tr>
-                <td><?= date('d/m/Y H:i', $si) ?></td>
-                <td><?= date('d/m/Y H:i', $st) ?></td>
-                <td><?= htmlspecialchars($ev['nombre_evento']) ?></td>
+                <td><?= $fi ?></td>
+                <td><?= $ft ?></td>
+                <td><?= $nombre ?></td>
                 <td>
-                  <?php
-                    // Si no hay nada, 'General'
-                    $raw   = $ev['equipos'] ?: 'General';
-                    $teams = array_filter(array_map('trim', explode(',', $raw)));
-                  ?>
                   <ul class="equipos-list">
-                    <?php foreach ($teams as $team): ?>
-                      <li><?= htmlspecialchars($team) ?></li>
-                    <?php endforeach; ?>
+                    <?php if (empty($teams)): ?>
+                      <li>General</li>
+                    <?php else: ?>
+                      <?php foreach ($teams as $t): ?>
+                        <li><?= htmlspecialchars($t, ENT_QUOTES) ?></li>
+                      <?php endforeach; ?>
+                    <?php endif; ?>
                   </ul>
                 </td>
-                <td><?= htmlspecialchars($ev['nombre_estado_previo']) ?></td>
-                <td><?= (int)$ev['cnt_presente'] ?> de <?= (int)$ev['total_integrantes'] ?></td>
-                <td><?= htmlspecialchars($ev['nombre_estado_final']) ?></td>
-                <!-- Opciones de asistencia -->
+                <td><?= $previo ?></td>
+                <td><?= "{$cnt_pres} de {$cnt_tot}" ?></td>
+                <td><?= $final ?></td>
+                <!-- Asistencia interactiva -->
                 <td>
-                  <div class="attendance-options"
-                      data-event-id="<?= $ev['id_evento'] ?>">
+                  <div class="attendance-options" data-event-id="<?= $ev['id_evento'] ?>">
                     <?php
                       $labels = [1=>'Sí', 2=>'No', 3=>'No sé'];
-                      for ($i = 1; $i <= 3; $i++):
+                      for ($i=1; $i<=3; $i++):
                         $sel = $current === $i ? 'selected' : '';
                         $chk = $current === $i ? 'checked'  : '';
                     ?>
                       <label class="att-item att-<?= $i ?> <?= $sel ?>">
-                        <input
-                          type="radio"
-                          name="att_<?= $ev['id_evento'] ?>"
-                          value="<?= $i ?>"
-                          <?= $chk ?>
-                          hidden
-                        >
+                        <input 
+                          type="radio" 
+                          name="att_<?= $ev['id_evento'] ?>" 
+                          value="<?= $i ?>" 
+                          <?= $chk ?> hidden>
                         <span class="pill"><?= $labels[$i] ?></span>
                         <span class="circle"></span>
                       </label>
                     <?php endfor; ?>
                   </div>
                 </td>
-                <!-- Acciones: Ver detalles + Notificar -->
+                <!-- Botones -->
                 <td class="actions">
-                  <!-- Ver detalles -->
+                  <!-- Detalles -->
                   <?php 
-                    // formatea igual que en eventos.php
-                    $fi = $dias[date('w',$si)] . ' ' . date('d',$si) . ' | ' 
-                        . date('H.i',$si) . ' horas';
-                    $ft = $dias[date('w',$st)] . ' ' . date('d',$st) . ' | '
-                        . date('H.i',$st) . ' horas';
+                    $fi_lbl = $dias[date('w', strtotime($fi_raw))] . ' ' . date('d', strtotime($fi_raw)) . ' | ' . date('H.i', strtotime($fi_raw)) . ' horas';
+                    $ft_lbl = $dias[date('w', strtotime($ft_raw))] . ' ' . date('d', strtotime($ft_raw)) . ' | ' . date('H.i', strtotime($ft_raw)) . ' horas';
                   ?>
-                  <button
-                    title="Ver detalles"
+                  <button 
                     class="action-btn detail-btn"
-                    data-fi="<?= $dias[date('w',$si)] . ' ' . date('d',$si) . ' | ' . date('H.i',$si) . ' horas' ?>"
-                    data-ft="<?= $dias[date('w',$st)] . ' ' . date('d',$st) . ' | ' . date('H.i',$st) . ' horas' ?>"
-                    data-nombre="<?= htmlspecialchars($ev['nombre_evento'], ENT_QUOTES) ?>"
-                    data-lugar="<?= htmlspecialchars($ev['lugar'] ?? '',         ENT_QUOTES) ?>"
-                    data-encargado="<?= htmlspecialchars($ev['encargado_nombre_completo'] ?? '', ENT_QUOTES) ?>"
-                    data-descripcion="<?= htmlspecialchars($ev['descripcion'] ?? '', ENT_QUOTES) ?>"
-                    data-equipos="<?= htmlspecialchars($ev['equipos'] ?: 'General', ENT_QUOTES) ?>"
-                    data-previo="<?= htmlspecialchars($ev['nombre_estado_previo'] ?? '', ENT_QUOTES) ?>"
-                    data-tipo="<?= htmlspecialchars($ev['nombre_tipo'] ?? '', ENT_QUOTES) ?>"
-                    data-asist="<?= (int)$ev['cnt_presente'] . ' de ' . (int)$ev['total_integrantes'] ?>"
-                    data-observacion="<?= htmlspecialchars($ev['observacion'] ?? '', ENT_QUOTES) ?>"
+                    title="Ver detalles"
+                    data-fi="<?= $fi_lbl ?>"
+                    data-ft="<?= $ft_lbl ?>"
+                    data-nombre="<?= $nombre ?>"
+                    data-lugar="<?= $lugar ?>"
+                    data-descripcion="<?= $desc ?>"
+                    data-equipos="<?= htmlspecialchars($rawTeams ?: 'General', ENT_QUOTES) ?>"
+                    data-previo="<?= $previo ?>"
+                    data-asist="<?= "{$cnt_pres} de {$cnt_tot}" ?>"
+                    data-observacion="<?= $obs ?>"
                     data-can-see-observacion="<?= $ev['show_observacion'] ? '1':'0' ?>"
-                    data-final="<?= htmlspecialchars($ev['nombre_estado_final'] ?? '', ENT_QUOTES) ?>"
-                  >
-                    <i class="fas fa-eye"></i>
-                  </button>
+                    data-final="<?= $final ?>"
+                  ><i class="fas fa-eye"></i></button>
 
                   <!-- Notificar -->
-                  <button title="Notificar" class="action-btn notify-btn"
-                          data-id="<?= $ev['id_evento'] ?>">
+                  <button 
+                    class="action-btn notify-btn" 
+                    title="Notificar"
+                    data-id="<?= $ev['id_evento'] ?>">
                     <i class="fas fa-bell"></i>
                   </button>
                 </td>
               </tr>
-            <?php endforeach; ?>
+              <?php endforeach; ?>
             </tbody>
           </table>
         </div>
       <?php endif; ?>
     </section>
+
+    <?php
+      // ── Nuevo: Registrar asistencia en eventos pasados ──
+
+      // 1) Coger los mismos equipos del usuario que para los próximos
+      $placeholders = implode(',', array_fill(0, count($userTeamIds), '?'));
+
+      // 2) Traer los últimos 3 eventos que ya terminaron, con los mismos filtros
+      $sqlPast = "
+        SELECT
+          e.id_evento,
+          e.nombre_evento,
+          e.lugar,
+          e.fecha_hora_inicio,
+          e.fecha_hora_termino,
+          CASE
+            WHEN e.es_general = 1 THEN 'General'
+            ELSE GROUP_CONCAT(DISTINCT epj.nombre_equipo_proyecto SEPARATOR ', ')
+          END AS equipos
+        FROM eventos e
+        LEFT JOIN equipos_proyectos_eventos AS user_epe
+          ON e.id_evento = user_epe.id_evento
+          AND user_epe.id_equipo_proyecto IN ($placeholders)
+        LEFT JOIN equipos_proyectos_eventos AS all_epe
+          ON e.id_evento = all_epe.id_evento
+        LEFT JOIN equipos_proyectos AS epj
+          ON all_epe.id_equipo_proyecto = epj.id_equipo_proyecto
+        WHERE
+          e.fecha_hora_termino < NOW()
+          AND e.id_estado_previo   = 1
+          AND e.id_estado_final   NOT IN (5,6)
+          AND (
+              user_epe.id_equipo_proyecto IS NOT NULL
+            OR e.es_general = 1
+          )
+        GROUP BY e.id_evento
+        ORDER BY e.fecha_hora_termino DESC
+        LIMIT 3
+      ";
+      $stmtPast = $pdo->prepare($sqlPast);
+      $stmtPast->execute($userTeamIds);
+      $pastEvents = $stmtPast->fetchAll(PDO::FETCH_ASSOC);
+
+      // 3) Traer listas de estados y justificaciones
+      $states     = $pdo->query("SELECT id_estado_asistencia, nombre_estado_asistencia FROM estados_asistencia ORDER BY id_estado_asistencia")->fetchAll(PDO::FETCH_ASSOC);
+      $justs      = $pdo->query("SELECT id_justificacion_inasistencia, nombre_justificacion_inasistencia FROM justificacion_inasistencia ORDER BY id_justificacion_inasistencia")->fetchAll(PDO::FETCH_ASSOC);
+    ?>
+    <section id="past-attendance" style="margin-bottom:2rem">
+      <h2>Registrar asistencia en eventos pasados</h2>
+
+      <?php if (empty($pastEvents)): ?>
+        <p>No tienes eventos recientes para marcar.</p>
+      <?php else: ?>
+        <table>
+          <thead>
+            <tr>
+              <th>Inicio</th><th>Término</th><th>Evento</th>
+              <th>Equipo/Proyecto</th><th>Lugar</th><th>Asistencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($pastEvents as $ev): 
+              // fechas
+              $si_raw = $ev['fecha_hora_inicio']  ?? null;
+              $st_raw = $ev['fecha_hora_termino'] ?? null;
+              $si = $si_raw ? date('d/m/Y H:i', strtotime($si_raw)) : '—';
+              $st = $st_raw ? date('d/m/Y H:i', strtotime($st_raw)) : '—';
+              // nombre, lugar
+              $nombre = htmlspecialchars($ev['nombre_evento'] ?? '', ENT_QUOTES);
+              $lugar  = htmlspecialchars($ev['lugar']         ?? '', ENT_QUOTES);
+              // equipos
+              $rawT = $ev['equipos'] ?? '';
+              $teams= array_filter(array_map('trim', explode(',', $rawT)));
+              // asistencia actual
+              $stmtA = $pdo->prepare("
+                SELECT id_estado_asistencia, id_justificacion_inasistencia, descripcion_otros
+                  FROM asistencias
+                 WHERE id_usuario = ? AND id_evento = ?
+              ");
+              $stmtA->execute([$id_usuario, $ev['id_evento']]);
+              $cur = $stmtA->fetch(PDO::FETCH_ASSOC) ?: [];
+            ?>
+            <tr>
+              <td><?= $si ?></td>
+              <td><?= $st ?></td>
+              <td><?= $nombre ?></td>
+              <td>
+                <ul class="equipos-list">
+                  <?php if (empty($teams)): ?>
+                    <li>General</li>
+                  <?php else: ?>
+                    <?php foreach ($teams as $t): ?>
+                      <li><?= htmlspecialchars($t, ENT_QUOTES) ?></li>
+                    <?php endforeach; ?>
+                  <?php endif; ?>
+                </ul>
+              </td>
+              <td><?= $lugar ?></td>
+              <td>
+                <?php
+                  // estado actual
+                  $curState = $cur['id_estado_asistencia'] ?? 0;
+                  $curJust  = $cur['id_justificacion_inasistencia'] ?? '';
+                  $curOther = $cur['descripcion_otros'] ?? '';
+
+                  // ── flags para mostrar al cargar ──
+                  // mostramos toda la sección de "extras" si está justificado o si ya hay texto en "Otros"
+                  $showExtras     = $curState === 3 || $curOther !== '';
+                  // el select de justificación se muestra si existe justificación o texto en "Otros"
+                  $showJustSelect = $curState === 3 || $curOther !== '';
+                  // el campo “Otros” se muestra si eligió la opción 9 o ya hay texto guardado
+                  $showOtherInput = $curJust === '9' || $curOther !== '';
+                ?>
+                <div class="past-attendance" data-ev="<?= $ev['id_evento'] ?>">
+                  <!-- 1) Botones de estado, igual que antes… -->
+                  <div class="attendance-options">
+                    <?php foreach ($states as $s):
+                      $sid = $s['id_estado_asistencia'];
+                      $sel = $sid == $curState ? 'selected' : '';
+                      $chk = $sid == $curState ? 'checked'  : '';
+                    ?>
+                    <label class="att-item att-<?= $sid ?> <?= $sel ?>">
+                      <input type="radio"
+                            name="past_<?= $ev['id_evento'] ?>"
+                            value="<?= $sid ?>"
+                            <?= $chk ?> hidden>
+                      <span class="pill"><?= htmlspecialchars($s['nombre_estado_asistencia'], ENT_QUOTES) ?></span>
+                      <span class="circle"></span>
+                    </label>
+                    <?php endforeach; ?>
+                  </div>
+
+                  <!-- 2) Extras: render siempre pero oculto/visible según PHP -->
+                  <div class="extras" style="display: <?= $showExtras     ? 'flex'          : 'none' ?>;">
+                    <select class="past-just"
+                            style="display: <?= $showJustSelect ? 'inline-block' : 'none' ?>;">
+                      <option value="">—</option>
+                      <?php foreach ($justs as $j): ?>
+                        <?php
+                          // saltamos id=10 y id=11 para que no aparezcan
+                          if (in_array($j['id_justificacion_inasistencia'], [10,11], true)) {
+                              continue;
+                          }
+                        ?>
+                        <option 
+                          value="<?= $j['id_justificacion_inasistencia'] ?>"
+                          <?= $j['id_justificacion_inasistencia']==$curJust?'selected':'' ?>>
+                          <?= htmlspecialchars($j['nombre_justificacion_inasistencia'], ENT_QUOTES) ?>
+                        </option>
+                      <?php endforeach; ?>
+                    </select>
+                    <input type="text"
+                          class="past-other"
+                          placeholder="Describir..."
+                          maxlength="255"
+                          value="<?= htmlspecialchars($curOther, ENT_QUOTES) ?>"
+                          style="display: <?= $showOtherInput ? 'inline-block' : 'none' ?>;">
+                    <span class="error-msg">
+                      Sólo A-Z, 0-9, espacio y ,.;:()¡!¿?_- (máx.255)
+                    </span>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      <?php endif; ?>
+    </section>
+
+    <script>
+    document.querySelectorAll('.past-attendance').forEach(wrapper => {
+      const radios     = wrapper.querySelectorAll('.attendance-options input[type=radio]');
+      const extras     = wrapper.querySelector('.extras');
+      const selectJust = extras.querySelector('.past-just');
+      const inputOther = extras.querySelector('.past-other');
+      const errMsg     = extras.querySelector('.error-msg');
+      const evId       = wrapper.dataset.ev;
+
+      // 1) Cambio de estado principal
+      radios.forEach(radio => {
+        radio.addEventListener('change', () => {
+          wrapper.querySelectorAll('.att-item').forEach(l => l.classList.remove('selected'));
+          radio.closest('.att-item').classList.add('selected');
+
+          const v = radio.value;
+
+          // Presente → justificación 10
+          if (v === '1') {
+            extras.style.display = 'none';
+            savePast(evId, v, 10, null);
+            return;
+          }
+          // Ausente → justificación 11
+          if (v === '2') {
+            extras.style.display = 'none';
+            savePast(evId, v, 11, null);
+            return;
+          }
+          // “No sé” → abrimos select como antes
+          // (estado v==='3')
+          extras.style.display     = 'flex';
+          selectJust.style.display = 'inline-block';
+        });
+      });
+
+      // 2) Cambio de justificación
+      selectJust.addEventListener('change', () => {
+        const j = selectJust.value;
+        if (j === '9') {
+          // “Otros”
+          inputOther.style.display = 'inline-block';
+        } else {
+          inputOther.style.display = 'none';
+          inputOther.value = '';
+          errMsg.style.display = 'none';
+          savePast(evId, wrapper.querySelector('.attendance-options input:checked').value, j, null);
+        }
+      });
+
+      // 3) Validación inline al escribir “Otros”
+      inputOther.addEventListener('input', () => {
+        const val = inputOther.value;
+        // sólo letras, números, espacios y estos símbolos ,.;:()¡!¿?_- / largo ≤255
+        const valid = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9\s,.;:()¡!¿?_\-]*$/.test(val) && val.length <= 255;
+        errMsg.style.display = valid ? 'none' : 'block';
+      });
+      // 4) Guardar al perder foco (si no hay error)
+      inputOther.addEventListener('blur', () => {
+        if (errMsg.style.display === 'none') {
+          const st   = wrapper.querySelector('.attendance-options input:checked').value;
+          const just = selectJust.value;
+          savePast(evId, st, just, inputOther.value);
+        }
+      });
+
+    }); // end each
+
+    // función ya existente para POST
+    async function savePast(ev, st, just, other) {
+      const form = new FormData();
+      form.append('id_evento', ev);
+      form.append('id_estado_asistencia', st);
+      if (just)  form.append('id_justificacion_inasistencia', just);
+      if (other) form.append('descripcion_otros', other);
+
+      const res  = await fetch('marcar_asistencia_pasados.php', {
+        method: 'POST',
+        body: form
+      });
+      const data = await res.json();
+      if (!data.ok) alert(data.error || 'Error guardando asistencia');
+    }
+    </script>
   </main>
 
   <!-- ═════════ utilidades ═════════ -->
@@ -610,19 +902,20 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
   <script src="heartbeat.js"></script>
   <script src="eventos.js"></script> <!-- ya tenías en eventos.php -->
   <script>
-    document.querySelectorAll('.attendance-options input[type=radio]')
+    // AHORA: sólo dentro de #upcoming-attendance
+    document
+      .querySelectorAll('#upcoming-attendance .attendance-options input[type=radio]')
       .forEach(radio => {
         radio.addEventListener('change', async e => {
           const container = e.target.closest('.attendance-options');
-          const evId      = container.dataset.eventId;
+          const evId      = container.dataset.eventId;       // ya existe en próximos
           const valor     = e.target.value;
 
-          // 1) Enviar al servidor
           const form = new FormData();
           form.append('id_evento', evId);
           form.append('id_estado_previo_asistencia', valor);
 
-          const res = await fetch('marcar_asistencia.php', {
+          const res  = await fetch('marcar_asistencia.php', {
             method: 'POST',
             body: form
           });

@@ -76,6 +76,7 @@ foreach ($offsets as $days) {
 
     WHERE
     e.id_estado_previo = 1
+    AND e.id_estado_final NOT IN (5,6)   -- NO enviamos si ya está “Suspendido” (5) o “Postergado” (6)
     -- si es general o si el usuario está en uno de sus equipos
     AND (
         e.es_general   = 1
