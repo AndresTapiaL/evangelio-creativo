@@ -101,7 +101,8 @@ $sqlUp = "
   ) allu ON 1 = 1
 
   WHERE
-    e.fecha_hora_inicio > NOW()
+    e.fecha_hora_inicio >= NOW()
+    AND e.fecha_hora_inicio <= DATE_ADD(NOW(), INTERVAL 30 DAY)
     AND e.id_estado_previo = 1
     AND e.id_estado_final NOT IN (5,6)    -- excluir “Suspendido” (5) y “Postergado” (6)
     /* sólo si participas en el equipo O es general */
@@ -112,7 +113,6 @@ $sqlUp = "
 
   GROUP BY e.id_evento
   ORDER BY e.fecha_hora_inicio ASC
-  LIMIT 3
 ";
 $stmtUp = $pdo->prepare($sqlUp);
 $stmtUp->execute($userTeamIds);
@@ -560,12 +560,13 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
     </section>
 
     <?php
-      // ── Nuevo: Registrar asistencia en eventos pasados ──
+      // ── Registrar asistencia en eventos pasados ──
 
       // 1) Coger los mismos equipos del usuario que para los próximos
       $placeholders = implode(',', array_fill(0, count($userTeamIds), '?'));
 
-      // 2) Traer los últimos 3 eventos que ya terminaron, con los mismos filtros
+      // 2) Traer todos los eventos que ya empezaron, pero que no hayan terminado
+      //    hace más de 1 día, con los mismos filtros de estado y participación.
       $sqlPast = "
         SELECT
           e.id_evento,
@@ -580,22 +581,22 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
         FROM eventos e
         LEFT JOIN equipos_proyectos_eventos AS user_epe
           ON e.id_evento = user_epe.id_evento
-          AND user_epe.id_equipo_proyecto IN ($placeholders)
+        AND user_epe.id_equipo_proyecto IN ($placeholders)
         LEFT JOIN equipos_proyectos_eventos AS all_epe
           ON e.id_evento = all_epe.id_evento
         LEFT JOIN equipos_proyectos AS epj
           ON all_epe.id_equipo_proyecto = epj.id_equipo_proyecto
         WHERE
-          e.fecha_hora_termino < NOW()
+          e.fecha_hora_inicio   <= NOW()                           -- ya empezó
+          AND e.fecha_hora_termino >= DATE_SUB(NOW(), INTERVAL 1 DAY) -- no terminó hace más de 24 h
           AND e.id_estado_previo   = 1
           AND e.id_estado_final   NOT IN (5,6)
           AND (
-              user_epe.id_equipo_proyecto IS NOT NULL
+            user_epe.id_equipo_proyecto IS NOT NULL
             OR e.es_general = 1
           )
         GROUP BY e.id_evento
         ORDER BY e.fecha_hora_termino DESC
-        LIMIT 3
       ";
       $stmtPast = $pdo->prepare($sqlPast);
       $stmtPast->execute($userTeamIds);

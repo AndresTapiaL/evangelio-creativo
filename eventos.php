@@ -1048,6 +1048,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
             type="text"
             name="busqueda"
             id="search-input"
+            maxlength="200"
             placeholder="Buscar..."
             value="<?= htmlspecialchars($busqueda) ?>"
             style="padding:.4rem .6rem; border:1px solid #ccc; border-radius:4px;"
@@ -1413,37 +1414,37 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
         <button class="modal-close"><i class="fas fa-times"></i></button>
       </header>
       <div class="card-body">
-        <form id="form-edit-evento">
+        <form id="form-edit-evento" novalidate>
           <input type="hidden" name="id_evento" id="edit-id">
           <div class="form-group">
             <label>Nombre:</label>
-            <input type="text" name="nombre_evento" id="edit-nombre" required>
+            <input type="text" name="nombre_evento" maxlength="100" id="edit-nombre" required>
             <small id="err-required-nombre" class="err-inline">* obligatorio</small>
             <small id="err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
           <div class="form-group">
             <label>Lugar:</label>
-            <input type="text" name="lugar" id="edit-lugar">
+            <input type="text" name="lugar" maxlength="100" id="edit-lugar">
             <small id="err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
           <div class="form-group">
             <label>Descripción:</label>
-            <textarea name="descripcion" id="edit-descripcion"></textarea>
+            <textarea name="descripcion" maxlength="500" id="edit-descripcion"></textarea>
             <small id="err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
           <div class="form-group">
             <label>Observación:</label>
-            <textarea name="observacion" id="edit-observacion"></textarea>
+            <textarea name="observacion" maxlength="500" id="edit-observacion"></textarea>
             <small id="err-regex-observacion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
           <div class="form-group">
             <label>Fecha y hora inicio:</label>
-            <input type="datetime-local" name="fecha_hora_inicio" id="edit-start" required>
+            <input type="datetime-local" name="fecha_hora_inicio" id="edit-start" required min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="err-required-start" class="err-inline">* fecha y hora requeridas</small>
           </div>
           <div class="form-group">
             <label>Fecha y hora término:</label>
-            <input type="datetime-local" name="fecha_hora_termino" id="edit-end">
+            <input type="datetime-local" name="fecha_hora_termino" id="edit-end"  min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="err-required-end" class="err-inline">* fecha y hora requeridas</small>
               <!-- Mensaje de error inline -->
               <div id="end-error" class="input-error" style="display:none; color:#dc3545; font-size:0.875rem; margin-top:0.25rem;">
@@ -1522,7 +1523,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
         </form>
       </div>
       <footer class="card-footer">
-        <button id="btn-save-evento" class="btn btn-primary">Guardar cambios</button>
+        <button type="button" id="btn-save-evento" class="btn btn-primary">Guardar cambios</button>
       </footer>
     </div>
   </div>
@@ -1536,14 +1537,14 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       </header>
 
       <div class="card-body">
-        <form id="form-copy-evento">
+        <form id="form-copy-evento" novalidate>
           <!-- Id oculto por si algún día lo necesitas (vacío) -->
           <input type="hidden" name="id_evento_original" id="copy-orig-id">
 
           <!-- 1) Nombre -->
           <div class="form-group">
             <label>Nombre:</label>
-            <input type="text" name="nombre_evento" id="copy-nombre" required>
+            <input type="text" name="nombre_evento" maxlength="100" id="copy-nombre" required>
             <small id="copy-err-required-nombre" class="err-inline">* obligatorio</small>
             <small id="copy-err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
@@ -1551,33 +1552,33 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
           <!-- 2) Lugar -->
           <div class="form-group">
             <label>Lugar:</label>
-            <input type="text" name="lugar" id="copy-lugar">
+            <input type="text" name="lugar" maxlength="100" id="copy-lugar">
             <small id="copy-err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
 
           <!-- 3) Descripción -->
           <div class="form-group">
             <label>Descripción:</label>
-            <textarea name="descripcion" id="copy-descripcion"></textarea>
+            <textarea name="descripcion" maxlength="500" id="copy-descripcion"></textarea>
             <small id="copy-err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
 
           <!-- 4) Observación -->
           <div class="form-group">
             <label>Observación:</label>
-            <textarea name="observacion" id="copy-observacion"></textarea>
+            <textarea name="observacion" maxlength="500" id="copy-observacion"></textarea>
             <small id="copy-err-regex-observacion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
 
           <!-- 5) Fechas -->
           <div class="form-group">
             <label>Fecha y hora inicio:</label>
-            <input type="datetime-local" name="fecha_hora_inicio" id="copy-start" required>
+            <input type="datetime-local" name="fecha_hora_inicio" id="copy-start" required  min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="copy-err-required-start" class="err-inline">* fecha y hora requeridas</small>
           </div>
           <div class="form-group">
             <label>Fecha y hora término:</label>
-            <input type="datetime-local" name="fecha_hora_termino" id="copy-end">
+            <input type="datetime-local" name="fecha_hora_termino" id="copy-end" min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="copy-err-required-end" class="err-inline">* fecha y hora requeridas</small>
             <div id="copy-end-error" class="input-error">
               * La fecha y hora de término debe ser igual o posterior al inicio.
@@ -1653,7 +1654,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
 
       <footer class="card-footer bg-transparent border-0 p-0 mt-3">
-        <button id="btn-create-evento" class="btn btn-primary">
+        <button type="button" id="btn-create-evento" class="btn btn-primary">
           Crear evento
         </button>
       </footer>
@@ -1669,11 +1670,11 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       </header>
 
       <div class="card-body">
-        <form id="form-create-evento">
+        <form id="form-create-evento" novalidate>
           <!-- 1) Nombre -->
           <div class="form-group">
             <label>Nombre:</label>
-            <input type="text" name="nombre_evento" id="create-nombre" required>
+            <input type="text" name="nombre_evento" maxlength="100" id="create-nombre" required>
             <small id="create-err-required-nombre" class="err-inline">* obligatorio</small>
             <small id="create-err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
@@ -1681,33 +1682,33 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
           <!-- 2) Lugar -->
           <div class="form-group">
             <label>Lugar:</label>
-            <input type="text" name="lugar" id="create-lugar">
+            <input type="text" name="lugar" maxlength="100" id="create-lugar">
             <small id="create-err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
 
           <!-- 3) Descripción -->
           <div class="form-group">
             <label>Descripción:</label>
-            <textarea name="descripcion" id="create-descripcion"></textarea>
+            <textarea name="descripcion" maxlength="500" id="create-descripcion"></textarea>
             <small id="create-err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
 
           <!-- 4) Observación -->
           <div class="form-group">
             <label>Observación:</label>
-            <textarea name="observacion" id="create-observacion"></textarea>
+            <textarea name="observacion" maxlength="500" id="create-observacion"></textarea>
             <small id="create-err-regex-observacion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
 
           <!-- 5) Fechas -->
           <div class="form-group">
             <label>Fecha y hora inicio:</label>
-            <input type="datetime-local" name="fecha_hora_inicio" id="create-start" required>
+            <input type="datetime-local" name="fecha_hora_inicio" id="create-start" required min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="create-err-required-start" class="err-inline">* fecha y hora requeridas</small>
           </div>
           <div class="form-group">
             <label>Fecha y hora término:</label>
-            <input type="datetime-local" name="fecha_hora_termino" id="create-end">
+            <input type="datetime-local" name="fecha_hora_termino" id="create-end" min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="create-err-required-end" class="err-inline">* fecha y hora requeridas</small>
             <div id="create-end-error" class="input-error" style="display:none">
               * La fecha y hora de término debe ser igual o posterior al inicio.
@@ -1783,7 +1784,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
 
       <footer class="card-footer bg-transparent border-0 p-0 mt-3">
-        <button id="btn-store-evento" class="btn btn-success w-100">
+        <button type="button" id="btn-store-evento" class="btn btn-success w-100">
           Crear evento
         </button>
       </footer>
@@ -1799,7 +1800,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       </header>
 
       <div class="card-body">
-        <form id="form-request-evento">
+        <form id="form-request-evento" novalidate>
           <!-- 0) Hidden defaults -->
           <input type="hidden" name="id_estado_previo" value="3"><!-- En espera -->
           <input type="hidden" name="id_estado_final"  value="3"><!-- En pausa  -->
@@ -1807,7 +1808,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
           <!-- 1) Nombre -->
           <div class="form-group">
             <label>Nombre:</label>
-            <input type="text" name="nombre_evento" id="req-nombre" required>
+            <input type="text" maxlength="100" name="nombre_evento" id="req-nombre" required>
             <small id="req-err-required-nombre" class="err-inline">* obligatorio</small>
             <small id="req-err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
@@ -1815,26 +1816,26 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
           <!-- 2) Lugar -->
           <div class="form-group">
             <label>Lugar:</label>
-            <input type="text" name="lugar" id="req-lugar">
+            <input type="text" maxlength="100" name="lugar" id="req-lugar">
             <small id="req-err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
 
           <!-- 3) Descripción -->
           <div class="form-group">
             <label>Descripción:</label>
-            <textarea name="descripcion" id="req-descripcion"></textarea>
+            <textarea name="descripcion" maxlength="500" id="req-descripcion"></textarea>
             <small id="req-err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
           </div>
 
           <!-- 4) Fechas -->
           <div class="form-group">
             <label>Fecha y hora inicio:</label>
-            <input type="datetime-local" name="fecha_hora_inicio" id="req-start" required>
+            <input type="datetime-local" name="fecha_hora_inicio" id="req-start" required min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="req-err-required-start" class="err-inline">* fecha y hora requeridas</small>
           </div>
           <div class="form-group">
             <label>Fecha y hora término:</label>
-            <input type="datetime-local" name="fecha_hora_termino" id="req-end">
+            <input type="datetime-local" name="fecha_hora_termino" id="req-end" min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="req-err-required-end" class="err-inline">* fecha y hora requeridas</small>
             <div id="req-end-error" class="input-error" style="display:none">
               * La fecha y hora de término debe ser igual o posterior al inicio.
@@ -1892,7 +1893,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
 
       <footer class="card-footer bg-transparent border-0 p-0 mt-3">
-        <button id="btn-send-request" class="btn btn-primary w-100">
+        <button type="button" id="btn-send-request" class="btn btn-primary w-100">
           Solicitar evento
         </button>
       </footer>

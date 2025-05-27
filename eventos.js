@@ -52,6 +52,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const allowedRE = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,\-()]+$/;
   const modalBody = modalEdit.querySelector('.card-body');   // ← tu clase real
 
+/**
+ * Comprueba que una cadena “YYYY-MM-DDTHH:MM” sea
+ * una fecha-hora válida real (p.ej. descarta “2025-02-29T…”).
+ */
+  function isValidDateTimeLocal(value) {
+    // debe tener el formato exacto
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return false;
+    const [date, time] = value.split('T');
+    const [Y, M, D]    = date.split('-').map(n=>+n);
+    const [h, m]       = time.split(':').map(n=>+n);
+    const dt = new Date(Y, M-1, D, h, m);
+    return dt.getFullYear()  === Y
+        && dt.getMonth()     === M-1
+        && dt.getDate()      === D
+        && dt.getHours()     === h
+        && dt.getMinutes()   === m;
+  }
+
   // —— dispara validación al instante ——
   [...txtRules, ...dtRules].forEach(({inp})=>{
     const el = document.getElementById(inp);
@@ -100,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.edit-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       // limpiar mensajes de error cada vez que se abre el modal
-      document.querySelectorAll('.err-inline').forEach(e=>e.style.display='none');
+      modalEdit.querySelectorAll('.err-inline').forEach(el => el.style.display = 'none');
       projectsErr.style.display = 'none';
       firstInvalid = null;
       
@@ -120,8 +138,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const errEnd   = document.getElementById('end-error');
 
       // 3) Cargar valores iniciales de fecha
-      startInp.value = btn.dataset.start.replace(' ', 'T');
-      endInp.value   = btn.dataset.end.replace(' ', 'T');
+      const rawStart = btn.dataset.start.replace(' ', 'T'); // "2025-05-01T01:00:00"
+      const rawEnd   = btn.dataset.end  .replace(' ', 'T'); // "2025-05-27T01:15:00"
+
+      // 3) Recortamos a 16 caracteres: "YYYY-MM-DDTHH:MM"
+      startInp.value = rawStart.slice(0, 16);
+      endInp.value   = rawEnd  .slice(0, 16);
       endInp.min     = startInp.value;
 
       // 4) Validación inline de fechas
@@ -264,9 +286,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // datetime inputs -------------------------------------------------------
     const dt = copyDtRules.find(r=>r.inp===id);
-    if(dt){
-      const v = document.getElementById(id).value;
-      v ? copyHide(dt.req) : copyShow(dt.req);
+    if (dt) {
+      const el = document.getElementById(id);
+      const v  = el.value;
+      // si está vacío o no es fecha-hora válida
+      if (!v
+        || !isValidDateTimeLocal(v)
+        || (el.min && v < el.min)
+        || (el.max && v > el.max)
+      ) {
+        copyShow(dt.req);
+      } else {
+        copyHide(dt.req);
+      }
     }
   }
 
@@ -286,32 +318,27 @@ document.addEventListener('DOMContentLoaded', () => {
   // ———————————————————————————————
   // Filtra encargados SOLO para modal-copy
   // ———————————————————————————————
-  function filterEncargadosCopy(selectedProjects){
-    const selSet     = new Set(selectedProjects.map(String));
-    const selectEl   = copyEncSelect;             // id="copy-encargado"
-    let keepCurrent  = false;
+  function filterEncargadosCopy(selectedProjects, selectedEnc) {
+    const selSet = new Set(selectedProjects.map(String));
+    let keepCurrent = false;
 
-    Array.from(selectEl.options).forEach(opt=>{
-      if(!opt.value) return;                      // — sin encargado —
-
-      const optProjects = cleanList(opt.dataset.projects); // ["3","7"]
-
-      const visible =
-          selSet.size === 0                     // “General” => ver todos
-        || optProjects.length === 0              // líder global
-        || optProjects.some(p => selSet.has(p)); // comparte algún proyecto
-
+    Array.from(copyEncSelect.options).forEach(opt => {
+      if (!opt.value) return;
+      const optProjects = cleanList(opt.dataset.projects);
+      const visible = selSet.size===0
+                  || optProjects.length===0
+                  || optProjects.some(p=>selSet.has(p));
       opt.hidden = !visible;
-      if(opt.value === selectEl.value && visible) keepCurrent = true;
+      if (opt.value === selectedEnc && visible) keepCurrent = true;
     });
 
-    if(!keepCurrent) selectEl.value = '';        // limpia si quedó oculto
+    copyEncSelect.value = keepCurrent ? selectedEnc : '';
   }
 
   document.querySelectorAll('.copy-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       // 0) Limpiar errores
-      modalCopy.querySelectorAll('.err-inline').forEach(e=>e.style.display='none');
+      modalCopy.querySelectorAll('.err-inline').forEach(el => el.style.display = 'none');
       document.getElementById('copy-projects-error').style.display='none';
 
       // 1) Rellenar campos
@@ -326,8 +353,14 @@ document.addEventListener('DOMContentLoaded', () => {
       // 2) Fechas
       const st = document.getElementById('copy-start');
       const en = document.getElementById('copy-end');
-      st.value = btn.dataset.start.replace(' ', 'T');
-      en.value = btn.dataset.end.replace(' ', 'T');
+      
+      // 1) Convertimos el dataset "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SS"
+      const rawStart = btn.dataset.start.replace(' ', 'T');
+      const rawEnd   = btn.dataset.end  .replace(' ', 'T');
+
+      // 2) Recortamos a 16 caracteres para quitar los segundos: "YYYY-MM-DDTHH:MM"
+      st.value = rawStart.slice(0, 16);
+      en.value = rawEnd  .slice(0, 16);
       en.min   = st.value;
 
       // 3) Proyectos / General
@@ -410,10 +443,21 @@ document.addEventListener('DOMContentLoaded', () => {
       if (txt.req) (v ? hideCreate(txt.req) : (showCreate(txt.req), createFirstInvalid ??= id));
       if (v && !createAllowedRE.test(v)) showCreate(txt.rgx); else hideCreate(txt.rgx);
     }
-    const dt = createDtRules.find(r=>r.inp===id);
-    if (dt){
-      const v = document.getElementById(id).value;
-      v ? hideCreate(dt.req) : (showCreate(dt.req), createFirstInvalid ??= id);
+    // datetime inputs — ahora con validación real
+    const dt = createDtRules.find(r => r.inp === id);
+    if (dt) {
+      const el = document.getElementById(id);
+      const v  = el.value;
+      // si está vacío o no es válido, mostramos el error
+      if (!v
+        || !isValidDateTimeLocal(v)
+        || (el.min && v < el.min)
+        || (el.max && v > el.max)
+      ) {
+        createShow(dt.req);
+      } else {
+        createHide(dt.req);
+      }
     }
   }
 
@@ -451,13 +495,36 @@ document.addEventListener('DOMContentLoaded', () => {
     el.addEventListener('blur', ()=>validateCreateField(inp));
   });
 
+  const createStart = document.getElementById('create-start');
+  const createEnd   = document.getElementById('create-end');
+
   /* abrir modal vacío */
   if (btnNewEvent) {
     btnNewEvent.addEventListener('click', ()=>{
       document.getElementById('form-create-evento').reset();
-      createProjErr.style.display='none';
+      // ISO completo → cortamos a "YYYY-MM-DDTHH:MM"
+      const now16 = new Date().toISOString().slice(0, 16);
+
+      // Ponemos fecha/hora actual
+      createStart.value = now16;
+      createEnd  .value = now16;
+
+      // Después de poner createStart y createEnd…
+      createStart.addEventListener('change', () => {
+        createEnd.min = createStart.value;
+        if (createEnd.value < createEnd.min) {
+          createEnd.value = createEnd.min;
+        }
+      });
+
+      // Y bloqueamos el mínimo
+      createEnd.min = now16;
+      // <-- Limpiar TODOS los mensajes inline -->
+      document.querySelectorAll('#modal-create .err-inline')
+              .forEach(el => el.style.display = 'none');
+      createProjErr.style.display = 'none';
       createBody.scrollTop = 0;
-      modalCreate.style.display='flex';
+      modalCreate.style.display = 'flex';
     });
   }
 
@@ -482,37 +549,80 @@ document.addEventListener('DOMContentLoaded', () => {
     validateCreateProjects();
   });
 
-  /* guardar */
-  saveCreateBt.addEventListener('click', async ()=>{
+  // ——— Guardar CREAR EVENTO ———
+  saveCreateBt.addEventListener('click', async () => {
+    // 1) Ocultar errores previos
+    document.querySelectorAll('#modal-create .err-inline')
+            .forEach(el => el.style.display = 'none');
     const errEnd = document.getElementById('create-end-error');
-    errEnd.style.display='none';
+    errEnd.style.display = 'none';
 
-    if(!validateCreateAll() || !validateCreateProjects()){
+    // 2) Validación client-side
+    if (!validateCreateAll() || !validateCreateProjects()) {
       scrollCreate(document.getElementById(createFirstInvalid) || createProjErr);
       return;
     }
-    const st=document.getElementById('create-start');
-    const en=document.getElementById('create-end');
-    if(en.value && en.value<st.value){
-      errEnd.style.display='block';
+    const st = document.getElementById('create-start'),
+          en = document.getElementById('create-end');
+    if (en.value && en.value < st.value) {
+      errEnd.style.display = 'block';
       scrollCreate(errEnd);
       return;
     }
 
-    saveCreateBt.disabled=true;
-    const orig=saveCreateBt.textContent;
-    saveCreateBt.textContent='Guardando…';
+    // 3) Envío al servidor
+    saveCreateBt.disabled = true;
+    const origText = saveCreateBt.textContent;
+    saveCreateBt.textContent = 'Guardando…';
 
-    const fd=new FormData(document.getElementById('form-create-evento'));
-    try{
-      const r=await fetch('crear_evento.php',{method:'POST',body:fd});
-      const j=await r.json();
-      if(!j.mensaje) throw new Error(j.error||'Error');
+    // 3) Preparar FormData
+    const form = document.getElementById('form-create-evento');
+    const fd = new FormData(form);
+
+    // —— Paso 2: Normalizar las fechas para MySQL ——  
+    ['fecha_hora_inicio', 'fecha_hora_termino'].forEach(field => {
+      if (fd.has(field)) {
+        // fd.get(field) viene como "YYYY-MM-DDTHH:MM"
+        const v = fd.get(field);
+        // lo convertimos a "YYYY-MM-DD HH:MM:00"
+        fd.set(field, v.replace('T', ' ') + ':00');
+      }
+    });
+    try {
+      const res  = await fetch('crear_evento.php', { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (!data.mensaje) {
+        // 3.1) Si PHP devuelve un objeto de errores, lo mostramos inline
+        if (data.error && typeof data.error === 'object') {
+          const fieldToErrId = {
+            nombre_evento:      'create-err-required-nombre',
+            lugar:              'create-err-regex-lugar',
+            descripcion:        'create-err-regex-descripcion',
+            observacion:        'create-err-regex-observacion',
+            fecha_hora_inicio:  'create-err-required-start',
+            fecha_hora_termino: 'create-err-required-end'
+          };
+          for (const [field, msg] of Object.entries(data.error)) {
+            const errEl = document.getElementById(fieldToErrId[field]);
+            if (errEl) { errEl.textContent = msg; errEl.style.display = 'inline'; }
+          }
+        } else {
+          // 3.2) Error genérico
+          alert('Error: ' + (data.error || 'Error desconocido'));
+        }
+        saveCreateBt.disabled   = false;
+        saveCreateBt.textContent = origText;
+        return;
+      }
+
+      // 4) Éxito
       location.reload();
-    }catch(e){
-      alert('Error: '+e.message);
-      saveCreateBt.disabled=false;
-      saveCreateBt.textContent=orig;
+
+    } catch (networkErr) {
+      alert('Error de red: ' + networkErr.message);
+      saveCreateBt.disabled   = false;
+      saveCreateBt.textContent = origText;
     }
   });
 
@@ -558,10 +668,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if(txt.req) (v ? reqHide(txt.req) : (reqShow(txt.req), reqFirstInvalid ??= id));
       if(v && !reqAllowedRE.test(v)) reqShow(txt.rgx); else reqHide(txt.rgx);
     }
+    // datetime inputs --------------------------------------------------------
     const dt = reqDtRules.find(r=>r.inp===id);
-    if(dt){
-      const v = rs(id).value;
-      v ? reqHide(dt.req) : (reqShow(dt.req), reqFirstInvalid ??= id);
+    if (dt) {
+      const el = document.getElementById(id);
+      const v  = el.value;
+      if (!v
+        || !isValidDateTimeLocal(v)
+        || (el.min && v < el.min)
+        || (el.max && v > el.max)
+      ) {
+        reqShow(dt.req);
+      } else {
+        reqHide(dt.req);
+      }
     }
   }
   function reqValidateAll(){
@@ -595,9 +715,22 @@ document.addEventListener('DOMContentLoaded', () => {
     el.addEventListener('blur',()=>reqValidateField(inp));
   });
 
+  const reqStart   = document.getElementById('req-start');
+  const reqEnd     = document.getElementById('req-end');
+
   /* abrir */
   btnReqOpen.addEventListener('click', ()=>{
     rs('form-request-evento').reset();
+    const now16 = new Date().toISOString().slice(0, 16);
+    reqStart.value = now16;
+    reqEnd  .value = now16;
+    reqStart.addEventListener('change', () => {
+      reqEnd.min = reqStart.value;
+      if (reqEnd.value < reqEnd.min) {
+        reqEnd.value = reqEnd.min;
+      }
+    });
+    reqEnd.min     = now16;
     reqProjErr.style.display='none';
     reqBody.scrollTop=0;
     modalReq.style.display='flex';
@@ -623,29 +756,70 @@ document.addEventListener('DOMContentLoaded', () => {
     reqValidateProjects();
   });
 
-  /* enviar */
-  btnReqSend.addEventListener('click', async ()=>{
-    const errEnd = rs('req-end-error'); errEnd.style.display='none';
+  // ——— Guardar SOLICITAR EVENTO ———
+  btnReqSend.addEventListener('click', async () => {
+    // 1) Ocultar errores previos
+    document.querySelectorAll('#modal-request .err-inline')
+            .forEach(el => el.style.display = 'none');
+    const errEnd = document.getElementById('req-end-error');
+    errEnd.style.display = 'none';
 
-    if(!reqValidateAll()||!reqValidateProjects()){
-      reqScroll(rs(reqFirstInvalid)||reqProjErr); return;
+    // 2) Validación client-side
+    if (!reqValidateAll() || !reqValidateProjects()) {
+      reqScroll(document.getElementById(reqFirstInvalid) || reqProjErr);
+      return;
     }
-    const st=rs('req-start'); const en=rs('req-end');
-    if(en.value&&en.value<st.value){
-      errEnd.style.display='block'; reqScroll(errEnd); return;
+    const st = rs('req-start'), en = rs('req-end');
+    if (en.value && en.value < st.value) {
+      errEnd.style.display = 'block';
+      reqScroll(errEnd);
+      return;
     }
 
-    btnReqSend.disabled=true; const orig=btnReqSend.textContent;
-    btnReqSend.textContent='Enviando…';
-    const fd=new FormData(rs('form-request-evento'));
-    try{
-      const r=await fetch('crear_evento.php',{method:'POST',body:fd});
-      const j=await r.json();
-      if(!j.mensaje) throw new Error(j.error||'Error al solicitar');
+    // 3) Envío
+    btnReqSend.disabled = true;
+    const origText = btnReqSend.textContent;
+    btnReqSend.textContent = 'Enviando…';
+    const form = document.getElementById('form-request-evento');
+    const fd   = new FormData(form);
+    ['fecha_hora_inicio','fecha_hora_termino'].forEach(f=>{
+      if (fd.has(f)) {
+        const v = fd.get(f);
+        fd.set(f, v.replace('T',' ') + ':00');
+      }
+    });
+    try {
+      const res  = await fetch('crear_evento.php', { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (!data.mensaje) {
+        if (data.error && typeof data.error === 'object') {
+          const fieldToErrId = {
+            nombre_evento:      'req-err-required-nombre',
+            lugar:              'req-err-regex-lugar',
+            descripcion:        'req-err-regex-descripcion',
+            fecha_hora_inicio:  'req-err-required-start',
+            fecha_hora_termino: 'req-err-required-end'
+          };
+          for (const [field, msg] of Object.entries(data.error)) {
+            const errEl = document.getElementById(fieldToErrId[field]);
+            if (errEl) { errEl.textContent = msg; errEl.style.display = 'inline'; }
+          }
+        } else {
+          alert('Error: ' + (data.error || 'Error desconocido'));
+        }
+        btnReqSend.disabled   = false;
+        btnReqSend.textContent = origText;
+        return;
+      }
+
+      // 4) Éxito
       location.reload();
-    }catch(e){
-      alert('Error: '+e.message);
-      btnReqSend.disabled=false; btnReqSend.textContent=orig;
+
+    } catch (networkErr) {
+      alert('Error de red: ' + networkErr.message);
+      btnReqSend.disabled   = false;
+      btnReqSend.textContent = origText;
     }
   });
 
@@ -701,9 +875,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // datetime inputs --------------------------------------------------------
     const dt = dtRules.find(r=>r.inp===id);
-    if(dt){
-      const v = document.getElementById(id).value;
-      v ? hide(dt.req) : show(dt.req);
+    if (dt) {
+      const el = document.getElementById(id);
+      const v  = el.value;
+      if (!v
+        || !isValidDateTimeLocal(v)
+        || (el.min && v < el.min)
+        || (el.max && v > el.max)
+      ) {
+        show(dt.req);
+      } else {
+        hide(dt.req);
+      }
     }
   }
 
@@ -721,112 +904,156 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ——— Guardar Cambios Edición ———
   const saveBtn = document.getElementById('btn-save-evento');
+  // ——— Guardar Cambios EDITAR EVENTO ———
   saveBtn.addEventListener('click', async () => {
+    // 1) Ocultar errores previos
+    document.querySelectorAll('#modal-edit .err-inline')
+            .forEach(el => el.style.display = 'none');
     const errEnd = document.getElementById('end-error');
     errEnd.style.display = 'none';
 
-    if (saveBtn.disabled) return;
-    saveBtn.disabled = true;
-    const orig = saveBtn.textContent;
-    saveBtn.textContent = 'Guardando…';
-
-    if (!validateAll()) {                       // hay errores en campos normales
-      scrollToTarget(firstInvalid);             // ← desplazamiento suave
+    // 2) Validación client-side
+    if (!validateAll()) {
+      scrollToTarget(firstInvalid);
       saveBtn.disabled = false;
-      saveBtn.textContent = orig;
       return;
     }
-
-    // Validación de proyectos
-    if (!validateProjects()) {                   // ⇒ falta “General” o equipo
-      projectsErr.style.display = 'block';       // muestra el mensaje
-
-      firstInvalid = projectsErr;          // ahora el propio <small> es el destino
+    if (!validateProjects()) {
+      projectsErr.style.display = 'block';
+      firstInvalid = projectsErr;
       scrollToTarget(projectsErr);
-
       saveBtn.disabled = false;
-      saveBtn.textContent = orig;
       return;
     }
-    projectsErr.style.display = 'none';          // limpia si ya está bien
-
-    // Validación final de fechas
-    const startInp = document.getElementById('edit-start');
-    const endInp   = document.getElementById('edit-end');
-
+    const startInp = document.getElementById('edit-start'),
+          endInp   = document.getElementById('edit-end');
     if (endInp.value && endInp.value < startInp.value) {
-      errEnd.style.display = 'block';            // ‹ small id="err-end" …›
-      firstInvalid = projectsErr;                //  o  errEnd   según el caso
-      scrollToTarget(errEnd);                    // ⬅ desplazamos al MENSAJE
+      errEnd.style.display = 'block';
+      scrollToTarget(errEnd);
       saveBtn.disabled = false;
-      saveBtn.textContent = orig;
       return;
     }
-    errEnd.style.display = 'none';               // limpia si ya está bien
 
-    // Envío AJAX
+    // 3) Envío
+    saveBtn.disabled = true;
+    const origText = saveBtn.textContent;
+    saveBtn.textContent = 'Guardando…';
     const form = document.getElementById('form-edit-evento');
     const fd   = new FormData(form);
+    ['fecha_hora_inicio','fecha_hora_termino'].forEach(f=>{
+      if (fd.has(f)) {
+        const v = fd.get(f);
+        fd.set(f, v.replace('T',' ') + ':00');
+      }
+    });
     try {
       const res  = await fetch('actualizar_evento.php', { method: 'POST', body: fd });
-      const json = await res.json();
-      if (!json.mensaje) throw new Error(json.error || 'Error al guardar');
+      const data = await res.json();
+
+      // UNIFICAMOS aquí data.errors y data.error
+      const errs = data.errors || data.error;
+      if (!data.mensaje) {
+        if (errs && typeof errs === 'object') {
+          const fieldToErrId = {
+            nombre_evento:      'err-required-nombre',
+            lugar:              'err-regex-lugar',
+            descripcion:        'err-regex-descripcion',
+            observacion:        'err-regex-observacion',
+            fecha_hora_inicio:  'err-required-start',
+            fecha_hora_termino: 'err-required-end'
+          };
+          for (const [field, msg] of Object.entries(errs)) {
+            const errEl = document.getElementById(fieldToErrId[field]);
+            if (errEl) {
+              errEl.textContent = msg;
+              errEl.style.display = 'inline';
+            }
+          }
+        } else {
+          // fallback genérico
+          alert('Error: ' + (data.error || data.errors || 'Error desconocido'));
+        }
+        saveBtn.disabled   = false;
+        saveBtn.textContent = origText;
+        return;
+      }
+
+      // éxito…
       location.reload();
-    } catch (err) {
-      alert('Error: ' + err.message);
-      saveBtn.disabled = false;
-      saveBtn.textContent = orig;
+    } catch (networkErr) {
+      alert('Error de red: ' + networkErr.message);
+      saveBtn.disabled   = false;
+      saveBtn.textContent = origText;
     }
   });
 
+  // ——— Guardar DUPLICAR EVENTO ———
   saveCopyBt.addEventListener('click', async () => {
+    // 1) Ocultar errores previos
+    modalCopy.querySelectorAll('.err-inline')
+            .forEach(el => el.style.display = 'none');
     const errEnd = document.getElementById('copy-end-error');
     errEnd.style.display = 'none';
 
-    if (saveCopyBt.disabled) return;
-    saveCopyBt.disabled = true;
-    const orig = saveCopyBt.textContent;
-    saveCopyBt.textContent = 'Guardando…';
-
-    /* 1) Validación campos + proyectos */
-    if (!copyValidateAll()) {
-      copyScrollToTarget(copyFirstInvalid);
-      restore();
+    // 2) Validación client-side
+    if (!copyValidateAll() || !copyValidateProjects()) {
+      copyScrollToTarget(copyFirstInvalid || copyProjectsErr);
       return;
     }
-    if (!copyValidateProjects()) {
-      copyFirstInvalid = copyProjectsErr;
-      copyScrollToTarget(copyProjectsErr);
-      restore();
-      return;
-    }
-
-    /* 2) Validación final de fechas */
-    const st = document.getElementById('copy-start');
-    const en = document.getElementById('copy-end');
+    const st = document.getElementById('copy-start'),
+          en = document.getElementById('copy-end');
     if (en.value && en.value < st.value) {
       errEnd.style.display = 'block';
       copyScrollToTarget(errEnd);
-      restore();
       return;
     }
 
-    /* 3) Envío AJAX */
-    const fd = new FormData(document.getElementById('form-copy-evento'));
+    // 3) Envío al servidor
+    saveCopyBt.disabled   = true;
+    const origText = saveCopyBt.textContent;
+    saveCopyBt.textContent = 'Guardando…';
+    const form = document.getElementById('form-copy-evento');
+    const fd   = new FormData(form);
+    ['fecha_hora_inicio','fecha_hora_termino'].forEach(f=>{
+      if (fd.has(f)) {
+        const v = fd.get(f);
+        fd.set(f, v.replace('T',' ') + ':00');
+      }
+    });
     try {
-      const r = await fetch('crear_evento.php', { method:'POST', body: fd });
-      const j = await r.json();
-      if (!j.mensaje) throw new Error(j.error || 'Error al guardar');
-      location.reload();
-    } catch (err) {
-      alert('Error: ' + err.message);
-      restore();
-    }
+      const res  = await fetch('crear_evento.php', { method: 'POST', body: fd });
+      const data = await res.json();
 
-    /* helper interno */
-    function restore(){
-      saveCopyBt.disabled = false;
-      saveCopyBt.textContent = orig;
+      if (!data.mensaje) {
+        // Si devuelve validaciones, las mostramos inline
+        if (data.error && typeof data.error === 'object') {
+          const mapErr = {
+            nombre_evento:      'copy-err-required-nombre',
+            lugar:              'copy-err-regex-lugar',
+            descripcion:        'copy-err-regex-descripcion',
+            observacion:        'copy-err-regex-observacion',
+            fecha_hora_inicio:  'copy-err-required-start',
+            fecha_hora_termino: 'copy-err-required-end'
+          };
+          for (const [field, msg] of Object.entries(data.error)) {
+            const errEl = document.getElementById(mapErr[field]);
+            if (errEl) { errEl.textContent = msg; errEl.style.display = 'inline'; }
+          }
+        } else {
+          alert('Error: ' + (data.error || 'Error desconocido'));
+        }
+        saveCopyBt.disabled   = false;
+        saveCopyBt.textContent = origText;
+        return;
+      }
+
+      // 4) Éxito
+      location.reload();
+
+    } catch (networkErr) {
+      alert('Error de red: ' + networkErr.message);
+      saveCopyBt.disabled   = false;
+      saveCopyBt.textContent = origText;
     }
   });
 

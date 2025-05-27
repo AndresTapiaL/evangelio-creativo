@@ -52,7 +52,8 @@ $chk = $pdo->prepare("
       ON epe.id_equipo_proyecto = iep.id_equipo_proyecto
      AND iep.id_usuario = ?
    WHERE e.id_evento = ?
-     AND e.fecha_hora_termino < NOW()
+     AND e.fecha_hora_inicio   <= NOW()
+     AND e.fecha_hora_termino  >= DATE_SUB(NOW(), INTERVAL 1 DAY)
      AND e.id_estado_previo = 1
      AND e.id_estado_final NOT IN (5,6)
      AND (e.es_general = 1 OR iep.id_usuario IS NOT NULL)

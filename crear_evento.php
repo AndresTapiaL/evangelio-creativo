@@ -18,6 +18,76 @@ if (isset($_POST['encargado']) && $_POST['encargado'] !== '') {
     $encargado = null;
 }
 
+// ───────────── Validaciones ─────────────
+$errors = [];
+
+// 1) Longitud máxima de campos de texto
+$max = [
+  'nombre_evento' => 100,
+  'lugar'         => 100,
+  'descripcion'   => 500,
+  'observacion'   => 500
+];
+foreach ($max as $f => $len) {
+    $v = trim($_POST[$f] ?? '');
+    if ($f === 'nombre_evento' && $v === '') {
+        $errors[$f] = 'El nombre es obligatorio.';
+    } elseif (mb_strlen($v) > $len) {
+        $errors[$f] = "Máximo $len caracteres.";
+    }
+}
+
+// 2) Formato y existencia de las fechas
+function parseLocalDT(string $s) {
+  foreach (['Y-m-d H:i:s','Y-m-d H:i'] as $fmt) {
+    $d = DateTime::createFromFormat($fmt, $s);
+    if ($d && $d->format($fmt) === $s) {
+      return $d;
+    }
+  }
+  return false;
+}
+
+$startRaw = $_POST['fecha_hora_inicio']  ?? '';
+$endRaw   = $_POST['fecha_hora_termino'] ?? '';
+
+if (!($dtStart = parseLocalDT($startRaw))) {
+    $errors['fecha_hora_inicio'] = 'Formato o fecha-hora de inicio inválido.';
+}
+if (!($dtEnd = parseLocalDT($endRaw))) {
+    $errors['fecha_hora_termino'] = 'Formato o fecha-hora de término inválido.';
+}
+
+// después de parsear $dtStart y $dtEnd...
+$minAllowed = DateTime::createFromFormat('Y-m-d H:i', '1970-01-01 00:00');
+$maxAllowed = DateTime::createFromFormat('Y-m-d H:i', '2037-12-31 23:59');
+
+// 4) Rango razonable
+if ($dtStart < $minAllowed || $dtStart > $maxAllowed) {
+    $errors['fecha_hora_inicio'] = 'La fecha de inicio debe estar entre 1900 y 2100.';
+}
+if ($dtEnd < $minAllowed || $dtEnd > $maxAllowed) {
+    $errors['fecha_hora_termino'] = 'La fecha de término debe estar entre 1900 y 2100.';
+}
+
+if (!empty($errors)) {
+    http_response_code(400);
+    echo json_encode(['error' => $errors]);
+    exit;
+}
+
+// 3) El término no puede ser anterior al inicio
+if (isset($dtStart, $dtEnd) && $dtEnd < $dtStart) {
+    $errors['fecha_hora_termino'] = 'La fecha-hora término debe ser ≥ inicio.';
+}
+
+if (!empty($errors)) {
+    http_response_code(400);
+    echo json_encode(['error' => $errors]);
+    exit;
+}
+// ─────────────────────────────────────────
+
   /* 1. Insertar evento */
   $stmt = $pdo->prepare("
     INSERT INTO eventos(
