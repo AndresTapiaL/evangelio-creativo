@@ -340,10 +340,11 @@ $rolesEquipos = $restmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="menu">
       <a href="home.php">Inicio</a>
       <a href="eventos.php">Eventos</a>
-      <a href="#">Integrantes</a>
+      <a href="integrantes.php">Integrantes</a>
+      <a href="asistencia.php">Asistencia</a>
       <a href="ver_mis_datos.php">Mis datos</a>
-      <a href="#">Reportes</a>
-      <a href="#">Admisión</a>
+      <a href="reportes.php">Reportes</a>
+      <a href="admision.php">Admisión</a>
       <a href="#"><i class="fas fa-bell"></i></a>
     </div>
     <div class="perfil">

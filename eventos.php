@@ -109,8 +109,14 @@ if ($filtro !== 'calendario' && $filtro !== 'general') {
 
 // ─── 1.2) Calcular mes anterior y siguiente para el nav
 $ts        = strtotime("$year-$month-01");
-$prevMonth = date('Y-m', strtotime('-1 month', $ts));
-$nextMonth = date('Y-m', strtotime('+1 month', $ts));
+
+$prevMonth = ($year > 1970 || ($year == 1970 && $month > 1))
+           ? date('Y-m', strtotime('-1 month', $ts))
+           : null;
+
+$nextMonth = ($year < 2037 || ($year == 2037 && $month < 12))
+           ? date('Y-m', strtotime('+1 month', $ts))
+           : null;
 
 // ─── 1.3) Mapeos de meses y días
 $meses = [
@@ -120,6 +126,9 @@ $meses = [
 ];
 $dias = ['0'=>'Domingo','1'=>'Lunes','2'=>'Martes','3'=>'Miércoles',
          '4'=>'Jueves','5'=>'Viernes','6'=>'Sábado'];
+
+$where  = [];
+$params = [];
 
 // 3.1) Base del WHERE (ya tienes $where y $params)
 $where[]          = "YEAR(e.fecha_hora_inicio) = :year";
@@ -966,6 +975,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       <a href="home.php">Inicio</a>
       <a href="eventos.php">Eventos</a>
       <a href="integrantes.php">Integrantes</a>
+      <a href="asistencia.php">Asistencia</a>
       <a href="ver_mis_datos.php">Mis datos</a>
       <a href="reportes.php">Reportes</a>
       <a href="admision.php">Admisión</a>
@@ -1031,16 +1041,6 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       <?php endforeach; ?>
     </aside>
 
-    <?php
-    // Calcula mes anterior y siguiente
-    $ts        = strtotime("$year-$month-01");
-    $prevMonth = date('Y-m', strtotime('-1 month', $ts));
-    $nextMonth = date('Y-m', strtotime('+1 month', $ts));
-    $meses     = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril',
-                  '05'=>'Mayo','06'=>'Junio','07'=>'Julio','08'=>'Agosto',
-                  '09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
-    ?>
-
     <div>
       <div class="d-flex justify-content-end mb-2">
         <form class="d-flex me-auto" method="POST" action="eventos.php" id="form-search">
@@ -1058,7 +1058,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
           </button>
         </form>
         <small id="search-error" class="err-inline" style="display:none;">
-          * Sólo letras, números, espacios y . , ( ) -
+          * Solo letras, números, espacios, saltos de línea y . , # ¿ ¡ ! ? ( ) / -
         </small>
 
         <?php
@@ -1077,6 +1077,10 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
               type="month" 
               name="mesStart" 
               id="mesStart"
+              min="1970-01"
+              max="2037-12"
+              pattern="\d{4}-\d{2}"
+              title="AAAA-MM entre 1970-01 y 2037-12"
               value="<?= htmlspecialchars($mesStart) ?>"
               class="form-control form-control-sm"
             >
@@ -1090,6 +1094,10 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
               type="month" 
               name="mesEnd" 
               id="mesEnd"
+              min="1970-01"
+              max="2037-12"
+              pattern="\d{4}-\d{2}"
+              title="AAAA-MM entre 1970-01 y 2037-12"
               value="<?= htmlspecialchars($mesEnd) ?>"
               class="form-control form-control-sm"
             >
@@ -1155,23 +1163,25 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       <?php endif; ?>
 
       <nav class="month-nav">
-        <!-- Mes anterior -->
-        <form method="POST" style="display:inline-block">
-          <input type="hidden" name="filtro" value="<?=htmlspecialchars($filtro)?>">
-          <input type="hidden" name="mes"    value="<?= $prevMonth ?>">
-          <input type="hidden" name="busqueda" value="<?= htmlspecialchars($busqueda) ?>">
-          <button type="submit" class="nav-arrow">&larr;</button>
-        </form>
+        <?php if ($prevMonth !== null): ?>
+          <form method="POST" style="display:inline-block">
+            <input type="hidden" name="filtro"   value="<?= htmlspecialchars($filtro) ?>">
+            <input type="hidden" name="mes"      value="<?= $prevMonth ?>">
+            <input type="hidden" name="busqueda" value="<?= htmlspecialchars($busqueda) ?>">
+            <button type="submit" class="nav-arrow">&larr;</button>
+          </form>
+        <?php endif; ?>
 
         <span class="nav-title"><?= $meses[$month] ?> <?= $year ?></span>
 
-        <!-- Mes siguiente -->
-        <form method="POST" style="display:inline-block">
-          <input type="hidden" name="filtro" value="<?=htmlspecialchars($filtro)?>">
-          <input type="hidden" name="mes"    value="<?= $nextMonth ?>">
-          <input type="hidden" name="busqueda" value="<?= htmlspecialchars($busqueda) ?>">
-          <button type="submit" class="nav-arrow">&rarr;</button>
-        </form>
+        <?php if ($nextMonth !== null): ?>
+          <form method="POST" style="display:inline-block">
+            <input type="hidden" name="filtro"   value="<?= htmlspecialchars($filtro) ?>">
+            <input type="hidden" name="mes"      value="<?= $nextMonth ?>">
+            <input type="hidden" name="busqueda" value="<?= htmlspecialchars($busqueda) ?>">
+            <button type="submit" class="nav-arrow">&rarr;</button>
+          </form>
+        <?php endif; ?>
       </nav>
 
       <!-- 4.2) Tabla de este mes -->
@@ -1420,35 +1430,44 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
             <label>Nombre:</label>
             <input type="text" name="nombre_evento" maxlength="100" id="edit-nombre" required>
             <small id="err-required-nombre" class="err-inline">* obligatorio</small>
-            <small id="err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="err-regex-nombre"   class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
           <div class="form-group">
             <label>Lugar:</label>
             <input type="text" name="lugar" maxlength="100" id="edit-lugar">
-            <small id="err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="err-regex-lugar" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
           <div class="form-group">
             <label>Descripción:</label>
             <textarea name="descripcion" maxlength="500" id="edit-descripcion"></textarea>
-            <small id="err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="err-regex-descripcion" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
           <div class="form-group">
             <label>Observación:</label>
             <textarea name="observacion" maxlength="500" id="edit-observacion"></textarea>
-            <small id="err-regex-observacion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="err-regex-observacion" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
           <div class="form-group">
             <label>Fecha y hora inicio:</label>
             <input type="datetime-local" name="fecha_hora_inicio" id="edit-start" required min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="err-required-start" class="err-inline">* fecha y hora requeridas</small>
+            <small id="err-range-start" class="err-inline">
+              * Fecha fuera del rango permitido (1970-2037)
+            </small>
           </div>
           <div class="form-group">
             <label>Fecha y hora término:</label>
             <input type="datetime-local" name="fecha_hora_termino" id="edit-end"  min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="err-required-end" class="err-inline">* fecha y hora requeridas</small>
+            <small id="err-range-end" class="err-inline">
+              * Fecha fuera del rango permitido (1970-2037)
+            </small>
               <!-- Mensaje de error inline -->
               <div id="end-error" class="input-error" style="display:none; color:#dc3545; font-size:0.875rem; margin-top:0.25rem;">
                 * La fecha y hora de término debe ser igual o posterior al inicio.
+              </div>
+              <div id="edit-mindiff-error"  class="input-error" style="display:none">
+                * Debe haber al menos 15 min entre inicio y término.
               </div>
           </div>
           <div class="form-group">
@@ -1546,28 +1565,28 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
             <label>Nombre:</label>
             <input type="text" name="nombre_evento" maxlength="100" id="copy-nombre" required>
             <small id="copy-err-required-nombre" class="err-inline">* obligatorio</small>
-            <small id="copy-err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="copy-err-regex-nombre"   class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 2) Lugar -->
           <div class="form-group">
             <label>Lugar:</label>
             <input type="text" name="lugar" maxlength="100" id="copy-lugar">
-            <small id="copy-err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="copy-err-regex-lugar" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 3) Descripción -->
           <div class="form-group">
             <label>Descripción:</label>
             <textarea name="descripcion" maxlength="500" id="copy-descripcion"></textarea>
-            <small id="copy-err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="copy-err-regex-descripcion" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 4) Observación -->
           <div class="form-group">
             <label>Observación:</label>
             <textarea name="observacion" maxlength="500" id="copy-observacion"></textarea>
-            <small id="copy-err-regex-observacion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="copy-err-regex-observacion" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 5) Fechas -->
@@ -1575,13 +1594,22 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
             <label>Fecha y hora inicio:</label>
             <input type="datetime-local" name="fecha_hora_inicio" id="copy-start" required  min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="copy-err-required-start" class="err-inline">* fecha y hora requeridas</small>
+            <small id="copy-err-range-start" class="err-inline" style="display:none">
+              * Fecha fuera del rango permitido (1970-2037)
+            </small>
           </div>
           <div class="form-group">
             <label>Fecha y hora término:</label>
             <input type="datetime-local" name="fecha_hora_termino" id="copy-end" min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="copy-err-required-end" class="err-inline">* fecha y hora requeridas</small>
+            <small id="copy-err-range-end" class="err-inline" style="display:none">
+              * Fecha fuera del rango permitido (1970-2037)
+            </small>
             <div id="copy-end-error" class="input-error">
               * La fecha y hora de término debe ser igual o posterior al inicio.
+            </div>
+            <div id="copy-mindiff-error"  class="input-error" style="display:none">
+              * Debe haber al menos 15 min entre inicio y término.
             </div>
           </div>
 
@@ -1676,28 +1704,28 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
             <label>Nombre:</label>
             <input type="text" name="nombre_evento" maxlength="100" id="create-nombre" required>
             <small id="create-err-required-nombre" class="err-inline">* obligatorio</small>
-            <small id="create-err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="create-err-regex-nombre"   class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 2) Lugar -->
           <div class="form-group">
             <label>Lugar:</label>
             <input type="text" name="lugar" maxlength="100" id="create-lugar">
-            <small id="create-err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="create-err-regex-lugar" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 3) Descripción -->
           <div class="form-group">
             <label>Descripción:</label>
             <textarea name="descripcion" maxlength="500" id="create-descripcion"></textarea>
-            <small id="create-err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="create-err-regex-descripcion" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 4) Observación -->
           <div class="form-group">
             <label>Observación:</label>
             <textarea name="observacion" maxlength="500" id="create-observacion"></textarea>
-            <small id="create-err-regex-observacion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="create-err-regex-observacion" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 5) Fechas -->
@@ -1705,6 +1733,9 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
             <label>Fecha y hora inicio:</label>
             <input type="datetime-local" name="fecha_hora_inicio" id="create-start" required min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="create-err-required-start" class="err-inline">* fecha y hora requeridas</small>
+            <div id="create-start-error" class="input-error" style="display:none">
+              * La fecha de inicio debe estar entre 1970 y 2037.
+            </div>
           </div>
           <div class="form-group">
             <label>Fecha y hora término:</label>
@@ -1712,6 +1743,9 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
             <small id="create-err-required-end" class="err-inline">* fecha y hora requeridas</small>
             <div id="create-end-error" class="input-error" style="display:none">
               * La fecha y hora de término debe ser igual o posterior al inicio.
+            </div>
+            <div id="create-mindiff-error"  class="input-error" style="display:none">
+              * Debe haber al menos 15 min entre inicio y término.
             </div>
           </div>
 
@@ -1810,21 +1844,21 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
             <label>Nombre:</label>
             <input type="text" maxlength="100" name="nombre_evento" id="req-nombre" required>
             <small id="req-err-required-nombre" class="err-inline">* obligatorio</small>
-            <small id="req-err-regex-nombre"   class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="req-err-regex-nombre"   class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 2) Lugar -->
           <div class="form-group">
             <label>Lugar:</label>
             <input type="text" maxlength="100" name="lugar" id="req-lugar">
-            <small id="req-err-regex-lugar" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="req-err-regex-lugar" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 3) Descripción -->
           <div class="form-group">
             <label>Descripción:</label>
             <textarea name="descripcion" maxlength="500" id="req-descripcion"></textarea>
-            <small id="req-err-regex-descripcion" class="err-inline">* solo letras, números, espacios y . , ( ) -</small>
+            <small id="req-err-regex-descripcion" class="err-inline">* Solo letras, números, espacios, y . , # ¿ ¡ ! ? ( ) / -</small>
           </div>
 
           <!-- 4) Fechas -->
@@ -1832,13 +1866,22 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
             <label>Fecha y hora inicio:</label>
             <input type="datetime-local" name="fecha_hora_inicio" id="req-start" required min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="req-err-required-start" class="err-inline">* fecha y hora requeridas</small>
+            <small id="req-err-range-start" class="err-inline">
+              * Fecha fuera del rango permitido (1970-2037)
+            </small>
           </div>
           <div class="form-group">
             <label>Fecha y hora término:</label>
             <input type="datetime-local" name="fecha_hora_termino" id="req-end" min="1970-01-01T00:00" max="2037-12-31T23:59" pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" title="YYYY-MM-DDTHH:MM (entre 1970 y 2037)">
             <small id="req-err-required-end" class="err-inline">* fecha y hora requeridas</small>
+            <small id="req-err-range-end" class="err-inline">
+              * Fecha fuera del rango permitido (1970-2037)
+            </small>
             <div id="req-end-error" class="input-error" style="display:none">
               * La fecha y hora de término debe ser igual o posterior al inicio.
+            </div>
+            <div id="req-mindiff-error"  class="input-error" style="display:none">
+              * Debe haber al menos 15 min entre inicio y término.
             </div>
           </div>
 

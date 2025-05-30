@@ -402,6 +402,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
       <a href="home.php">Inicio</a>
       <a href="eventos.php">Eventos</a>
       <a href="integrantes.php">Integrantes</a>
+      <a href="asistencia.php">Asistencia</a>
       <a href="ver_mis_datos.php">Mis datos</a>
       <a href="reportes.php">Reportes</a>
       <a href="admision.php">Admisión</a>
@@ -538,6 +539,8 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     data-equipos="<?= htmlspecialchars($rawTeams ?: 'General', ENT_QUOTES) ?>"
                     data-previo="<?= $previo ?>"
                     data-asist="<?= "{$cnt_pres} de {$cnt_tot}" ?>"
+                    data-encargado="<?= htmlspecialchars($ev['encargado_nombre_completo'] ?? '', ENT_QUOTES) ?>"
+                    data-tipo="<?= htmlspecialchars($ev['nombre_tipo'] ?? '', ENT_QUOTES) ?>"
                     data-observacion="<?= $obs ?>"
                     data-can-see-observacion="<?= $ev['show_observacion'] ? '1':'0' ?>"
                     data-final="<?= $final ?>"

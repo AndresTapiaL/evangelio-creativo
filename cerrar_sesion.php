@@ -4,6 +4,8 @@ session_start();
 
 // 1) Vaciar $_SESSION
 $_SESSION = [];
+$where  = [];
+$params = [];
 
 // 2) Borrar la cookie de sesión (si existe)
 if (ini_get("session.use_cookies")) {

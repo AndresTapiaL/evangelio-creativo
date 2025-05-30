@@ -1,4 +1,22 @@
 document.addEventListener('DOMContentLoaded', () => {
+  let firstInvalid = null;
+  const rs = id => document.getElementById(id);
+  
+  // Modal Editar
+  protectDateTimeInput(document.getElementById('edit-start'));
+  protectDateTimeInput(document.getElementById('edit-end'));
+  
+  // Modal Duplicar
+  protectDateTimeInput(document.getElementById('copy-start'));
+  protectDateTimeInput(document.getElementById('copy-end'));
+  // Modal Crear
+  protectDateTimeInput(document.getElementById('create-start'));
+  protectDateTimeInput(document.getElementById('create-end'));
+
+  // Modal Solicitar
+  protectDateTimeInput(document.getElementById('req-start'));
+  protectDateTimeInput(document.getElementById('req-end'));
+
   // ——— Modal de Detalles ———
   const modalDetail = document.getElementById('modal-detalles');
   const closeDetail = modalDetail.querySelector('.modal-close');
@@ -46,10 +64,10 @@ document.addEventListener('DOMContentLoaded', () => {
     {inp:'edit-observacion',  req:null,                   rgx:'err-regex-observacion'}
   ];
   const dtRules = [
-    {inp:'edit-start', req:'err-required-start'},
-    {inp:'edit-end',   req:'err-required-end'}
+    { inp: 'edit-start', req: 'err-required-start', range: 'err-range-start' },
+    { inp: 'edit-end',   req: 'err-required-end',   range: 'err-range-end'   }
   ];
-  const allowedRE = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,\-()]+$/;
+  const allowedRE = /^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$/u;
   const modalBody = modalEdit.querySelector('.card-body');   // ← tu clase real
 
 /**
@@ -68,6 +86,28 @@ document.addEventListener('DOMContentLoaded', () => {
         && dt.getDate()      === D
         && dt.getHours()     === h
         && dt.getMinutes()   === m;
+  }
+
+  /** true si start y end están el mismo YYYY-MM-DD */
+  const isSameDay = (a, b) => a.slice(0,10) === b.slice(0,10);
+
+  /** true si la diferencia entre a y b ≥ n minutos  */
+  const gapOK = (a, b, n = 15) =>
+    (new Date(b) - new Date(a)) >= n * 60 * 1000;
+
+  function protectDateTimeInput(el) {
+    if (!el) return;
+    let lastValid = el.value;               // recuerda el valor correcto
+
+    // cuando el valor sea válido lo actualizamos
+    el.addEventListener('input', () => {
+      if (el.validity.valid) lastValid = el.value;
+    });
+
+    // Al salir del campo, si lo que quedó es inválido, lo restauramos
+    el.addEventListener('blur', () => {
+      if (!el.validity.valid) el.value = lastValid;
+    });
   }
 
   // —— dispara validación al instante ——
@@ -104,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ─── validación de Equipos/Proyectos ───
   const generalChk  = document.getElementById('edit-general');
-  const projectChks = Array.from(document.querySelectorAll('.edit-project-chk'));
+  const projectChks = Array.from(modalEdit.querySelectorAll('.edit-project-chk'));
   const projectsErr = document.getElementById('projects-error');
   const encSelect   = document.getElementById('edit-encargado');
 
@@ -118,9 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.edit-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       // limpiar mensajes de error cada vez que se abre el modal
+      firstInvalid = null;
       modalEdit.querySelectorAll('.err-inline').forEach(el => el.style.display = 'none');
       projectsErr.style.display = 'none';
-      firstInvalid = null;
       
       // 1) Rellenar campos básicos
       document.getElementById('edit-id').value          = btn.dataset.id;
@@ -148,12 +188,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // 4) Validación inline de fechas
       function validateDate() {
+        // tu validación de “término < inicio”
         if (endInp.value && endInp.value < startInp.value) {
           errEnd.style.display = 'block';
         } else {
           errEnd.style.display = 'none';
         }
+
+        // ——— NUEVO: validación de rango 1970–2037 ———
+        const rangoErr = document.getElementById('err-range-end');
+        if (endInp.value &&
+            (endInp.value < endInp.min || endInp.value > endInp.max)
+        ) {
+          rangoErr.style.display = 'inline';
+        } else {
+          rangoErr.style.display = 'none';
+        }
+
+        const minDiffErr = document.getElementById('edit-mindiff-error');
+
+        if (endInp.value && startInp.value &&
+            isSameDay(startInp.value, endInp.value) &&
+            !gapOK(startInp.value, endInp.value, 15)
+        ){
+          minDiffErr.style.display = 'block';
+        } else {
+          minDiffErr.style.display = 'none';
+        }
       }
+
+      // engancha validateDate a todos los eventos relevantes:
+      endInp.addEventListener('input',  validateDate);
+      endInp.addEventListener('change', validateDate);
+      endInp.addEventListener('blur',   validateDate);
+
+      // Y también cuando cambie la fecha de inicio, para que recalcule bien:
+      startInp.addEventListener('change', validateDate);
+
+      ['input','change','blur'].forEach(ev => {
+        endInp.addEventListener(ev, () => {
+          document.getElementById('err-range-end').style.display = 'none';
+        });
+      });
+
       startInp.onchange = () => {
         endInp.min = startInp.value;
         if (endInp.value < endInp.min) endInp.value = endInp.min;
@@ -164,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // 5) Marcar checkboxes de proyectos
       const eqRaw = btn.dataset.equipos || '';
       const eqArr = cleanList(eqRaw);
-      document.querySelectorAll('.checkbox-item input').forEach(chk => {
+      modalEdit.querySelectorAll('.checkbox-item input').forEach(chk => {
         chk.checked = eqArr.includes(chk.value);
       });
 
@@ -202,12 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
         filterEncargados(selProjects, encSelect.value); // muestra/oculta opciones
       };
 
-      // listeners para refrescar la lista si cambian los checks
-      generalChk.onchange = () => {
-        projectChks.forEach(c => c.checked = false);    // desmarca proyectos
-        syncEncargados();
-      };
-
       projectChks.forEach(c => {
         c.onchange = () => {
           generalChk.checked = projectChks.every(x => !x.checked);
@@ -237,10 +308,10 @@ document.addEventListener('DOMContentLoaded', () => {
     {inp:'copy-observacion', req:null,                        rgx:'copy-err-regex-observacion'}
   ];
   const copyDtRules = [
-    {inp:'copy-start', req:'copy-err-required-start'},
-    {inp:'copy-end',   req:'copy-err-required-end'}
+    { inp:'copy-start', req:'copy-err-required-start', range:'copy-err-range-start' },
+    { inp:'copy-end',   req:'copy-err-required-end',   range:'copy-err-range-end'   }
   ];
-  const copyAllowedRE = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,\-()]+$/;
+  const copyAllowedRE = allowedRE;
   const copyModalBody = modalCopy.querySelector('.card-body');      // container scroll
   const copyGeneralChk  = document.getElementById('copy-general');
   const copyProjectChks = Array.from(document.querySelectorAll('.copy-project-chk'));
@@ -277,6 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function copyValidateField(id){
+    const el = document.getElementById(id);
     // text inputs -----------------------------------------------------------
     const txt = copyTxtRules.find(r=>r.inp===id);
     if(txt){
@@ -285,25 +357,59 @@ document.addEventListener('DOMContentLoaded', () => {
       if(v && !copyAllowedRE.test(v)) { copyShow(txt.rgx); } else { copyHide(txt.rgx); }
     }
     // datetime inputs -------------------------------------------------------
-    const dt = copyDtRules.find(r=>r.inp===id);
+    const dt = copyDtRules.find(r => r.inp === id);
     if (dt) {
-      const el = document.getElementById(id);
-      const v  = el.value;
-      // si está vacío o no es fecha-hora válida
-      if (!v
-        || !isValidDateTimeLocal(v)
-        || (el.min && v < el.min)
-        || (el.max && v > el.max)
-      ) {
-        copyShow(dt.req);
-      } else {
-        copyHide(dt.req);
+      const el   = document.getElementById(id);
+
+      //  extra: fecha término < inicio
+      if (id === 'copy-end') {
+        const orderErr = document.getElementById('copy-end-error');
+        if (el.value && el.value < document.getElementById('copy-start').value) {
+          orderErr.style.display = 'block';
+          copyFirstInvalid ??= orderErr;
+        } else {
+          orderErr.style.display = 'none';
+        }
       }
+
+      const v    = el.value;
+
+      if (!v) {                    // vacío
+        copyShow(dt.req);
+        if (dt.range) copyHide(dt.range);
+        return;
+      }
+
+      const outOfBound = (v < el.min) || (v > el.max);
+      if (outOfBound) {            // fuera del rango 1970–2037
+        copyHide(dt.req);
+        if (dt.range) copyShow(dt.range);
+      } else {                     // dentro de rango ⇒ sin error
+        copyHide(dt.req);
+        if (dt.range) copyHide(dt.range);
+      }
+    }
+
+    const minErr = document.getElementById('copy-mindiff-error');
+
+    const isEndField = id.endsWith('end');            // ← NUEVO
+
+    if (isEndField &&
+        rs('copy-start').value &&
+        isSameDay(rs('copy-start').value, el.value) &&
+        !gapOK(rs('copy-start').value, el.value, 15)
+    ){
+      minErr.style.display = 'block';
+      copyFirstInvalid ??= minErr;                       // ajusta tu variable de scroll
+    } else {
+      minErr.style.display = 'none';
     }
   }
 
   function copyValidateAll(){
     copyFirstInvalid = null;
+    modalCopy.querySelectorAll('.err-inline').forEach(el=>el.style.display='none');
+    copyProjectsErr.style.display='none';
     copyTxtRules.forEach(r=>copyValidateField(r.inp));
     copyDtRules .forEach(r=>copyValidateField(r.inp));
     return !copyFirstInvalid;
@@ -350,18 +456,30 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('copy-tipo').value          = btn.dataset.tipo;
       document.getElementById('copy-final').value         = btn.dataset.final;
 
-      // 2) Fechas
+      // 2) Fechas ────────────────────────────────
       const st = document.getElementById('copy-start');
       const en = document.getElementById('copy-end');
-      
-      // 1) Convertimos el dataset "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SS"
-      const rawStart = btn.dataset.start.replace(' ', 'T');
-      const rawEnd   = btn.dataset.end  .replace(' ', 'T');
 
-      // 2) Recortamos a 16 caracteres para quitar los segundos: "YYYY-MM-DDTHH:MM"
-      st.value = rawStart.slice(0, 16);
-      en.value = rawEnd  .slice(0, 16);
-      en.min   = st.value;
+      //   a) dataset → “YYYY-MM-DDTHH:MM”
+      st.value = btn.dataset.start.replace(' ', 'T').slice(0,16);
+      en.value = btn.dataset.end  .replace(' ', 'T').slice(0,16);
+
+      //   b) mínimo dinámico
+      en.min = st.value;
+
+      //   c) listeners simples (igual que Crear/Solicitar)
+      st.onchange = () => {
+        en.min = st.value;
+        if (en.value < en.min) {
+          en.value = en.min;                 // ajusta término
+        }
+        copyValidateField('copy-start');
+        copyValidateField('copy-end');
+      };
+
+      ['input','change','blur'].forEach(ev=>{
+        en.addEventListener(ev, ()=> copyValidateField('copy-end'));
+      });
 
       // 3) Proyectos / General
       const eqArr = (btn.dataset.equipos || '').split(',').map(s=>s.trim()).filter(Boolean);
@@ -413,10 +531,10 @@ document.addEventListener('DOMContentLoaded', () => {
     {inp:'create-observacion', req:null,                   rgx:'create-err-regex-observacion'}
   ];
   const createDtRules = [
-    {inp:'create-start', req:'create-err-required-start'},
-    {inp:'create-end',   req:'create-err-required-end'}
+    { inp: 'create-start', req: 'create-err-required-start', range: 'create-start-error' },
+    { inp: 'create-end',   req: 'create-err-required-end',   range: 'create-end-error'   }
   ];
-  const createAllowedRE  = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()-]+$/;
+  const createAllowedRE  = allowedRE;
   const createBody       = modalCreate.querySelector('.card-body');
   const createGeneralChk = document.getElementById('create-general');
   const createProjChks   = Array.from(document.querySelectorAll('.create-project-chk'));
@@ -425,7 +543,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* —— Validación modal-create —— */
   let createFirstInvalid = null;
-  function showCreate(id){ document.getElementById(id).style.display='inline'; }
+  function showCreate(id){
+    const errEl = document.getElementById(id);
+    errEl.style.display = 'inline';
+    // si aún no hay primer invalid, guárdame su id
+    createFirstInvalid ??= errEl;
+  }
   function hideCreate(id){ document.getElementById(id).style.display='none'; }
 
   function scrollCreate(el){
@@ -437,6 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function validateCreateField(id){
+    const el = document.getElementById(id);
     const txt = createTxtRules.find(r=>r.inp===id);
     if (txt){
       const v = document.getElementById(id).value.trim();
@@ -447,16 +571,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const dt = createDtRules.find(r => r.inp === id);
     if (dt) {
       const el = document.getElementById(id);
-      const v  = el.value;
-      // si está vacío o no es válido, mostramos el error
-      if (!v
-        || !isValidDateTimeLocal(v)
-        || (el.min && v < el.min)
-        || (el.max && v > el.max)
-      ) {
-        createShow(dt.req);
+
+      const minErr     = document.getElementById('create-mindiff-error');
+      const isEndField = id.endsWith('end');           // ← NUEVO
+
+      if (isEndField &&
+          el.value && rs('create-start').value &&
+          isSameDay(rs('create-start').value, el.value) &&
+          !gapOK(rs('create-start').value, el.value, 15)
+      ){
+          minErr.style.display = 'block';
+          createFirstInvalid ??= minErr;
       } else {
-        createHide(dt.req);
+          minErr.style.display = 'none';
+      }
+
+      const v  = el.value;
+      const tooLow  = el.min && v < el.min;
+      const tooHigh = el.max && v > el.max;
+
+      if (!v || !isValidDateTimeLocal(v)) {
+        showCreate(dt.req);
+        if (dt.range) hideCreate(dt.range);
+      }
+      else if (tooLow || tooHigh) {
+        hideCreate(dt.req);
+        showCreate(dt.range);
+      }
+      else {
+        hideCreate(dt.req);
+        if (dt.range) hideCreate(dt.range);
       }
     }
   }
@@ -519,6 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Y bloqueamos el mínimo
       createEnd.min = now16;
+
       // <-- Limpiar TODOS los mensajes inline -->
       document.querySelectorAll('#modal-create .err-inline')
               .forEach(el => el.style.display = 'none');
@@ -551,15 +696,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ——— Guardar CREAR EVENTO ———
   saveCreateBt.addEventListener('click', async () => {
+    const origText = saveCreateBt.textContent;
     // 1) Ocultar errores previos
     document.querySelectorAll('#modal-create .err-inline')
             .forEach(el => el.style.display = 'none');
     const errEnd = document.getElementById('create-end-error');
     errEnd.style.display = 'none';
 
+    // ── Scroll al primer mensaje de error de fecha (req ó range)
+    const firstCreateError = createDtRules
+      .flatMap(r => [r.req, r.range])            // tanto el campo “req” (servidor) como el “range” (cliente)
+      .map(id => document.getElementById(id))
+      .find(el => el && el.style.display === 'inline');
+
+    if (firstCreateError) {
+      scrollCreate(firstCreateError);
+      saveCreateBt.disabled   = false;
+      saveCreateBt.textContent = origText;
+      return;
+    }
+
     // 2) Validación client-side
     if (!validateCreateAll() || !validateCreateProjects()) {
-      scrollCreate(document.getElementById(createFirstInvalid) || createProjErr);
+      scrollCreate(createFirstInvalid || createProjErr);
       return;
     }
     const st = document.getElementById('create-start'),
@@ -572,7 +731,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3) Envío al servidor
     saveCreateBt.disabled = true;
-    const origText = saveCreateBt.textContent;
     saveCreateBt.textContent = 'Guardando…';
 
     // 3) Preparar FormData
@@ -639,10 +797,10 @@ document.addEventListener('DOMContentLoaded', () => {
     {inp:'req-descripcion', req:null,                       rgx:'req-err-regex-descripcion'}
   ];
   const reqDtRules = [
-    {inp:'req-start', req:'req-err-required-start'},
-    {inp:'req-end',   req:'req-err-required-end'}
+    { inp: 'req-start', req: 'req-err-required-start', range: 'req-err-range-start' },
+    { inp: 'req-end',   req: 'req-err-required-end',   range: 'req-err-range-end'   }
   ];
-  const reqAllowedRE = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,()-]+$/;
+  const reqAllowedRE = allowedRE;
   const reqBody      = modalReq.querySelector('.card-body');
   const reqGeneral   = document.getElementById('req-general');
   const reqProjChks  = Array.from(document.querySelectorAll('.req-project-chk'));
@@ -651,9 +809,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* helpers */
   let reqFirstInvalid = null;
-  const rs = id=>document.getElementById(id);
-  function reqShow(id){ rs(id).style.display='inline'; }
-  function reqHide(id){ rs(id).style.display='none'; }
+  function reqShow(id) {
+    const el = document.getElementById(id);
+    el.style.display = 'inline';
+    reqFirstInvalid ??= el;
+  }
+  function reqHide(id) {
+    document.getElementById(id).style.display = 'none';
+  }
   function reqScroll(el){
     const y = el.getBoundingClientRect().top
             - reqBody.getBoundingClientRect().top
@@ -662,6 +825,7 @@ document.addEventListener('DOMContentLoaded', () => {
     el.focus();
   }
   function reqValidateField(id){
+    const el = document.getElementById(id);
     const txt = reqTxtRules.find(r=>r.inp===id);
     if(txt){
       const v = rs(id).value.trim();
@@ -669,19 +833,39 @@ document.addEventListener('DOMContentLoaded', () => {
       if(v && !reqAllowedRE.test(v)) reqShow(txt.rgx); else reqHide(txt.rgx);
     }
     // datetime inputs --------------------------------------------------------
-    const dt = reqDtRules.find(r=>r.inp===id);
+    const dt = reqDtRules.find(r => r.inp === id);
     if (dt) {
       const el = document.getElementById(id);
       const v  = el.value;
-      if (!v
-        || !isValidDateTimeLocal(v)
-        || (el.min && v < el.min)
-        || (el.max && v > el.max)
-      ) {
+      const tooLow  = el.min && v < el.min;
+      const tooHigh = el.max && v > el.max;
+
+      if (!v || !isValidDateTimeLocal(v)) {
         reqShow(dt.req);
-      } else {
-        reqHide(dt.req);
+        if (dt.range) reqHide(dt.range);
       }
+      else if (tooLow || tooHigh) {
+        reqHide(dt.req);
+        reqShow(dt.range);
+      }
+      else {
+        reqHide(dt.req);
+        if (dt.range) reqHide(dt.range);
+      }
+    }
+
+    const minErr      = document.getElementById('req-mindiff-error');
+    const isEndField  = id.endsWith('end');          // <── NUEVO
+
+    if (isEndField &&
+        el.value && rs('req-start').value &&
+        isSameDay(rs('req-start').value, el.value) &&
+        !gapOK(rs('req-start').value, el.value, 15)
+    ){
+        minErr.style.display = 'block';
+        reqFirstInvalid ??= minErr;
+    } else {
+        minErr.style.display = 'none';
     }
   }
   function reqValidateAll(){
@@ -758,15 +942,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ——— Guardar SOLICITAR EVENTO ———
   btnReqSend.addEventListener('click', async () => {
+    const origText = btnReqSend.textContent;
     // 1) Ocultar errores previos
     document.querySelectorAll('#modal-request .err-inline')
             .forEach(el => el.style.display = 'none');
+    reqProjErr.style.display='none';
     const errEnd = document.getElementById('req-end-error');
     errEnd.style.display = 'none';
 
+    // ── Scroll al primer error de rango en “Solicitar”
+    const firstReqRange = reqDtRules
+      .map(r => document.getElementById(r.range))
+      .find(el => el && el.style.display === 'inline');
+
+    if (firstReqRange) {
+      reqScroll(firstReqRange);
+      btnReqSend.disabled   = false;
+      btnReqSend.textContent = origText;
+      return;
+    }
+
     // 2) Validación client-side
     if (!reqValidateAll() || !reqValidateProjects()) {
-      reqScroll(document.getElementById(reqFirstInvalid) || reqProjErr);
+      reqScroll(reqFirstInvalid || reqProjErr);
       return;
     }
     const st = rs('req-start'), en = rs('req-end');
@@ -778,7 +976,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3) Envío
     btnReqSend.disabled = true;
-    const origText = btnReqSend.textContent;
     btnReqSend.textContent = 'Enviando…';
     const form = document.getElementById('form-request-evento');
     const fd   = new FormData(form);
@@ -845,7 +1042,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* —— helpers de validación ————————————————————— */
-  let firstInvalid = null;                                 // ← para el scroll
 
   function show(id){
     const el = document.getElementById(id);
@@ -866,6 +1062,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function validateField(id){
+    const el = document.getElementById(id);
     // text inputs ------------------------------------------------------------
     const txt = txtRules.find(r=>r.inp===id);
     if(txt){
@@ -873,20 +1070,41 @@ document.addEventListener('DOMContentLoaded', () => {
       if(txt.req) (v ? hide(txt.req) : show(txt.req));
       if(v && !allowedRE.test(v)) { show(txt.rgx); } else { hide(txt.rgx); }
     }
+
     // datetime inputs --------------------------------------------------------
-    const dt = dtRules.find(r=>r.inp===id);
+    const dt = dtRules.find(r => r.inp === id);
     if (dt) {
       const el = document.getElementById(id);
       const v  = el.value;
-      if (!v
-        || !isValidDateTimeLocal(v)
-        || (el.min && v < el.min)
-        || (el.max && v > el.max)
-      ) {
+      const tooLow  = el.min  && v < el.min;
+      const tooHigh = el.max  && v > el.max;
+
+      if (!v || !isValidDateTimeLocal(v)) {
         show(dt.req);
-      } else {
-        hide(dt.req);
+        if (dt.range) hide(dt.range);
       }
+      else if (tooLow || tooHigh) {
+        hide(dt.req);
+        show(dt.range);
+      }
+      else {
+        hide(dt.req);
+        if (dt.range) hide(dt.range);
+      }
+    }
+
+    const minErr     = document.getElementById('edit-mindiff-error');
+    const isEndField = id.endsWith('end');           // ← NUEVO
+
+    if (isEndField &&
+        el.value && rs('edit-start').value &&
+        isSameDay(rs('edit-start').value, el.value) &&
+        !gapOK(rs('edit-start').value, el.value, 15)
+    ){
+      minErr.style.display = 'block';
+      firstInvalid ??= minErr;
+    } else {
+      minErr.style.display = 'none';
     }
   }
 
@@ -912,6 +1130,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const errEnd = document.getElementById('end-error');
     errEnd.style.display = 'none';
 
+    // ── Si hay un error “fuera de rango”, hacemos scroll y salimos:
+    const firstRangeErr = dtRules
+      .map(r => document.getElementById(r.range))
+      .find(el => el && el.style.display === 'inline');
+
+    if (firstRangeErr) {
+      scrollToTarget(firstRangeErr);
+      saveBtn.disabled = false;
+      return;
+    }
+
     // 2) Validación client-side
     if (!validateAll()) {
       scrollToTarget(firstInvalid);
@@ -931,6 +1160,18 @@ document.addEventListener('DOMContentLoaded', () => {
       errEnd.style.display = 'block';
       scrollToTarget(errEnd);
       saveBtn.disabled = false;
+      return;
+    }
+
+    // justo después de comprobar “end < start”
+    const mindiffErr = document.getElementById('edit-mindiff-error');
+
+    if (endInp.value && startInp.value &&
+        isSameDay(startInp.value, endInp.value) &&
+        !gapOK(startInp.value, endInp.value, 15)
+    ) {
+      mindiffErr.style.display = 'block';   // el <div> recién creado
+      scrollToTarget(mindiffErr);
       return;
     }
 
@@ -994,6 +1235,17 @@ document.addEventListener('DOMContentLoaded', () => {
             .forEach(el => el.style.display = 'none');
     const errEnd = document.getElementById('copy-end-error');
     errEnd.style.display = 'none';
+
+    // ── Scroll al primer error de rango en “Duplicar”
+    const firstCopyRange = copyDtRules
+      .map(r => document.getElementById(r.range))
+      .find(el => el && el.style.display === 'inline');
+
+    if (firstCopyRange) {
+      copyScrollToTarget(firstCopyRange);
+      saveCopyBt.disabled = false;
+      return;
+    }
 
     // 2) Validación client-side
     if (!copyValidateAll() || !copyValidateProjects()) {
@@ -1077,7 +1329,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput  = document.getElementById('search-input');
   const btnSearch    = document.getElementById('btn-search');
   const searchError  = document.getElementById('search-error');
-  const searchRE     = /^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 .,\-()]*$/;
+  const searchRE = /^[\p{L}\p{N} .,#¿¡!?()\/\-]*$/u;
 
   function validateSearch() {
     const ok = searchRE.test(searchInput.value);
@@ -1100,6 +1352,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const errOrder       = document.getElementById('dateOrder-error');
   const errRange       = document.getElementById('dateRange-error');
 
+  const YEAR_MIN = 1970;
+  const YEAR_MAX = 2037;
+
+  function yyyymmToDate(str){          // '2025-07' → Date(2025,6,1)
+    const [y,m] = str.split('-').map(Number);
+    return new Date(y, m-1, 1);
+  }
+
   function validateDownload() {
     let ok = true;
 
@@ -1117,6 +1377,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // si falta alguno, no seguimos con resto
       errOrder.style.display = 'none';
       errRange.style.display = 'none';
+      const yS = +vStart.slice(0,4), yE = +vEnd.slice(0,4);
+      if (yS<YEAR_MIN || yS>YEAR_MAX) { errStart.style.display='block'; ok=false; }
+      if (yE<YEAR_MIN || yE>YEAR_MAX) { errEnd  .style.display='block'; ok=false; }
       btnDownload.disabled = !ok;
       return ok;
     }

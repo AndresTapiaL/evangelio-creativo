@@ -16,12 +16,34 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute(['id'=>$id]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+/* justo después de leer $user */
+$isLiderNacional = ($pdo->query("
+      SELECT 1
+        FROM integrantes_equipos_proyectos
+       WHERE id_usuario = $id
+         AND id_equipo_proyecto = 1
+       LIMIT 1")->fetchColumn()) ? true : false;
+
+/* Equipos que verá el usuario */
+$teams = $isLiderNacional
+         ? $pdo->query("SELECT id_equipo_proyecto,nombre_equipo_proyecto
+                          FROM equipos_proyectos
+                         ORDER BY nombre_equipo_proyecto")
+                ->fetchAll(PDO::FETCH_ASSOC)
+         : $pdo->prepare("
+              SELECT ep.id_equipo_proyecto, ep.nombre_equipo_proyecto
+                FROM integrantes_equipos_proyectos iep
+                JOIN equipos_proyectos ep USING(id_equipo_proyecto)
+               WHERE iep.id_usuario = :u
+               ORDER BY ep.nombre_equipo_proyecto");
+if (!$isLiderNacional){ $teams->execute(['u'=>$id]); $teams=$teams->fetchAll(PDO::FETCH_ASSOC); }
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Integrantes</title>
+  <title>Reportes</title> 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
   <link rel="stylesheet" href="styles/main.css">
@@ -74,6 +96,11 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
     h1 {
       margin-top: 0;
     }
+
+    .team-btn{
+    border:none;background:#eee;padding:.4rem;border-radius:4px;cursor:pointer;width:100%;
+    }
+    .team-btn.active{background:#ffcb31;font-weight:bold;}
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -139,7 +166,42 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
   <!-- ░░░░ CONTENIDO PRINCIPAL ░░░░ -->
   <main style="padding:2rem">
-    <h1>Integrantes</h1>
+    <div style="display:grid;grid-template-columns:200px 1fr;gap:1rem">
+
+        <!-- =====  SIDEBAR  ===== -->
+        <aside style="background:#f9f9f9;padding:1rem;border-radius:6px">
+            <h3 style="margin-top:0">Equipos/Proyectos</h3>
+            <ul id="team-list" style="list-style:none;padding:0">
+            <li><button class="team-btn" data-id="0" style="width:100%">Todos</button></li>
+            <?php foreach($teams as $t): ?>
+                <li style="margin-top:.4rem">
+                <button class="team-btn"
+                        data-id="<?= $t['id_equipo_proyecto'] ?>"
+                        style="width:100%">
+                    <?= htmlspecialchars($t['nombre_equipo_proyecto']) ?>
+                </button>
+                </li>
+            <?php endforeach; ?>
+            </ul>
+        </aside>
+        <section>
+            <h1>Reportes</h1>
+
+            <!-- pestañas -->
+            <nav id="tabs" style="margin:1rem 0">
+                <button data-report="integrantes"   id="tab-integrantes">Justificaciones · Integrantes</button>
+                <button data-report="eventos"       id="tab-eventos">Justificaciones · Eventos</button>
+                <button data-report="equipos"       id="tab-equipos">Equipos</button>
+                <button data-report="eventos_estado" id="tab-ev-estado">Eventos · Estados</button>
+            </nav>
+
+            <!-- barra de periodos -->
+            <div id="period-buttons" style="margin-bottom:1rem"></div>
+
+            <!-- el reporte se inyecta aquí -->
+            <div id="report-container" class="table-responsive"></div>
+        </section>
+    </div>
   </main>
 
   <!-- ═════════ utilidades ═════════ -->
@@ -177,5 +239,6 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
   <!-- ░░░░ Heartbeat automático cada 10 min ░░░░ -->
   <script src="heartbeat.js"></script>
+  <script defer src="reportes.js"></script>
 </body>
 </html>

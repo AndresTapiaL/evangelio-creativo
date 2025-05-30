@@ -126,6 +126,16 @@ $mesStart  = $_REQUEST['mesStart'] ?? date('Y-m');
 $mesEnd    = $_REQUEST['mesEnd']   ?? date('Y-m');
 $format    = ($_REQUEST['format'] ?? 'excel') === 'pdf' ? 'pdf' : 'excel';
 
+function validMonth($m){
+    return preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $m)
+        && (int)substr($m,0,4) >= 1970
+        && (int)substr($m,0,4) <= 2037;
+}
+if (!validMonth($mesStart) || !validMonth($mesEnd)) {
+    http_response_code(400);
+    exit('Mes fuera del rango 1970-2037');
+}
+
 // 5) Construir fechas de rango
 list($ys,$ms) = explode('-', $mesStart);
 list($ye,$me) = explode('-', $mesEnd);

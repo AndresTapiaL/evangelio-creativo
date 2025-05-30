@@ -31,12 +31,24 @@ try {
       'descripcion'   => 500,
       'observacion'   => 500
     ];
+
+    // Patrón: letras (incluye acentos), números, espacios, y . , - ( ) 
+    $pattern = '/^[\p{L}\p{N} .,#¿¡!?\(\)\/\-\r\n]+$/u';
+
     foreach ($max as $field => $len) {
         $val = trim($_POST[$field] ?? '');
         if ($field === 'nombre_evento' && $val === '') {
             $errors[$field] = 'El nombre es obligatorio.';
         } elseif (mb_strlen($val) > $len) {
             $errors[$field] = "Máximo $len caracteres.";
+        }
+    }
+
+    // 2) Sólo caracteres permitidos en texto
+    foreach (['nombre_evento','lugar','descripcion','observacion'] as $field) {
+        $txt = trim($_POST[$field] ?? '');
+        if ($txt !== '' && !preg_match($pattern, $txt)) {
+            $errors[$field] = 'Sólo se permiten letras, números, espacios y . , ( ) -';
         }
     }
 
@@ -65,12 +77,12 @@ try {
     $minAllowed = DateTime::createFromFormat('Y-m-d H:i', '1970-01-01 00:00');
     $maxAllowed = DateTime::createFromFormat('Y-m-d H:i', '2037-12-31 23:59');
 
-    // 4) Rango razonable
+    // 3bis) Validar rango 1970–2037
     if ($dtStart < $minAllowed || $dtStart > $maxAllowed) {
-        $errors['fecha_hora_inicio'] = 'La fecha de inicio debe estar entre 1900 y 2100.';
+        $errors['fecha_hora_inicio'] = 'La fecha de inicio debe estar entre 1970 y 2037.';
     }
-    if ($dtEnd < $minAllowed || $dtEnd > $maxAllowed) {
-        $errors['fecha_hora_termino'] = 'La fecha de término debe estar entre 1900 y 2100.';
+    if ($dtEnd   < $minAllowed || $dtEnd   > $maxAllowed) {
+        $errors['fecha_hora_termino'] = 'La fecha de término debe estar entre 1970 y 2037.';
     }
 
     if (!empty($errors)) {
@@ -82,6 +94,15 @@ try {
     // 3) Término ≥ inicio
     if (isset($dtStart, $dtEnd) && $dtEnd < $dtStart) {
         $errors['fecha_hora_termino'] = 'La fecha‐hora término debe ser ≥ inicio.';
+    }
+
+    // 4) Si son el mismo día debe haber ≥15 min
+    if ($dtStart && $dtEnd &&
+        $dtStart->format('Y-m-d') === $dtEnd->format('Y-m-d') &&
+        ($dtEnd->getTimestamp() - $dtStart->getTimestamp()) < 15*60
+    ){
+        $errors['fecha_hora_termino'] =
+            'Debe haber al menos 15 minutos entre inicio y término cuando son el mismo día.';
     }
 
     if (!empty($errors)) {
