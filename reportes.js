@@ -20,7 +20,35 @@
   /* ═════════ 2) Estado global ═════════ */
   let curType   = 'integrantes';
   let curPer    = periodos[0].id_periodo;
-  let curTeam   = 0;                 // 0 = Todos
+  let curTeam = +document.querySelector('.team-btn').dataset.id;
+
+  /* cuando llega data, mostrar “Sin eventos aún” si todos 0 */
+  function renderIntegrantes(rows, host){
+    if (rows[0] && rows[0].mensaje){
+        host.innerHTML = `<em>${rows[0].mensaje}</em>`;
+        return;
+    }
+
+    if (rows.length === 0) {
+      host.innerHTML = '<em>Sin eventos aún.</em>';
+      return;
+    }
+
+    const jNames=[...new Set(rows.map(r=>r.nombre_justificacion_inasistencia))];
+    const tbl = htmlTable(['Nombre',...jNames]);
+    const byU={};
+    rows.forEach(r=>{
+      const u=(byU[r.id_usuario]??={nombre:r.nombre_completo,vals:{}});
+      u.vals[r.nombre_justificacion_inasistencia]=r.porcentaje;
+    });
+    Object.values(byU).forEach(u=>{
+      tbl.tBodies[0].append(tr([
+        u.nombre,
+        ...jNames.map(j=>`${u.vals[j]??0}%`)
+      ]));
+    });
+    host.append(tbl);
+  }
 
 
   /* ═════════ 3) Listeners ═════════ */
@@ -73,25 +101,16 @@
 
   /* ─── helpers de render ───────────────────────────────────── */
 
-  function renderIntegrantes(rows, host) {
-    const jNames = [...new Set(rows.map(r=>r.nombre_justificacion_inasistencia))];
-    const tbl = htmlTable(['Nombre completo', ...jNames]);
-    const byU = {};
-    rows.forEach(r=>{
-      const o = (byU[r.id_usuario] ??= {nombre:r.nombre_completo, vals:{}});
-      o.vals[r.nombre_justificacion_inasistencia] = r.porcentaje;
-    });
-    Object.values(byU).forEach(u=>{
-      tbl.tBodies[0].append(tr([
-        u.nombre,
-        ...jNames.map(j=>`${u.vals[j]??0}%`)
-      ]));
-    });
-    host.append(tbl);
-  }
-
   function renderEventos(rows, host) {
-    const jNames = [...new Set(rows.map(r=>r.nombre_justificacion_inasistencia))];
+    /* si viene el mensaje especial, lo mostramos y salimos */
+    if (rows[0] && rows[0].mensaje){
+        host.innerHTML = `<em>${rows[0].mensaje}</em>`;
+        return;
+    }
+
+    const jNames = [...new Set(
+          rows.map(r=>r.nombre_justificacion_inasistencia)
+    )];   
     const tbl = htmlTable(['Nombre evento','Fecha',...jNames]);
     const byE = {};
     rows.forEach(r=>{

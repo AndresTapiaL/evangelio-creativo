@@ -172,15 +172,13 @@ if (!$isLiderNacional){ $teams->execute(['u'=>$id]); $teams=$teams->fetchAll(PDO
         <aside style="background:#f9f9f9;padding:1rem;border-radius:6px">
             <h3 style="margin-top:0">Equipos/Proyectos</h3>
             <ul id="team-list" style="list-style:none;padding:0">
-            <li><button class="team-btn" data-id="0" style="width:100%">Todos</button></li>
-            <?php foreach($teams as $t): ?>
-                <li style="margin-top:.4rem">
-                <button class="team-btn"
-                        data-id="<?= $t['id_equipo_proyecto'] ?>"
-                        style="width:100%">
+            <?php foreach($teams as $ix=>$t): ?>
+              <li style="margin-top:.4rem">
+                <button class="team-btn<?= $ix==0?' active':'' ?>"
+                        data-id="<?= $t['id_equipo_proyecto'] ?>" style="width:100%">
                     <?= htmlspecialchars($t['nombre_equipo_proyecto']) ?>
                 </button>
-                </li>
+              </li>
             <?php endforeach; ?>
             </ul>
         </aside>
