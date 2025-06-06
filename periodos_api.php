@@ -21,7 +21,7 @@ try{
         CASE
             WHEN nombre_periodo LIKE '%-T1'   THEN CONCAT('Enero-Abril ', LEFT(nombre_periodo,4))
             WHEN nombre_periodo LIKE '%-T2'   THEN CONCAT('Mayo-Agosto ', LEFT(nombre_periodo,4))
-            WHEN nombre_periodo LIKE '%-T3'   THEN CONCAT('Sept-Dic ',    LEFT(nombre_periodo,4))
+            WHEN nombre_periodo LIKE '%-T3'   THEN CONCAT('Septiembre-Diciembre ',    LEFT(nombre_periodo,4))
             WHEN nombre_periodo LIKE '%-Anual' THEN CONCAT('Anual ',      LEFT(nombre_periodo,4))
             WHEN es_historico = 1             THEN 'Histórico'
             ELSE nombre_periodo

@@ -101,6 +101,163 @@ if (!$isLiderNacional){ $teams->execute(['u'=>$id]); $teams=$teams->fetchAll(PDO
     border:none;background:#eee;padding:.4rem;border-radius:4px;cursor:pointer;width:100%;
     }
     .team-btn.active{background:#ffcb31;font-weight:bold;}
+
+    #tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    #tabs button {
+      padding: 0.5rem 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #f0f0f0;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    #tabs button:hover {
+      background: #e6e6e6;
+    }
+    #tabs button.active {
+      background: #ffcb31;
+      border-color: #e6b800;
+      font-weight: bold;
+    }
+
+    /* ── Periodos: ejemplo de botones dentro de #period-buttons ── */
+    #period-buttons {
+      display: block;
+      margin-bottom: 1rem;
+    }
+    #period-buttons button {
+      margin-right: 0.5rem;
+      margin-bottom: 0.5rem;
+      padding: 0.4rem 0.8rem;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      background: #fafafa;
+      cursor: pointer;
+    }
+    #period-buttons button.active {
+      background: #ffcb31;
+      border-color: #e6b800;
+      font-weight: bold;
+    }
+
+    /* ── Sidebar de Equipos (lista de .team-btn) ── */
+    .team-btn {
+      width: 100%;
+      text-align: left;
+      padding: 0.4rem;
+      margin-bottom: 0.25rem;
+      border: none;
+      background: #eee;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+    .team-btn:hover {
+      background: #e0e0e0;
+    }
+    .team-btn.active {
+      background: #ffcb31;
+      font-weight: bold;
+    }
+
+    /* Agrupar visualmente cada año */
+    .grupo-anio {
+      margin-bottom: 1rem;
+      border-left: 3px solid #ccc;   /* solo para marcar la separación, opcional */
+      padding-left: 0.5rem;
+    }
+
+    /* El <h4> que aparece por cada año */
+    .grupo-anio h4 {
+      color: #222;
+    }
+
+    /* Los botones hijos (períodos) pueden compartir .btn-periodo,
+      pero si quieres, puedes darles un estilo extra cuando están dentro de un .grupo-anio */
+    .grupo-anio .btn-periodo {
+      margin-right: 0.5rem;
+      margin-bottom: 0.5rem;
+      padding: 0.4rem 0.8rem;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      background: #fafafa;
+      cursor: pointer;
+      display: inline-block;
+    }
+    .grupo-anio .btn-periodo.active {
+      background: #ffcb31;
+      border-color: #e6b800;
+      font-weight: bold;
+    }
+
+    /* ── estilo para el contenedor de flechas + año ── */
+    #period-buttons {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Flechas */
+    .arrow-btn {
+      font-size: 1.2rem;
+      padding: 0.25rem 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fafafa;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .arrow-btn:hover {
+      background: #e6e6e6;
+    }
+
+    /* Etiqueta de año (2025, 2024, etc.) */
+    .anio-label {
+      font-weight: bold;
+      font-size: 1rem;
+      color: #222;
+    }
+
+    /* Contenedor de los botones de ese año */
+    .periodos-del-anio {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      justify-content: center;
+      width: 100%;
+    }
+
+    /* Botones de trimestre (mismo estilo que usabas antes) */
+    .periodos-del-anio .btn-periodo {
+      padding: 0.4rem 0.8rem;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      background: #fafafa;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .periodos-del-anio .btn-periodo:hover {
+      background: #e6e6e6;
+    }
+    .periodos-del-anio .btn-periodo.active {
+      background: #ffcb31;
+      border-color: #e6b800;
+      font-weight: bold;
+    }
+    /* Puedes poner esto en tu CSS o inyectarlo con JavaScript */
+    section.ocupandoTodoElEspacio {
+      /* Hacer que ocupe columna 1 hasta la última columna del grid (span 2 columnas) */
+      grid-column: 1 / -1;
+    }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -190,7 +347,7 @@ if (!$isLiderNacional){ $teams->execute(['u'=>$id]); $teams=$teams->fetchAll(PDO
                 <button data-report="integrantes"   id="tab-integrantes">Justificaciones · Integrantes</button>
                 <button data-report="eventos"       id="tab-eventos">Justificaciones · Eventos</button>
                 <button data-report="equipos"       id="tab-equipos">Equipos</button>
-                <button data-report="eventos_estado" id="tab-ev-estado">Eventos · Estados</button>
+                <button data-report="eventos_estado" id="tab-eventos_estado">Eventos · Estados</button>
             </nav>
 
             <!-- barra de periodos -->

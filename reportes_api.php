@@ -184,7 +184,7 @@ switch ($type) {
       SELECT
         ev.id_evento,
         ev.nombre_evento,
-        DATE(ev.fecha_hora_inicio) AS fecha_evento,
+        DATE_FORMAT(ev.fecha_hora_inicio, '%d-%m-%Y') AS fecha_evento,
         ji.nombre_justificacion_inasistencia,
         COALESCE(r.total,0)     AS total,
         COALESCE(r.porcentaje,0) AS porcentaje
@@ -243,70 +243,211 @@ switch ($type) {
 
   /* ═════════ 3) Cuadro de estados por equipo  ═════════════ */
   case 'equipos':
-
-    /* ───────── Filtro opcional por equipo ───────── */
-    $teamWhere = $teamId ? " WHERE ep.id_equipo_proyecto = :team " : "";
-
-    /* ── 1) Último estado de actividad de cada integrante dentro del período ── */
+    // ==== 1) CTE para obtener “último estado” de cada integrante en este período ====
     $sql = "
       WITH ult AS (
         SELECT
           h.id_integrante_equipo_proyecto,
-          -- último estado del periodo seleccionado
           SUBSTRING_INDEX(
             GROUP_CONCAT(h.id_tipo_estado_actividad
-                         ORDER BY h.fecha_estado_actividad DESC), ',', 1) AS id_estado
+                         ORDER BY h.fecha_estado_actividad DESC),
+            ',', 1
+          ) AS id_estado
         FROM historial_estados_actividad h
         WHERE get_period_id(h.fecha_estado_actividad) = :p
         GROUP BY h.id_integrante_equipo_proyecto
       )
-
       SELECT
+        ep.id_equipo_proyecto,
+        ep.es_equipo,
         ep.nombre_equipo_proyecto,
 
-        /* total de integrantes CON registro en el período */
-        COUNT(*)                                         AS total_integrantes,
+        /* Total de integrantes (solo si su último estado NO es 6 ni 7) */
+        COUNT(
+          DISTINCT
+          CASE 
+            WHEN ult.id_estado NOT IN (6,7) THEN iep.id_usuario
+            ELSE NULL
+          END
+        ) AS total_integrantes,
 
-        SUM(ult.id_estado = 1)                           AS activos,
-        SUM(ult.id_estado = 2)                           AS semiactivos,
-        SUM(ult.id_estado = 5)                           AS nuevos,
-        SUM(ult.id_estado = 3)                           AS inactivos,
-        SUM(ult.id_estado = 4)                           AS en_espera,
-        SUM(ult.id_estado = 6)                           AS retirados,
-        SUM(ult.id_estado = 7)                           AS cambios
+        /* Conteos por cada estado concreto */
+        SUM( IF( ult.id_estado = 1, 1, 0 ) ) AS activos,
+        SUM( IF( ult.id_estado = 2, 1, 0 ) ) AS semiactivos,
+        SUM( IF( ult.id_estado = 5, 1, 0 ) ) AS nuevos,
+        SUM( IF( ult.id_estado = 3, 1, 0 ) ) AS inactivos,
+        SUM( IF( ult.id_estado = 4, 1, 0 ) ) AS en_espera,
+        SUM( IF( ult.id_estado = 6, 1, 0 ) ) AS retirados,
+        SUM( IF( ult.id_estado = 7, 1, 0 ) ) AS cambios,
+        SUM( IF( ult.id_estado = 8, 1, 0 ) ) AS sin_estado
 
-      FROM ult
-      JOIN integrantes_equipos_proyectos iep
-                 ON iep.id_integrante_equipo_proyecto = ult.id_integrante_equipo_proyecto
-      JOIN equipos_proyectos ep USING(id_equipo_proyecto)
-      $teamWhere
-      GROUP BY ep.id_equipo_proyecto
-      ORDER BY ep.nombre_equipo_proyecto
+      FROM equipos_proyectos ep
+      LEFT JOIN integrantes_equipos_proyectos iep
+        ON iep.id_equipo_proyecto = ep.id_equipo_proyecto
+      LEFT JOIN ult
+        ON ult.id_integrante_equipo_proyecto = iep.id_integrante_equipo_proyecto
+
+      GROUP BY ep.id_equipo_proyecto, ep.es_equipo, ep.nombre_equipo_proyecto
+      ORDER BY ep.es_equipo DESC, ep.nombre_equipo_proyecto ASC
     ";
 
     $stmt = $pdo->prepare($sql);
     $stmt->bindValue(':p', $periodo, PDO::PARAM_INT);
-    if ($teamId) $stmt->bindValue(':team', $teamId, PDO::PARAM_INT);
     $stmt->execute();
+    $filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode(['ok'=>true,'data'=>$stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    // ==== 2) Nueva lógica para “Total” según el nuevo criterio solicitado ====
+    //
+    // Queremos contar “cada usuario sólo una vez” si en ese período
+    // tiene al menos UN registro en historial_estados_actividad con id_tipo_estado_actividad ≠ 6 ni 7.
+    //
+    // Para ello, nos basta con hacer:
+    //   SELECT COUNT(DISTINCT iep.id_usuario)
+    //   FROM historial_estados_actividad h
+    //   JOIN integrantes_equipos_proyectos iep
+    //     ON iep.id_integrante_equipo_proyecto = h.id_integrante_equipo_proyecto
+    //   WHERE get_period_id(h.fecha_estado_actividad) = :p
+    //     AND h.id_tipo_estado_actividad NOT IN (6,7)
+    //
+    // Así, “DISTINCT iep.id_usuario” garantiza que si un usuario aparece en varios equipos
+    // o con varias filas de historial, sólo cuente una vez, y solo se cuenta si existe
+    // al menos un h.id_tipo_estado_actividad ≠ 6,7.
+    //
+
+    $sqlTotal = "
+      SELECT
+        COUNT(DISTINCT iep.id_usuario) AS total_usuarios
+      FROM historial_estados_actividad h
+      JOIN integrantes_equipos_proyectos iep
+        ON iep.id_integrante_equipo_proyecto = h.id_integrante_equipo_proyecto
+      WHERE get_period_id(h.fecha_estado_actividad) = :p
+        AND h.id_tipo_estado_actividad NOT IN (6,7)
+    ";
+    $stTotal = $pdo->prepare($sqlTotal);
+    $stTotal->bindValue(':p', $periodo, PDO::PARAM_INT);
+    $stTotal->execute();
+    $resTot = $stTotal->fetch(PDO::FETCH_ASSOC);
+    $totalIntegrantesAll = $resTot['total_usuarios'] ?? 0;
+
+    // ==== 3) CALCULAR TOTALES “column-wise” recorriendo $filas (sin contar la fila Total) ====
+    // Inicializamos las variables acumuladoras en cero:
+    $sumActivos      = 0;
+    $sumSemiactivos  = 0;
+    $sumNuevos       = 0;
+    $sumInactivos    = 0;
+    $sumEnEspera     = 0;
+    $sumRetirados    = 0;
+    $sumCambios      = 0;
+    $sumSinEstado    = 0;
+
+    // Recorremos cada fila existente (cada equipo) y sumamos sus columnas:
+    foreach ($filas as $fila) {
+        // Por seguridad, casteamos a entero (si viniera NULL, lo tratamos como 0):
+        $sumActivos     += (int) $fila['activos'];
+        $sumSemiactivos += (int) $fila['semiactivos'];
+        $sumNuevos      += (int) $fila['nuevos'];
+        $sumInactivos   += (int) $fila['inactivos'];
+        $sumEnEspera    += (int) $fila['en_espera'];
+        $sumRetirados   += (int) $fila['retirados'];
+        $sumCambios     += (int) $fila['cambios'];
+        $sumSinEstado   += (int) $fila['sin_estado'];
+    }
+
+    // ==== 4) Ahora sí agregamos la fila “Total” con esos acumulados ====
+    $filas[] = [
+      'id_equipo_proyecto'     => 0,
+      'es_equipo'              => 0,
+      'nombre_equipo_proyecto' => 'Total',
+      'total_integrantes'      => $totalIntegrantesAll,
+      'activos'                => $sumActivos,
+      'semiactivos'            => $sumSemiactivos,
+      'nuevos'                 => $sumNuevos,
+      'inactivos'              => $sumInactivos,
+      'en_espera'              => $sumEnEspera,
+      'retirados'              => $sumRetirados,
+      'cambios'                => $sumCambios,
+      'sin_estado'             => $sumSinEstado,
+    ];
+
+    echo json_encode(['ok'=>true,'data'=>$filas]);
     exit;
 
-  /* ═════════ 4) Datos crudos para gráfico de eventos ══════ */
+  /* ═════════ 4)  Eventos · Estados  ═════════════════════════════ */
   case 'eventos_estado':
-    $sql = "
-      SELECT
-        ep.nombre_equipo_proyecto,
-        ev.id_estado_final,
-        COUNT(*)        AS total
-      FROM eventos ev
-      JOIN equipos_proyectos_eventos epe ON epe.id_evento = ev.id_evento
-      JOIN equipos_proyectos          ep  ON ep.id_equipo_proyecto = epe.id_equipo_proyecto
-      WHERE get_period_id(DATE(ev.fecha_hora_inicio)) = :p
-      GROUP BY ep.id_equipo_proyecto, ev.id_estado_final";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindValue(':p',$periodo,PDO::PARAM_INT);
-    $stmt->execute();
-    echo json_encode(['ok'=>true,'data'=>$stmt->fetchAll(PDO::FETCH_ASSOC)]);
+
+    /* 0)  Catálogos de estados y equipos/proyectos ────────────── */
+    $estados = $pdo->query("
+        SELECT id_estado_final, nombre_estado_final
+          FROM estados_finales_eventos
+      ORDER BY id_estado_final
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    $catEquipos = $pdo->query("
+        SELECT id_equipo_proyecto,
+               nombre_equipo_proyecto,
+               es_equipo
+          FROM equipos_proyectos
+      ORDER BY nombre_equipo_proyecto
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    /* helper → matriz equipo×estado inicializada a 0 ------------- */
+    $makeMatrix = function (array $subset) use ($estados) {
+        $M = [];
+        foreach ($subset as $eq) {
+            foreach ($estados as $es) {
+                $M[] = [
+                    'id_equipo_proyecto'     => (int)$eq['id_equipo_proyecto'],
+                    'nombre_equipo_proyecto' => $eq['nombre_equipo_proyecto'],
+                    'id_estado_final'        => (int)$es['id_estado_final'],
+                    'nombre_estado_final'    => $es['nombre_estado_final'],
+                    'total'                  => 0
+                ];
+            }
+        }
+        return $M;
+    };
+
+    /* 1)  Conteo real por (equipo_proyecto , estado_final) ─────── */
+    $q = $pdo->prepare("
+        SELECT epe.id_equipo_proyecto,
+               ev.id_estado_final,
+               COUNT(*) AS tot
+          FROM equipos_proyectos_eventos epe
+          JOIN eventos ev ON ev.id_evento = epe.id_evento
+         WHERE get_period_id(DATE(ev.fecha_hora_inicio)) = :p
+           AND ev.id_estado_final IS NOT NULL
+           AND ev.id_estado_previo  = 1
+      GROUP BY epe.id_equipo_proyecto, ev.id_estado_final
+    ");
+    $q->bindValue(':p', $periodo, PDO::PARAM_INT);
+    $q->execute();
+
+    /* Pasamos el resultado a un mapa bidimensional para lookup rápido */
+    $map = [];   // [id_equipo][id_estado] → tot
+    foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $map[(int)$r['id_equipo_proyecto']][(int)$r['id_estado_final']] = (int)$r['tot'];
+    }
+
+    /* 2)  Separar catálogo y armar matrices de salida ──────────── */
+    $soloEquipos   = array_filter($catEquipos, fn($e) => $e['es_equipo'] == 1);
+    $soloProyectos = array_filter($catEquipos, fn($e) => $e['es_equipo'] == 0);
+
+    $general = $makeMatrix($soloEquipos);      // es_equipo = 1
+    foreach ($general as &$g) {
+        $g['total'] = $map[$g['id_equipo_proyecto']][$g['id_estado_final']] ?? 0;
+    }
+    unset($g);
+
+    $otros = $makeMatrix($soloProyectos);      // es_equipo = 0
+    foreach ($otros as &$o) {
+        $o['total'] = $map[$o['id_equipo_proyecto']][$o['id_estado_final']] ?? 0;
+    }
+    unset($o);
+
+    echo json_encode([
+        'ok'      => true,
+        'general' => $general,   //  ← solo equipos (es_equipo = 1)
+        'otros'   => $otros      //  ← solo proyectos (es_equipo = 0)
+    ]);
     exit;
 }
