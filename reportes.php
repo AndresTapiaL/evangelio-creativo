@@ -1,12 +1,22 @@
 <?php
 date_default_timezone_set('UTC');
 require 'conexion.php';
+require_once 'lib_auth.php';
+
 session_start();
-if (empty($_SESSION['id_usuario'])) {
+$uid = $_SESSION['id_usuario'] ?? 0;
+
+/* ── 1. ¿Sesión iniciada? ─────────────────────────────── */
+if (!$uid) {
     header('Location: login.html');
     exit;
 }
-$id = $_SESSION['id_usuario'];
+
+/* ── 2. ¿Tiene derecho a usar reportes? ───────────────── */
+if (!user_can_use_reports($pdo, $uid)) {
+    http_response_code(403);
+    exit('403 – Acceso denegado');
+}
 
 // — Trae nombre y foto para el menú —
 $stmt = $pdo->prepare("
@@ -14,30 +24,36 @@ $stmt = $pdo->prepare("
     FROM usuarios
    WHERE id_usuario = :id
 ");
-$stmt->execute(['id'=>$id]);
+$stmt->execute(['id'=>$uid]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-/* justo después de leer $user */
-$isLiderNacional = ($pdo->query("
-      SELECT 1
-        FROM integrantes_equipos_proyectos
-       WHERE id_usuario = $id
-         AND id_equipo_proyecto = 1
-       LIMIT 1")->fetchColumn()) ? true : false;
+$isLN  = user_is_lider_nac($pdo,$uid);
+$myTeams = user_allowed_teams($pdo,$uid);   // lista de IDs permitidos
+//  objeto JS que usará reportes.js
+echo "<script>
+        window.REP_AUTH = {
+            isLN : ".($isLN?'true':'false').",
+            allowed : ".json_encode(array_map('intval',$myTeams))."
+        };
+      </script>";
 
-/* Equipos que verá el usuario */
-$teams = $isLiderNacional
-         ? $pdo->query("SELECT id_equipo_proyecto,nombre_equipo_proyecto
-                          FROM equipos_proyectos
-                         ORDER BY nombre_equipo_proyecto")
-                ->fetchAll(PDO::FETCH_ASSOC)
-         : $pdo->prepare("
-              SELECT ep.id_equipo_proyecto, ep.nombre_equipo_proyecto
-                FROM integrantes_equipos_proyectos iep
-                JOIN equipos_proyectos ep USING(id_equipo_proyecto)
-               WHERE iep.id_usuario = :u
-               ORDER BY ep.nombre_equipo_proyecto");
-if (!$isLiderNacional){ $teams->execute(['u'=>$id]); $teams=$teams->fetchAll(PDO::FETCH_ASSOC); }
+/* ─── Equipos que el usuario puede ver ─── */
+if ($isLN) {
+    $teams = $pdo->query("
+        SELECT id_equipo_proyecto, nombre_equipo_proyecto
+          FROM equipos_proyectos
+      ORDER BY nombre_equipo_proyecto")
+      ->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    if (!$myTeams) $myTeams = [0];                // evita IN ()
+    $in = implode(',', array_map('intval',$myTeams));
+    $teams = $pdo->query("
+        SELECT id_equipo_proyecto, nombre_equipo_proyecto
+          FROM equipos_proyectos
+         WHERE id_equipo_proyecto IN ($in)
+      ORDER BY nombre_equipo_proyecto")
+      ->fetchAll(PDO::FETCH_ASSOC);
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -305,7 +321,12 @@ if (!$isLiderNacional){ $teams->execute(['u'=>$id]); $teams=$teams->fetchAll(PDO
       <a href="integrantes.php">Integrantes</a>
       <a href="asistencia.php">Asistencia</a>
       <a href="ver_mis_datos.php">Mis datos</a>
-      <a href="reportes.php">Reportes</a>
+      <?php
+      require_once 'lib_auth.php';
+      $uid = $_SESSION['id_usuario'] ?? 0;
+      if (user_can_use_reports($pdo,$uid)): ?>
+          <a href="reportes.php">Reportes</a>
+      <?php endif; ?>
       <a href="admision.php">Admisión</a>
       <a href="#"><i class="fas fa-bell"></i></a>
     </div>

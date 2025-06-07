@@ -1,6 +1,27 @@
 /* reportes.js – UI 100 % vanilla */
 
 (async () => {
+  const AUTH = window.REP_AUTH;        // viene desde PHP
+
+  /* ── Seguridad de interfaz: oculta botones que el usuario no puede usar ── */
+  const TABS = {
+    integr: document.getElementById('tab-integrantes'),
+    event:  document.getElementById('tab-eventos'),
+    equip:  document.getElementById('tab-equipos'),
+    est:    document.getElementById('tab-eventos_estado')
+  };
+
+  /* Líder nacional  **o**  al menos un equipo con rol 4/6
+    (→ `allowed.length > 0` porque el PHP solo llena ese array
+        cuando el usuario tiene rol 4 u 6 en algún equipo)         */
+  const CAN_EXT_TABS = window.REP_AUTH.isLN ||
+                      window.REP_AUTH.allowed.length > 0;
+
+  if (!CAN_EXT_TABS) {
+    TABS.equip.style.display = 'none';
+    TABS.est.style.display   = 'none';
+  }
+
   /* Colores fijos por nombre de estado  (mismos en ambos gráficos) */
   const COLOR_BY_STATE = {
     'Realizado'   : '#8BC34A',  // verde claro
@@ -32,6 +53,10 @@
     const mes = hoy.getMonth() + 1;         // enero=1...diciembre=12
     const añoHoy = hoy.getFullYear().toString();
 
+    if (textoPeriodo.startsWith('Anual')) {
+      return textoPeriodo.endsWith(añoHoy);
+    }
+
     // Extraer año final y texto anterior (tramo)
     const partes = textoPeriodo.trim().split(' ');
     if (partes.length < 2) return false;
@@ -45,6 +70,7 @@
     if (tramo === 'Enero-Abril'        && mes >= 1  && mes <= 4 ) return true;
     if (tramo === 'Mayo-Agosto'        && mes >= 5  && mes <= 8 ) return true;
     if (tramo === 'Septiembre-Diciembre' && mes >= 9  && mes <= 12) return true;
+    if (tramo === 'Anual') return true;
 
     return false;
   }
@@ -123,7 +149,8 @@
           const trimestres = {
             'Enero-Abril':           1,
             'Mayo-Agosto':           2,
-            'Septiembre-Diciembre':  3
+            'Septiembre-Diciembre':  3,
+            'Anual'                : 4
           };
           const clave1 = p1.nombre_periodo.replace(` ${anio}`, ''); // e.g. "Enero-Abril"
           const clave2 = p2.nombre_periodo.replace(` ${anio}`, '');

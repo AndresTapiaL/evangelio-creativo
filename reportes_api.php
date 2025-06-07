@@ -1,6 +1,16 @@
 <?php
 // ───── CONFIG ───────────────────────────────────────────────
 require 'conexion.php';
+require_once 'lib_auth.php';
+session_start();
+$uid = $_SESSION['id_usuario'] ?? 0;
+if (!user_can_use_reports($pdo,$uid)) {
+    http_response_code(403);
+    echo json_encode(['error'=>'forbidden']); exit;
+}
+$isLN   = user_is_lider_nac($pdo,$uid);
+$myTeams = user_allowed_teams($pdo,$uid);     // array
+
 header('Content-Type: application/json; charset=utf-8');
 
 // ───── PARÁMETROS ───────────────────────────────────────────
@@ -24,6 +34,7 @@ switch ($type) {
 
   /* ═════════ 1) Justificaciones por integrantes ═══════════ */
   case 'integrantes':
+    assert_team_allowed($teamId,$myTeams,$isLN);
 
     /* ——— Validación ——— */
     if (!$teamId) {
@@ -176,7 +187,14 @@ switch ($type) {
 
     /* Si $teamId = 0 → traer todos los equipos; 
        si no, filtrar con AND epe.id_equipo_proyecto = :team */
+    if (!$isLN && $teamId===0){
+        // no se permite "todos" salvo Lider Nac
+        http_response_code(403); echo json_encode(['error'=>'team-forbidden']); exit;
+    }
     $teamFilter = $teamId ? 'AND epe.id_equipo_proyecto = :team' : '';
+    if (!$isLN && $teamId){
+        assert_team_allowed($teamId,$myTeams,false);
+    }
 
     /* ——— Seleccionamos todas las combinaciones evento ↔ justificación ———
        (así obtenemos filas con total=0 si no hubo participantes de ese tipo) */
@@ -243,6 +261,10 @@ switch ($type) {
 
   /* ═════════ 3) Cuadro de estados por equipo  ═════════════ */
   case 'equipos':
+    if (!$isLN && !$myTeams){
+        http_response_code(403);
+        echo json_encode(['error'=>'forbidden']); exit;
+    }
     // ==== 1) CTE para obtener “último estado” de cada integrante en este período ====
     $sql = "
       WITH ult AS (
@@ -374,6 +396,19 @@ switch ($type) {
 
   /* ═════════ 4)  Eventos · Estados  ═════════════════════════════ */
   case 'eventos_estado':
+    /* ── ¿el período elegido es “Anual AAAA” ? ───────────────── */
+    $nomPer = $pdo->prepare("SELECT nombre_periodo
+                              FROM periodos
+                              WHERE id_periodo = ?");
+    $nomPer->execute([$periodo]);
+    $nomPer = $nomPer->fetchColumn() ?: '';
+    $isAnnual = str_ends_with($nomPer, '-Anual');   // PHP 8; para PHP 7 usa substr/strpos
+    $yearSel  = $isAnnual ? (int)substr($nomPer, 0, 4) : 0;
+
+    if (!$isLN && !$myTeams){
+        http_response_code(403);
+        echo json_encode(['error'=>'forbidden']); exit;
+    }
 
     /* 0)  Catálogos de estados y equipos/proyectos ────────────── */
     $estados = $pdo->query("
@@ -408,18 +443,36 @@ switch ($type) {
     };
 
     /* 1)  Conteo real por (equipo_proyecto , estado_final) ─────── */
-    $q = $pdo->prepare("
-        SELECT epe.id_equipo_proyecto,
-               ev.id_estado_final,
-               COUNT(*) AS tot
-          FROM equipos_proyectos_eventos epe
-          JOIN eventos ev ON ev.id_evento = epe.id_evento
-         WHERE get_period_id(DATE(ev.fecha_hora_inicio)) = :p
-           AND ev.id_estado_final IS NOT NULL
-           AND ev.id_estado_previo  = 1
-      GROUP BY epe.id_equipo_proyecto, ev.id_estado_final
-    ");
-    $q->bindValue(':p', $periodo, PDO::PARAM_INT);
+    if ($isAnnual) {
+        /* —— Anual: filtrar por AÑO —— */
+        $q = $pdo->prepare("
+            SELECT epe.id_equipo_proyecto,
+                  ev.id_estado_final,
+                  COUNT(*) AS tot
+              FROM equipos_proyectos_eventos epe
+              JOIN eventos ev ON ev.id_evento = epe.id_evento
+            WHERE YEAR(ev.fecha_hora_inicio) = :y
+              AND ev.id_estado_final IS NOT NULL
+              AND ev.id_estado_previo  = 1
+          GROUP BY epe.id_equipo_proyecto, ev.id_estado_final
+        ");
+        $q->bindValue(':y', $yearSel, PDO::PARAM_INT);
+
+    } else {
+        /* —— Cuatrimestre / Histórico (código original) —— */
+        $q = $pdo->prepare("
+            SELECT epe.id_equipo_proyecto,
+                  ev.id_estado_final,
+                  COUNT(*) AS tot
+              FROM equipos_proyectos_eventos epe
+              JOIN eventos ev ON ev.id_evento = epe.id_evento
+            WHERE get_period_id(DATE(ev.fecha_hora_inicio)) = :p
+              AND ev.id_estado_final IS NOT NULL
+              AND ev.id_estado_previo  = 1
+          GROUP BY epe.id_equipo_proyecto, ev.id_estado_final
+        ");
+        $q->bindValue(':p', $periodo, PDO::PARAM_INT);
+    }
     $q->execute();
 
     /* Pasamos el resultado a un mapa bidimensional para lookup rápido */

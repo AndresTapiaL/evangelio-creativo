@@ -213,7 +213,12 @@ $defaultVersion = filemtime(__DIR__ . '/uploads/fotos/default.png');
       <a href="integrantes.php">Integrantes</a>
       <a href="asistencia.php">Asistencia</a>
       <a href="ver_mis_datos.php">Mis datos</a>
-      <a href="reportes.php">Reportes</a>
+      <?php
+      require_once 'lib_auth.php';
+      $uid = $_SESSION['id_usuario'] ?? 0;
+      if (user_can_use_reports($pdo,$uid)): ?>
+          <a href="reportes.php">Reportes</a>
+      <?php endif; ?>
       <a href="admision.php">Admisión</a>
       <a href="#"><i class="fas fa-bell"></i></a>
     </div>
