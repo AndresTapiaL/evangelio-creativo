@@ -26,153 +26,341 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
   <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preload" href="styles/poppins-v23-latin-400.woff2"
+        as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="styles/poppins-v23-latin-500.woff2"
+        as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="styles/poppins-v23-latin-600.woff2"
+        as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="styles/poppins-v23-latin-700.woff2"
+      as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="styles/poppins-v23-latin-400italic.woff2"
+      as="font" type="font/woff2" crossorigin>
+
   <style>
-    /* ————————————————— NAV ————————————————— */
-    nav{
-      background:#f0f0f0;
-      padding:1rem;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-    nav .menu{
-      display:flex;flex-wrap:wrap;gap:1rem;align-items:center;
-    }
-    nav a{ text-decoration:none;color:#222;font-weight:bold; }
-    .perfil{display:flex;align-items:center;gap:.5rem}
-    .perfil img{width:32px;height:32px;border-radius:50%;object-fit:cover}
+  /* ===== Poppins (latin) ===== */
+  @font-face{
+    font-family:"Poppins";
+    src:url("/styles/poppins-v23-latin-400.woff2") format("woff2");
+    font-weight:400;
+    font-style:normal;
+    font-display:swap;      /* evita FOIT, mejora LCP */
+  }
 
-    /* ————————————————— BASE ————————————————— */
-    body{font-family:sans-serif;background:#f6f6f6;margin:0;padding:2rem}
-    .container{
-      max-width:800px;margin:auto;background:#fff;padding:2rem;
-      border-radius:10px;box-shadow:0 0 12px rgba(0,0,0,.1);
-    }
-    h1{margin-top:0}
+  /* 700 bold */
+  @font-face{
+    font-family:"Poppins";
+    src:url("styles/poppins-v23-latin-700.woff2") format("woff2");
+    font-weight:700;
+    font-style:normal;
+    font-display:swap;
+  }
 
-    /* ————————————————— SIDEBAR ————————————————— */
-    .sidebar{
-      width:220px;float:left;margin-right:2rem;background:#fff;
-      border:1px solid #d7d7d7;border-radius:8px;
-      box-shadow:0 2px 6px rgba(0,0,0,.05);
-      max-height:calc(100vh - 160px);overflow-y:auto;padding:0;
-    }
-    .sidebar ul{list-style:none;margin:0;padding:0}
-    .sidebar li{
-      cursor:pointer;padding:.65rem 1rem;font-size:.95rem;
-      border-left:4px solid transparent;transition:background .15s,border-color .15s;
-    }
-    .sidebar li:hover{background:#f5f7ff}
-    .sidebar li.sel{background:#e8edff;border-left-color:#3a67f8;font-weight:600}
+  /* (opcional) 400 italic */
+  @font-face{
+    font-family:"Poppins";
+    src:url("styles/poppins-v23-latin-400italic.woff2") format("woff2");
+    font-weight:400;
+    font-style:italic;
+    font-display:swap;
+  }
 
-    /* ————————————————— TABLA ————————————————— */
-    #section-table{overflow-x:auto}
+  @font-face{
+    font-family:"Poppins";
+    src:url("styles/poppins-v23-latin-500.woff2") format("woff2");
+    font-weight:500;
+    font-style:normal;
+    font-display:swap;
+  }
 
-    .btn{margin-bottom:.5rem}
-    .btn-prim{
-      background:#36f;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;
-    }
+  @font-face{
+    font-family:"Poppins";
+    src:url("styles/poppins-v23-latin-600.woff2") format("woff2");
+    font-weight:600;
+    font-style:normal;
+    font-display:swap;
+  }
 
-    /* ————————————————— MODAL GENÉRICO ————————————————— */
-    .modal{
-      position:fixed;inset:0;z-index:1000;background:#0008;
-      display:flex;align-items:center;justify-content:center;
-    }
-    .modal.hidden{display:none}
+  /* fallback chain */
+  body{
+    font-family:"Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  
+  /* ───────────  VARIABLES Y RESET BÁSICO  ─────────── */
+  :root{
+    --bg-main:#f1f4f9;
+    --bg-card:#ffffff;
+    --bg-sidebar:#21263a;
+    --bg-modal:#ffffff;
+    --text-main:#242424;
+    --text-muted:#6d7280;
+    --primary:#5562ff;
+    --primary-dark:#3841d8;
+    --radius:12px;
+    --shadow:0 6px 24px rgba(0,0,0,.08);
+    --transition:.2s ease;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    font:400 16px/1.5 "Poppins",sans-serif;
+    background:var(--bg-main);
+    color:var(--text-main);
+  }
 
-    .modal-box{
-      background:#fff;padding:2rem;border-radius:10px;max-width:600px;
-      max-height:90%;overflow:auto;position:relative;
-      /* ancho + sombra coherentes */
-      box-shadow:0 8px 24px rgba(0,0,0,.18);
-    }
-    .close{
-      position:absolute;right:1rem;top:1rem;border:none;
-      background:none;font-size:1.2rem
-    }
-    .avatar{
-      width:120px;height:120px;border-radius:50%;object-fit:cover;
-      margin:auto;display:block
-    }
+  /* ───────────  NAV  ─────────── */
+  nav{
+    background:#fff;
+    box-shadow:var(--shadow);
+    padding:.85rem 1.5rem;
+    display:flex;align-items:center;justify-content:space-between;
+    position:sticky;top:0;z-index:500;
+  }
+  nav .menu{display:flex;gap:1.4rem;}
+  nav a{
+    text-decoration:none;color:var(--text-muted);
+    font-weight:500;transition:color var(--transition);
+  }
+  nav a:hover,nav a.active{color:var(--primary);}
+  .perfil{display:flex;align-items:center;gap:.6rem}
+  .perfil img{width:38px;height:38px;border-radius:50%;object-fit:cover}
 
-    /* ═════════════ FORMULARIO EDITAR – NUEVO LAYOUT ═════════════ */
+  /* ───────────  SIDEBAR  ─────────── */
+  /* sidebar absoluto contra el borde izquierdo */
+  .sidebar{
+    position:fixed;
+    top:72px;              /* = altura real del <nav>  */
+    left:0;
+    bottom:0;
+    width:240px;
+    color:#fff;
 
-    /* ancho general del modal grande */
-    .modal-box.big{max-width:760px;}
+    background:var(--bg-sidebar);
+    padding:1rem .5rem 2rem;          /* 2 rem extra → no se corta último item */
+    overflow-y:auto;
 
-    /* cada fieldset → grid 2 cols (1 col <600 px) */
-    fieldset{
-      border:none;margin:0 0 1.2rem;padding:0;
-      display:grid;grid-template-columns:1fr 1fr;column-gap:1.2rem;
-    }
-    @media(max-width:600px){fieldset{grid-template-columns:1fr;}}
+    border-radius:0 var(--radius) var(--radius) 0;
+  }
 
-    legend{font-weight:700;margin-bottom:.4rem;grid-column:1/-1}
+  .sidebar ul{list-style:none}
+  .sidebar li{
+    padding:.6rem .9rem;border-radius:6px;margin-bottom:.3rem;
+    cursor:pointer;user-select:none;font-size:.95rem;
+    transition:background var(--transition);
+  }
+  .sidebar li:hover{background:rgba(255,255,255,.1)}
+  .sidebar li.sel{background:var(--primary);}
 
-    fieldset>label{display:flex;flex-direction:column;gap:.25rem;font-size:.88rem;margin-bottom:.7rem}
-    fieldset input,fieldset select{width:100%;box-sizing:border-box;font-size:.9rem;padding:.35rem .45rem}
+  /* ← 3.3 Layout flexible (sidebar + contenido) */
+  .layout{
+    display:flex;
+  }
 
-    /* bloque foto + botón */
-    #btn-del-photo{flex-shrink:0}
+  /* toda la columna derecha desplazada 240 px */
+  .layout{
+    margin-left:240px;          /* <- mueve solo el “lado derecho” */
+    display:flex;
+  }
 
-    /* teléfonos */
-    .phone-row{display:flex;align-items:center;gap:.45rem;margin-bottom:.55rem}
-    .phone-row label{flex:1;display:flex;flex-direction:column;font-size:.88rem}
-    .phone-row select{width:150px}
-    .phone-row label::before{content:"\f095";font:900 14px "Font Awesome 6 Free";color:#d33;margin-bottom:3px}
+  /* la sección tabla ocupa todo el espacio restante */
+  .layout > main{
+    flex:1;
+    padding:2rem;
+    overflow-x:auto;
+  }
 
-    /* check-list ocupaciones */
-    #ocup-container{display:flex;flex-wrap:wrap;gap:.5rem}
-    #ocup-container label{min-width:170px;font-size:.88rem}
+  /* ← 3.4 Botón Columnas renovado */
+  #btn-cols{
+    margin-bottom:.8rem;      /* deja un pequeño aire antes de la tabla */
+    background:#1b2033;
+    border-radius:20px;
+    display:flex;align-items:center;gap:.4rem;
+    font-size:.85rem;
+  }
+  #btn-cols{
+    position:sticky;
+    top:0;                 /* queda pegado al borde superior del panel */
+    z-index:10;
+  }
+  #btn-cols i{font-size:.95rem;}
 
-    /* combos dinámicos Equipo / Rol */
-    .eq-row{display:flex;gap:.55rem;margin-bottom:.6rem}
-    .eq-row select{flex:1}
+  /* ← 3.5 Pop-up de columnas */
+  #section-table{position:relative;}          /* contenedor ancla */
 
-    /* ————————————————— MODAL › DETALLE ————————————————— */
-    .modal-box dl{
-      display:grid;
-      grid-template-columns:210px 1fr;
-      column-gap:1rem;row-gap:.35rem;
-      font-size:.9rem;margin:0;
-    }
-    .modal-box dl dt{
-      font-weight:600;text-align:right;white-space:nowrap;
-      align-self:flex-start;           /* etiqueta arriba cuando hay wrap */
-    }
-    .modal-box dl dd{
-      margin:0;white-space:normal;word-break:break-word;text-align:left; /* permite saltos */
-    }
+  #cols-menu{
+    position:absolute;
+    top:48px; right:0;
+    background:#fff;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:1rem 1.2rem;
+    width:220px;max-height:70vh;overflow:auto;
 
-    #det-ocup{list-style:none;padding:0}
+    opacity:0;pointer-events:none;transform:translateY(-6px);
+    transition:opacity .18s ease, transform .18s ease;
+  }
+  #cols-menu.show{opacity:1;pointer-events:auto;transform:none;}
 
-    /* —— Tabla de estados —— */
-    #det-tab-estados{
-      width:100%;border-collapse:collapse;font-size:.9rem;
-    }
-    #det-tab-estados th,#det-tab-estados td{
-      padding:.25rem .5rem;text-align:center;
-    }
-    #det-tab-estados tbody tr:nth-child(odd){background:#f9f9f9}
+  #cols-menu label{
+    display:flex;
+    align-items:center;
+    gap:.45rem;
+    margin-bottom:.5rem;
+    font-size:.86rem;
+  }
 
-    /* ————————————————— Visor de imagen ————————————————— */
-    .img-viewer{
-      position:fixed;inset:0;background:#000d;
-      display:flex;align-items:center;justify-content:center;z-index:2000;
-    }
-    .img-viewer img{
-      max-width:90vw;max-height:90vh;border-radius:8px;
-      box-shadow:0 4px 16px rgba(0,0,0,.6);
-    }
-    .img-viewer.hidden{display:none}
+  #cols-menu label:hover{background:#f6f8ff;border-radius:6px;padding:.25rem;}
 
-    #det-tab-estados th button{
-      width:30px;height:24px;
-      background:#eee;border:1px solid #999;border-radius:4px;
-      cursor:pointer;
-    }
-    #det-tab-estados th button:disabled{opacity:.4;cursor:default}
+  #cols-menu input{accent-color:var(--primary);}
+
+  /* ───────────  TABLA  ─────────── */
+  table{width:100%;border-collapse:collapse}
+  /* 1-A)  la tabla usa tamaño automático (no ‘fixed’)                */
+  table{table-layout:auto;}
+  /* 1-B)  las celdas con texto largo no hacen saltos de línea        */
+  td,th{white-space:nowrap;}
+  thead{background:#fff;box-shadow:var(--shadow)}
+  th,td{padding:.8rem .9rem;text-align:left;font-size:.9rem;}
+  tbody tr:nth-child(odd){background:#fafbfc}
+  tbody tr:hover{background:#e9edff}
+  th{white-space:nowrap;color:var(--text-muted);font-weight:600;}
+  td button{background:none;border:0;cursor:pointer;font-size:1rem}
+
+  /* ───────────  BOTONES  ─────────── */
+  .btn{padding:.5rem .95rem;border-radius:8px;border:0;font-weight:500;
+      background:var(--primary);color:#fff;cursor:pointer;
+      transition:background var(--transition);}
+  .btn:hover{background:var(--primary-dark);}
+
+  /* ───────────  MODAL  ─────────── */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);
+        display:flex;justify-content:center;align-items:flex-start;
+        padding-top:5vh;z-index:1000;overflow:auto;opacity:0;pointer-events:none;
+        transition:opacity .25s ease;}
+  .modal.show{opacity:1;pointer-events:auto;}
+  .modal-box{
+    background:var(--bg-modal);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:2rem;max-width:clamp(340px,85vw,880px);
+    width:100%;animation:slideDown .3s ease;
+  }
+
+  .modal-box dl{
+    display:grid;
+    grid-template-columns:160px 1fr;
+    row-gap:.4rem;column-gap:1rem;
+    font-size:.9rem;
+  }
+  .modal-box dl dt{font-weight:600;color:var(--primary);text-align:right;}
+  .modal-box dl dd{margin:0;}
+
+  @keyframes slideDown{from{translate:0 -20px;opacity:.3;}}
+
+  .close{
+    position:absolute;top:1.1rem;right:1.1rem;
+    background:none;border:0;font-size:1.3rem;color:var(--text-muted);
+    cursor:pointer;transition:color var(--transition);}
+  .close:hover{color:var(--primary);}
+
+  .avatar{width:140px;height:140px;border-radius:50%;
+          object-fit:cover;box-shadow:var(--shadow);}
+
+  /* ───────────  FIELDSETS  ─────────── */
+  fieldset{border:0;margin-block:1.6rem;}
+  legend{font-weight:600;font-size:1.05rem;color:var(--primary);
+        margin-bottom:1rem;padding-bottom:.3rem;border-bottom:2px solid #eef1ff;}
+  label{display:flex;flex-direction:column;gap:.35rem;font-size:.88rem;}
+  input,select{
+    padding:.55rem .8rem;border:1px solid #d6d9e2;border-radius:8px;
+    font:inherit;background:#fff;transition:border-color var(--transition);}
+  input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px #dfe2ff;}
+
+  #fs-personales{
+    display:grid;gap:1.4rem 1.8rem;
+    grid-template-columns:160px 1fr 1fr;
+    align-items:start;
+  }
+  .foto-box{grid-row:span 3;display:flex;flex-direction:column;gap:.9rem;align-items:center;}
+
+  @media(max-width:700px){
+    #fs-personales{grid-template-columns:1fr;}
+    .foto-box{grid-row:auto;flex-direction:row;gap:1.2rem;}
+  }
+
+  /* inputs anchos */
+  #ed-dir,#ed-correo{grid-column:1/-1}
+
+  /* ───────────  TELÉFONOS  ─────────── */
+  #phone-container .phone-row{
+    display:grid;grid-template-columns:1fr 200px;gap:1rem;margin-bottom:.8rem;}
+
+  /* ───────────  OCUPACIONES (chips)  ─────────── */
+  #ocup-container{
+    display:flex;flex-wrap:wrap;gap:.6rem;}
+  #ocup-container label{
+    flex-direction:row;align-items:center;background:#eef1ff;color:var(--primary);
+    padding:.35rem .7rem;border-radius:20px;font-size:.78rem;font-weight:500;
+    cursor:pointer;user-select:none;}
+  #ocup-container input{margin-right:.4rem;accent-color:var(--primary);}
+
+  /* ───────────  SCROLLBAR (Chrome / Edge)  ─────────── */
+  ::-webkit-scrollbar{height:8px;width:8px;}
+  ::-webkit-scrollbar-thumb{background:#c5c9d6;border-radius:8px;}
+  ::-webkit-scrollbar-thumb:hover{background:#a9afc4;}
+
+  /* ───────────  NUEVO CONTENEDOR FLEX  ─────────── */
+  /* envuelve <aside id="sidebar"> y <section id="section-table">   */
+  .layout{
+    display:flex;                 /* ← sidebar + tabla uno al lado del otro   */
+    align-items:flex-start;
+  }
+
+  /* el viejo #sidebar mantiene sus 240 px y sticky ↓ */
+  .sidebar{flex:0 0 240px;}       /* ya no “flota”, ocupa su hueco fijo       */
+
+  #section-table{
+    flex:1;
+    overflow-x:auto;
+  }
+
+  /* botón – cambia copy & color */
+  #btn-cols{
+    background:var(--bg-sidebar);
+    display:flex;align-items:center;gap:.4rem;
+  }
+  #btn-cols::before{content:"⚙︎";}
+
+  /* menú flotante */
+  #cols-menu{
+    position:absolute;
+    top:55px; right:0;               /* pegado al botón */
+    background:#fff;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:1rem 1.2rem;
+    width:220px; max-height:65vh; overflow:auto;
+
+    opacity:0; pointer-events:none; transform:translateY(-6px);
+    transition:opacity .2s, transform .2s;
+  }
+  #cols-menu.show{opacity:1;pointer-events:auto;transform:none;}
+
+  .img-viewer{
+    position:fixed;inset:0;z-index:1600;
+    background:rgba(0,0,0,.75);
+    display:flex;justify-content:center;align-items:center;
+    opacity:0;pointer-events:none;transition:opacity .25s;
+  }
+  .img-viewer.show{opacity:1;pointer-events:auto;}
+
+  .img-viewer img{
+    max-width:90vw;max-height:90vh;border-radius:8px;
+    box-shadow:var(--shadow);           /* mismo estilo que modales  */
+  }
+
+  #section-table{background:#fff;border-radius:var(--radius);
+                box-shadow:var(--shadow);}
+
+  td:last-child{position:sticky;right:0;background:#fff;}
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -242,24 +430,30 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
   </nav>
 
   <!-- ░░░░ CONTENIDO PRINCIPAL ░░░░ -->
-  <main style="padding:2rem">
-    <h1>Integrantes</h1>
-
-    <!-- ░░░░ SIDEBAR + TABLA ░░░░ -->
+  <!-- contenedor de DOS columnas -->
+  <div class="layout">
+    <!-- ░░░░ SIDEBAR ░░░░ -->
     <aside id="sidebar" class="sidebar">
-      <ul id="equipos-list"></ul>
+        <ul id="equipos-list"></ul>
     </aside>
 
-    <section id="section-table">
-      <button id="btn-cols" class="btn">🗂️ Columnas</button>
-      <div id="cols-menu" class="cols-menu hidden"></div>
+    <!-- ░░░░ CONTENIDO ░░░░ -->
+    <main>
+      <h1>Integrantes</h1>
 
-      <table id="tbl-integrantes">
-        <thead></thead>
-        <tbody></tbody>
-      </table>
-    </section>
+      <button id="btn-cols" class="btn"><i class="fa-solid fa-sliders"></i>&nbsp;Columnas</button>
 
+      <section id="section-table">
+          <div id="cols-menu" class="cols-menu"></div>
+
+          <table id="tbl-integrantes">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+      </section>
+    </main>
+  </div>
+  
     <!-- ░░░░ MODAL ─ VER DETALLES ░░░░ -->
     <div id="modal-det" class="modal hidden">
       <div class="modal-box">
@@ -315,8 +509,16 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
           <input type="hidden" name="id" id="ed-id">
 
           <!-- Datos personales -->
-          <fieldset>
+          <fieldset id="fs-personales">
             <legend>Datos personales</legend>
+
+            <!-- fila 0 : foto + eliminar -->
+            <div class="foto-box">
+                <img id="ed-foto" class="avatar">
+                <button type="button" id="btn-del-photo" class="btn">🗑️ Eliminar foto</button>
+            </div>
+
+            <!-- fila 1 : nombres -->
             <label>Nombres
               <input id="ed-nom" name="nombres" required maxlength="60">
             </label>
@@ -327,21 +529,12 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
               <input id="ed-am" name="apellido_materno" maxlength="30">
             </label>
 
-            <!-- Foto – solo eliminar -->
-            <div style="display:flex;align-items:center;gap:.5rem">
-              <img id="ed-foto" class="avatar" style="width:70px;height:70px">
-              <button type="button" id="btn-del-photo" class="btn">
-                🗑️ Eliminar foto
-              </button>
-            </div>
-
+            <!-- fila 2 : fecha + tipo doc + nro -->
             <label>Fecha de nacimiento
               <input type="date" id="ed-fnac" name="fecha_nacimiento">
             </label>
-
-            <!-- Documento de identidad -->
             <label>Tipo documento
-              <select id="ed-doc-type" name="doc_type">
+              <select id="ed-doc-type">
                 <option value="CL">RUT (Chile)</option>
                 <option value="INT">Internacional</option>
               </select>
@@ -432,7 +625,6 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
         </form>
       </div>
     </div>
-  </main>
 
   <!-- ═════════ utilidades ═════════ -->
   <script>

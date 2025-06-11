@@ -27,6 +27,66 @@ try {
     break;
   }
 
+  /* ════════════════ 0-bis) CATÁLOGOS GENERALES ════════════════ */
+  case 'GET:paises': {
+      $rows = $pdo->query("
+          SELECT id_pais   AS id,
+                nombre_pais AS nom
+            FROM paises
+        ORDER BY nombre_pais
+      ")->fetchAll(PDO::FETCH_ASSOC);
+      echo json_encode(['ok'=>true,'paises'=>$rows]);
+      break;
+  }
+
+  case 'GET:regiones': {                  // ?accion=regiones&pais=1
+      $pais = (int)($_GET['pais'] ?? 0);
+      $st = $pdo->prepare("
+          SELECT id_region_estado AS id,
+                nombre_region_estado AS nom
+            FROM region_estado
+          WHERE id_pais = :pais
+        ORDER BY nombre_region_estado");
+      $st->execute([':pais'=>$pais]);
+      echo json_encode(['ok'=>true,'regiones'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
+      break;
+  }
+
+  case 'GET:ciudades': {                  // ?accion=ciudades&region=6
+      $reg = (int)($_GET['region'] ?? 0);
+      $st = $pdo->prepare("
+          SELECT id_ciudad_comuna  AS id,
+                nombre_ciudad_comuna AS nom
+            FROM ciudad_comuna
+          WHERE id_region_estado = :reg
+        ORDER BY nombre_ciudad_comuna");
+      $st->execute([':reg'=>$reg]);
+      echo json_encode(['ok'=>true,'ciudades'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
+      break;
+  }
+
+  case 'GET:desc_telefonos': {
+      $rows = $pdo->query("
+          SELECT id_descripcion_telefono AS id,
+                nombre_descripcion_telefono AS nom
+            FROM descripcion_telefonos
+        ORDER BY id_descripcion_telefono
+      ")->fetchAll(PDO::FETCH_ASSOC);
+      echo json_encode(['ok'=>true,'descs'=>$rows]);
+      break;
+  }
+
+  case 'GET:ocupaciones': {
+      $rows = $pdo->query("
+          SELECT id_ocupacion AS id,
+                nombre        AS nom
+            FROM ocupaciones
+        ORDER BY nombre
+      ")->fetchAll(PDO::FETCH_ASSOC);
+      echo json_encode(['ok'=>true,'ocupaciones'=>$rows]);
+      break;
+  }
+
   /* ════════════════ 1) LISTA INTEGRANTES ════════════════ */
   case 'GET:lista': {
       $team = $_GET['team'] ?? 0;                          // 0=general ‖ 'ret'
@@ -44,7 +104,7 @@ try {
                 DATE_FORMAT(u.fecha_nacimiento,'%d-%m')     AS dia_mes,
                 TIMESTAMPDIFF(YEAR,u.fecha_nacimiento,:hoy) AS edad,
                 u.rut_dni AS rut_fmt,
-                GROUP_CONCAT(CONCAT(t.telefono,' (',dt.nombre_descripcion_telefono,')')
+                GROUP_CONCAT(DISTINCT CONCAT(t.telefono,' (',dt.nombre_descripcion_telefono,')')
                              ORDER BY t.es_principal DESC SEPARATOR ' / ')               AS telefonos,
                 ce.correo_electronico                                                    AS correo,
                 CONCAT_WS(' / ',cc.nombre_ciudad_comuna,re.nombre_region_estado,
@@ -146,36 +206,56 @@ try {
       break;
   }
 
-/* ════════════════ 4) DETALLES USUARIO ════════════════ */
+  /* ════════════════ 4) DETALLES USUARIO ════════════════ */
   case 'GET:detalles': {
     $id = (int)($_GET['id'] ?? 0);
     if (!$id) throw new Exception('id');
 
     /* ► datos básicos --------------------------------------------------- */
     $sqlUser = "
-          SELECT u.*,
-              CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS nombre_completo,
-              DATE_FORMAT(u.fecha_nacimiento,'%d-%m-%Y')                     AS nacimiento_fmt,
-              DATE_FORMAT(u.fecha_nacimiento,'%d-%m')                        AS dia_mes,
-              TIMESTAMPDIFF(YEAR,u.fecha_nacimiento,CURDATE())               AS edad,
-              DATE_FORMAT(u.fecha_registro ,'%d-%m-%Y')                      AS fecha_registro_fmt,
-              TIMESTAMPDIFF(MONTH,u.ultima_actualizacion,CURDATE())          AS meses_upd,
-              p.nombre_pais,
-              re.nombre_region_estado,
-              cc.nombre_ciudad_comuna,
-              ce.correo_electronico,
-              /* teléfonos – marca el principal y separa con saltos de línea */
-              GROUP_CONCAT(
-                  CONCAT(t.telefono,' (',dt.nombre_descripcion_telefono,
-                          IF(t.es_principal=1,' – Principal',''),')')
-                  ORDER BY t.es_principal DESC SEPARATOR '\n'
-              ) AS telefonos,
-              /* ocupaciones en texto plano */
-              ( SELECT GROUP_CONCAT(o.nombre ORDER BY o.nombre SEPARATOR ', ')
-                  FROM usuarios_ocupaciones uo
-                  JOIN ocupaciones o ON o.id_ocupacion = uo.id_ocupacion
-                  WHERE uo.id_usuario = u.id_usuario
-              ) AS ocupaciones
+      SELECT u.*,
+
+             /* nombre completo y edad ---------------------------------- */
+             CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno)          AS nombre_completo,
+             DATE_FORMAT(u.fecha_nacimiento,'%d-%m-%Y')                              AS nacimiento_fmt,
+             DATE_FORMAT(u.fecha_nacimiento,'%d-%m')                                 AS dia_mes,
+             TIMESTAMPDIFF(YEAR,u.fecha_nacimiento,CURDATE())                        AS edad,
+             DATE_FORMAT(u.fecha_registro,'%d-%m-%Y')                                AS fecha_registro_fmt,
+             TIMESTAMPDIFF(MONTH,u.ultima_actualizacion,CURDATE())                   AS meses_upd,
+
+             /* datos geográficos ---------------------------------------- */
+             p.nombre_pais,
+             re.nombre_region_estado,
+             cc.nombre_ciudad_comuna,
+
+             /* correo principal ---------------------------------------- */
+             ce.correo_electronico,
+
+             /* teléfonos → construimos un array JSON textual ------------ */
+             CONCAT(
+                   '[',
+                   GROUP_CONCAT(
+                       CONCAT(
+                         '{\"num\":\"',      REPLACE(t.telefono,'\"','\\\\\"'),
+                         '\",\"desc\":',     IFNULL(t.id_descripcion_telefono,'null'),
+                         ',\"prim\":',       IFNULL(t.es_principal,0),
+                         '}'
+                       )
+                       ORDER BY t.es_principal DESC SEPARATOR ','
+                   ),
+                   ']'
+             )                                                   AS telefonos_arr,
+
+             /* ids de ocupaciones en array JSON textual ---------------- */
+             ( SELECT CONCAT('[', GROUP_CONCAT(id_ocupacion), ']')
+                   FROM usuarios_ocupaciones
+                  WHERE id_usuario = u.id_usuario )              AS ocup_ids,
+
+             /* nombres de ocupaciones (texto plano) -------------------- */
+             ( SELECT GROUP_CONCAT(o.nombre ORDER BY o.nombre SEPARATOR ', ')
+                   FROM usuarios_ocupaciones uo
+                   JOIN ocupaciones o ON o.id_ocupacion = uo.id_ocupacion
+                  WHERE uo.id_usuario = u.id_usuario )           AS ocupaciones_txt
           FROM usuarios u
           LEFT JOIN paises                p  ON p.id_pais            = u.id_pais
           LEFT JOIN region_estado         re ON re.id_region_estado  = u.id_region_estado
@@ -189,6 +269,11 @@ try {
     $stmt = $pdo->prepare($sqlUser);
     $stmt->execute([':id' => $id]);
     $u = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $u['telefonos_arr'] = json_decode($u['telefonos_arr'] ?? '[]', true);
+    $u['ocup_ids']      = json_decode($u['ocup_ids']      ?? '[]', true);
+    $u['ocupaciones']   = $u['ocupaciones_txt'] ?? '';
+    unset($u['ocupaciones_txt']);
 
     /* ► equipos + roles + estados (3 últimos periodos) ------------------ */
     $sqlEquip = "
@@ -242,7 +327,21 @@ try {
     $stmt->execute([':id' => $id]);
     $equip = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode(['ok' => true, 'user' => $u, 'equipos' => $equip]);
+    /* ---- equipos actuales (para edición) ---- */
+    $equipNowStmt = $pdo->prepare("
+        SELECT id_equipo_proyecto AS eq,
+                id_rol             AS rol
+          FROM integrantes_equipos_proyectos
+          WHERE id_usuario = ?");
+    $equipNowStmt->execute([$id]);
+    $equip_now = $equipNowStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    echo json_encode([
+          'ok'        => true,
+          'user'      => $u,
+          'equipos'   => $equip,     // tabla resumen con estados
+          'equip_now' => $equip_now  // equipos vigentes + rol
+    ]);
     break;
   }
 

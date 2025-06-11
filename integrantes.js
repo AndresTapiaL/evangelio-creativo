@@ -10,6 +10,20 @@ const API = 'integrantes_api.php';          // ← punto único de entrada
 const $  = sel => document.querySelector(sel);
 const $$ = sel => document.querySelectorAll(sel);
 
+/* referencias reutilizadas */
+const btnCols  = $('#btn-cols');     // botón engranaje
+const colsMenu = $('#cols-menu');    // pop-up de columnas
+
+/* helpers para mostrar / ocultar modales */
+const show = el =>{
+  el.classList.add('show');
+  el.classList.remove('hidden');
+};
+const hide = el =>{
+  el.classList.remove('show');
+  el.classList.add('hidden');
+};
+
 /* ------------------------------------------------ catálogo de estados */
 let C_ESTADOS = [];
 fetch(`${API}?accion=estados`)
@@ -18,6 +32,23 @@ fetch(`${API}?accion=estados`)
 let CURR_YEAR = new Date().getFullYear();
 let YEAR_MIN = null;   // primer año con registros
 let YEAR_MAX = null;   // último año con registros
+
+let EQUI_COMBO_HTML='';
+(async()=>{ const d=await (await fetch(`${API}?accion=equipos`)).json();
+            EQUI_COMBO_HTML='<option value=""></option>'+
+                 d.equipos.filter(e=>e.id&&e.id!=='ret')
+                 .map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
+})();
+function loadRolesInto(sel,eq,selVal=''){
+   if(!eq){ sel.innerHTML='<option></option>'; return;}
+   fetch(`${API}?accion=roles&eq=`+eq)
+     .then(r=>r.json())
+     .then(j=>{
+        sel.innerHTML='<option></option>'+
+           j.roles.map(r=>`<option value="${r.id}">${r.nom}</option>`).join('');
+        sel.value=selVal;
+     });
+}
 
 /* ------------------------------------------------ sidebar */
 async function loadSidebar () {
@@ -206,6 +237,9 @@ async function loadEstadosYear(idUsuario, anio) {
   return true;
 }
 
+const DESC_TEL = {1:'Solo llamadas',2:'Solo WhatsApp',3:'Llamadas y WhatsApp',4:'# Emergencia'};
+const descNom = id => DESC_TEL[id] || '';
+
 async function openDetalle (e) {
   const id = e.currentTarget.dataset.id;
   const j  = await (await fetch(`${API}?accion=detalles&id=` + id)).json();
@@ -231,8 +265,15 @@ async function openDetalle (e) {
   md.querySelector('#det-ingreso').textContent = u.fecha_registro_fmt;
   md.querySelector('#det-correo').textContent  = u.correo_electronico;
   md.querySelector('#det-edad').textContent = u.edad + ' años';
-  md.querySelector('#det-tels').innerHTML =
-      (u.telefonos || '').replace(/\n/g,'<br>');
+  // array con objetos {num,desc,prim}
+  const telHTML = (u.telefonos_arr||[])
+        .map(t=>`<div>${t.num}
+                    <small style="color:var(--text-muted)">
+                      ${t.desc ? ' · '+descNom(t.desc) : ''}
+                      ${t.prim==1 ? ' · <b>Principal</b>' : ''}
+                    </small>
+                  </div>`).join('');
+  md.querySelector('#det-tels').innerHTML = telHTML || '-';
   md.querySelector('#det-ocup').textContent = u.ocupaciones || '-';
 
   if (!C_ESTADOS.length) {
@@ -265,24 +306,26 @@ async function openDetalle (e) {
       updateArrows();            // deshabilita ▶/◀ si toca
   }
 
-  md.classList.remove('hidden');
+  show(md);
 }
 
-/* ───── Visor de imagen ➜ abrir / cerrar ───── */
-$('#det-foto').onclick = () => {
-  $('#viewer-img').src = $('#det-foto').src;
-  $('#img-viewer').classList.remove('hidden');
+/* ——— visor full-screen de la foto ——— */
+const viewer = $('#img-viewer');
+const vImg   = $('#viewer-img');
+
+$('#det-foto').onclick = ()=>{
+  vImg.src = $('#det-foto').src;
+  viewer.classList.add('show');      /* misma clase que usamos para modales */
 };
-$('#img-viewer').onclick = e => {
-  if (e.target.id === 'img-viewer' || e.target.id === 'viewer-img')
-      $('#img-viewer').classList.add('hidden');
-};
+
+viewer.onclick = ()=> viewer.classList.remove('show');
+
 
 /* cerrar al hacer clic en el fondo */
 $('#modal-det').addEventListener('click', e=>{
-  if(e.target.id==='modal-det') e.target.classList.add('hidden');
+  if(e.target.id==='modal-det') hide(e.currentTarget);
 });
-$('#det-close').onclick = () => $('#modal-det').classList.add('hidden');
+$('#det-close').onclick = () => hide($('#modal-det'));
 
 /* ------------------------------------------------ modal: editar */
 let CURR_USER = null;
@@ -293,14 +336,31 @@ async function openEdit (e) {
   if (!j.ok) { alert(j.error); return; }
   CURR_USER = j;
   fillEditForm(j.user);
-  $('#modal-edit').classList.remove('hidden');
+  show($('#modal-edit'));
 }
-$('#edit-close').onclick = () => $('#modal-edit').classList.add('hidden');
+$('#edit-close').onclick = () => hide($('#modal-edit'));
 $('#btn-add-eq').onclick = addEqRow;
 $('#form-edit').onsubmit = submitEdit;
 
 /* ---------- COMPLETA TODOS LOS CAMPOS DEL FORM ---------- */
 function fillEditForm (u) {
+  /* limpia y vuelca equipos actuales */
+  $('#eq-container').innerHTML='';
+  (u.equip_now||[]).forEach(row=>{
+    const div = document.createElement('div');
+    div.className='eq-row';
+    // selector equipo
+    const se = document.createElement('select');
+    se.innerHTML = EQUI_COMBO_HTML;   // ver nota abajo
+    se.value = row.eq;
+    // selector rol
+    const sr = document.createElement('select');
+    loadRolesInto(sr,row.eq,row.rol); // helper
+    se.onchange = ()=> loadRolesInto(sr,se.value);
+    div.append(se,sr);
+    $('#eq-container').appendChild(div);
+  });
+
   /* ids visibles */
   $('#ed-id').value     = u.id_usuario;
   $('#ed-nom').value    = u.nombres                ?? '';
@@ -330,31 +390,25 @@ function fillEditForm (u) {
     $('#ed-ciudad').value = u.id_ciudad_comuna ?? '';
   });
 
-  /* teléfonos (máx 3) */
-  populatePhoneDescs().then(() => {
-    // limpiamos inputs
-    ['tel0','tel1','tel2'].forEach(n => $(`[name="${n}"]`).value = '');
-    ['tel_desc0','tel_desc1','tel_desc2']
-      .forEach(n => $(`[name="${n}"]`).selectedIndex = 0);
+  /* ----- TELÉFONOS ----- */
+  populatePhoneDescs().then(()=>{
+    // limpia campos
+    ['tel0','tel1','tel2'].forEach(n=>$(`[name="${n}"]`).value='');
+    ['tel_desc0','tel_desc1','tel_desc2'].forEach(n=>$(`[name="${n}"]`).selectedIndex=0);
 
-    const arr = (u.telefonos || '').split(' / ');
-    arr.forEach( (t,i) => {
-      const num  = t.replace(/\s*\(.*?\)\s*$/,'').trim();
-      const desc = (t.match(/\((.*?)\)/) || [,''])[1];
-      $(`[name="tel${i}"]`).value = num;
-      const sel = $(`[name="tel_desc${i}"]`);
-      [...sel.options].forEach(o=>{
-         if(o.textContent===desc) sel.value=o.value;
-      });
+    (u.telefonos_arr||[]).forEach((tel,i)=>{
+      if(i>2) return;
+      $(`[name="tel${i}"]`).value     = tel.num;
+      $(`[name="tel_desc${i}"]`).value= tel.desc||'';
     });
   });
 
   /* ocupaciones (check-list) */
   populateOcupaciones().then(list=>{
     const cont = $('#ocup-container');
+    const taken = new Set(u.ocup_ids||[]);
     cont.innerHTML = list.map(o=>{
-      const checked = (u.ocupaciones || '').split(',')
-                        .map(x=>x.trim()).includes(String(o.id)) ? 'checked' : '';
+      const checked = taken.has(o.id) ? 'checked' : '';
       return `<label style="min-width:160px">
                 <input type="checkbox" name="ocup_${o.id}" ${checked}> ${o.nom}
               </label>`;
@@ -380,18 +434,41 @@ function formatRut(numString){
 /* catálogo Países ------------------------------------------------------ */
 async function populatePaises () {
   if ($('#ed-pais').options.length) return;  // ya estaba
-  const j = await (await fetch('catalogos/paises.php')).json();
+  const j = await (await fetch(`${API}?accion=paises`)).json();
   $('#ed-pais').innerHTML =
       '<option value="">— país —</option>' +
       j.paises.map(p => `<option value="${p.id}">${p.nom}</option>`).join('');
   $('#ed-pais').onchange = e => populateRegiones(e.target.value);
 }
 
+/* ---- Sincronización País <-> Tipo Documento ---- */
+function syncPaisDoc(){
+  const selDoc = $('#ed-doc-type');
+  const selPais= $('#ed-pais');
+
+  selDoc.onchange = () =>{
+      if(selDoc.value==='CL' && selPais.value!=='1') selPais.value='1';
+      if(selDoc.value==='INT' && selPais.value==='1') selPais.value='';
+      populateRegiones(selPais.value);          // dispara cascade
+  };
+  selPais.onchange = () =>{
+      if(selPais.value==='1' && selDoc.value!=='CL') selDoc.value='CL';
+      if(selPais.value!=='' && selPais.value!=='1' && selDoc.value!=='INT') selDoc.value='INT';
+      /* limpiar dependientes */
+      if(!selPais.value){ $('#ed-region').innerHTML='<option value=""></option>';
+                         $('#ed-ciudad').innerHTML='<option value=""></option>'; }
+  };
+}
+
 /* catálogo Regiones según país ---------------------------------------- */
 async function populateRegiones (idPais) {
   const sel = $('#ed-region');
-  if (!idPais) { sel.innerHTML = '<option value="">—</option>'; return; }
-  const j = await (await fetch(`catalogos/regiones.php?pais=${idPais}`)).json();
+  if (!idPais){
+    $('#ed-region').innerHTML = '<option value=""></option>';
+    $('#ed-ciudad').innerHTML = '<option value=""></option>'; /* ← nueva */
+    return;
+  }
+  const j = await (await fetch(`${API}?accion=regiones&pais=`+idPais)).json();
   sel.innerHTML = '<option value="">— región —</option>' +
       j.regiones.map(r => `<option value="${r.id}">${r.nom}</option>`).join('');
   sel.onchange = e => populateCiudades(e.target.value);
@@ -401,7 +478,7 @@ async function populateRegiones (idPais) {
 async function populateCiudades (idRegion) {
   const sel = $('#ed-ciudad');
   if (!idRegion) { sel.innerHTML = '<option value="">—</option>'; return; }
-  const j = await (await fetch(`catalogos/ciudades.php?region=${idRegion}`)).json();
+  const j = await (await fetch(`${API}?accion=ciudades&region=`+idRegion)).json();
   sel.innerHTML = '<option value="">— ciudad —</option>' +
       j.ciudades.map(c => `<option value="${c.id}">${c.nom}</option>`).join('');
 }
@@ -409,7 +486,7 @@ async function populateCiudades (idRegion) {
 /* descripción teléfonos ------------------------------------------------ */
 async function populatePhoneDescs () {
   if ($('[name="tel_desc0"]').options.length) return;
-  const j = await (await fetch('catalogos/desc_telefonos.php')).json();
+  const j = await (await fetch(`${API}?accion=desc_telefonos`)).json();
   const opts = j.descs.map(d => `<option value="${d.id}">${d.nom}</option>`).join('');
   ['tel_desc0','tel_desc1','tel_desc2']
     .forEach(n => $(`[name="${n}"]`).innerHTML =
@@ -418,7 +495,7 @@ async function populatePhoneDescs () {
 
 /* ocupaciones ---------------------------------------------------------- */
 async function populateOcupaciones () {
-  const j = await (await fetch('catalogos/ocupaciones.php')).json();
+  const j = await (await fetch(`${API}?accion=ocupaciones`)).json();
   return j.ocupaciones;   // [{id,nom}, …]
 }
 
@@ -464,7 +541,7 @@ async function submitEdit (ev) {
   const j = await (await fetch(API, { method: 'POST', body: fd })).json();
   if (j.ok) {
       alert('Guardado ✓');
-      $('#modal-edit').classList.add('hidden');
+      hide($('#modal-edit'));
       /* recarga tabla */
       selectTeam(TEAM, $(`#equipos-list li[data-id="${TEAM}"]`));
   } else alert(j.error);
@@ -486,7 +563,18 @@ const estadoNom = id => {
 document.addEventListener('DOMContentLoaded', () => {
   buildColMenu();
   loadSidebar();
-  $('#btn-cols').onclick = () => $('#cols-menu').classList.toggle('hidden');
+  syncPaisDoc();
+  /* ——— selector de columnas ——— */
+  btnCols.onclick = e => {
+    colsMenu.classList.toggle('show');
+    e.stopPropagation();               /* evita que el click cierre al instante */
+  };
+
+  /* cerrar si se hace click fuera */
+  document.addEventListener('click',ev=>{
+    if(ev.target===btnCols || colsMenu.contains(ev.target)) return;
+    colsMenu.classList.remove('show');
+  });
 });
 
 /* ------------------------------------------------ helpers de navegación */
