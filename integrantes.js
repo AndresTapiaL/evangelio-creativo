@@ -33,6 +33,13 @@ let CURR_YEAR = new Date().getFullYear();
 let YEAR_MIN = null;   // primer año con registros
 let YEAR_MAX = null;   // último año con registros
 
+/* ─── paginación y orden ─────────────────────────────── */
+let PAGE    = 1;          // página actual
+const PER   = 3;         // 50 registros por página
+let TOTAL   = 0;          // total de filas que devuelve la API
+let SORT_BY = 'nombre';   // columna por la que se ordena
+let DIR     = 'ASC';      // ASC | DESC
+
 let EQUI_COMBO_HTML='';
 (async()=>{ const d=await (await fetch(`${API}?accion=equipos`)).json();
             EQUI_COMBO_HTML='<option value=""></option>'+
@@ -53,6 +60,9 @@ function loadRolesInto(sel,eq,selVal=''){
 /* ------------------------------------------------ sidebar */
 async function loadSidebar () {
   const ul = $('#equipos-list');
+  ul.innerHTML = '';
+  const source = typeof PRE_EQUIPOS !== 'undefined' ? {equipos:PRE_EQUIPOS}
+                : await (await fetch(`${API}?accion=equipos`)).json();
   ul.innerHTML = '<li>Cargando…</li>';
 
   const j = await (await fetch(`${API}?accion=equipos`)).json();
@@ -62,64 +72,136 @@ async function loadSidebar () {
     const li = document.createElement('li');
     li.textContent = e.nombre;
     li.dataset.id  = e.id;
-    li.onclick     = () => selectTeam(e.id, li);
+    li.onclick     = () => selectTeam(String(e.id), li);
     ul.appendChild(li);
   });
 
-  selectTeam(0, ul.firstChild);            // General
+  selectTeam('0', ul.firstChild, 1);
 }
 
 /* ------------------------------------------------ tabla */
-let DATA = [], TEAM = 0;
+let DATA = [], TEAM = '0';
 
 function visibleCols () {
-  return [...$$('#cols-menu input')].filter(c => c.checked)
-                                    .map   (c => c.dataset.key);
+  /* Oculta est1-3 cuando se está en “General” o “Retirados” */
+  const cols = [...$$('#cols-menu input')]
+                 .filter(c => c.checked)
+                 .map   (c => c.dataset.key);
+  return (TEAM === '0' || TEAM === 'ret')
+         ? cols.filter(k => !/^est[123]$/.test(k))
+         : cols;
 }
 
-async function selectTeam (id, li) {
-  TEAM = id;
-  [...$('#equipos-list').children].forEach(n => n.classList.remove('sel'));
-  li.classList.add('sel');
+async function selectTeam (id, li, page = 1) {
+  /* normalizamos el identificador */
+  id       = (id === 'ret') ? 'ret' : id.toString();
+  TEAM     = id;                 // ← guarda “0”, “5”, “ret”…
+  PAGE     = page;
 
-  const j = await (await fetch(`${API}?accion=lista&team=` + id)).json();
-  DATA = j.integrantes;
+  /* ► marca el ítem del sidebar */
+  if (li) {
+      $('#equipos-list li.sel')?.classList.remove('sel');
+      li.classList.add('sel');
+  }
+
+  const url = `${API}?accion=lista&team=${TEAM}` +
+              `&page=${PAGE}&per=${PER}`         +
+              `&sort=${SORT_BY}&dir=${DIR}`;
+  const j   = await (await fetch(url)).json();
+  TOTAL     = j.total;
+  DATA      = j.integrantes;
+
   refreshTable();
+  buildPager();
 }
 
 function refreshTable () {
   const cols  = visibleCols();
   const thead = $('#tbl-integrantes thead');
   const tbody = $('#tbl-integrantes tbody');
+  const showStates = (TEAM !== '0' && TEAM !== 'ret');
 
   /* encabezados */
-  let headHTML = cols.map(k => `<th>${COLS.find(c => c.key === k).label}</th>`).join('');
-  headHTML += ['🔸1', '🔸2', '🔸3'].map(t => `<th>${t}</th>`).join('');
-  headHTML += '<th>Acciones</th>';
+  let headHTML = cols.map(k => {
+    const arrow = (SORT_BY === k) ? (DIR === 'ASC' ? ' ▲' : ' ▼') : '';
+    return `<th data-key="${k}" style="cursor:pointer">
+              ${COLS.find(c => c.key === k).label}${arrow}
+            </th>`;
+  }).join('');
+  /* columnas de estado: más antiguo → más presente */
+  if (showStates) {
+      const hdrs = [periodLabel(-2), periodLabel(-1), periodLabel(0)];
+      headHTML  += hdrs.map(t => `<th>${t}</th>`).join('');
+  }
+  headHTML += '<th class="sticky-right">Acciones</th>';
   thead.innerHTML = `<tr>${headHTML}</tr>`;
+
+  thead.querySelectorAll('th[data-key]').forEach(th => {
+    th.onclick = () => {
+      if (SORT_BY === th.dataset.key) {
+          DIR = (DIR === 'ASC' ? 'DESC' : 'ASC');  // segundo clic → alterna
+      } else {
+          SORT_BY = th.dataset.key;                // nueva columna → empieza ASC
+          DIR     = 'ASC';
+      }
+      selectTeam(TEAM, $('#equipos-list li.sel'), 1);   // vuelve a página 1
+    };
+  });
 
   /* filas */
   tbody.innerHTML = DATA.map(r => {
     const tdCols = cols.map(k => `<td>${r[k] ?? ''}</td>`).join('');
-    const idPer  = [r.per1_id, r.per2_id, r.per3_id];
-    const tdSel  = [r.est1, r.est2, r.est3]
-                    .map((v, i) => selHTML(v,
+
+    /*  per3 / est3 es el MÁS ANTIGUO  */
+    const idPer = [r.per3_id, r.per2_id, r.per1_id];
+    const tdSel = [r.est3, r.est2, r.est1]
+                    .map((v, i) => selHTML(
+                        v,
                         r.id_integrante_equipo_proyecto,
                         idPer[i]))
-                     .join('');
+                    .join('');
 
-    return `<tr>${tdCols}${tdSel}
-              <td>
-                <button class="btn-det"  data-id="${r.id_usuario}">👁️</button>
-                <button class="btn-edit" data-id="${r.id_usuario}">✏️</button>
-              </td>
-            </tr>`;
+    /* ─────────────–– fila final ───────────── */
+    let fila = `<tr>${tdCols}`;      // columnas “normales”
+    if (showStates) fila += tdSel;   // solo si corresponde mostrar estados
+    fila += `
+        <td>
+          <button class="btn-det"  data-id="${r.id_usuario}">👁️</button>
+          <button class="btn-edit" data-id="${r.id_usuario}">✏️</button>
+        </td>
+      </tr>`;
+
+    return fila;
   }).join('');
 
   /* listeners */
   $$('.sel-estado').forEach(s => s.onchange = updateEstado);
   $$('.btn-det')    .forEach(b => b.onclick = openDetalle);
   $$('.btn-edit')   .forEach(b => b.onclick = openEdit);
+}
+
+/* ─────────────────── paginador numérico ─────────────────── */
+function buildPager () {
+  const pages = Math.ceil(TOTAL / PER);
+  let nav = document.getElementById('pager');
+  if (!nav) {
+    nav = document.createElement('div');
+    nav.id = 'pager';
+    nav.style.margin = '1rem 0';
+    $('#section-table').after(nav);
+  }
+  if (pages <= 1) { nav.innerHTML = ''; return; }
+
+  nav.innerHTML = Array.from({length: pages}, (_, i) => {
+      const p = i + 1;
+      return `<button data-p="${p}" ${p === PAGE ? 'disabled' : ''}>${p}</button>`;
+  }).join(' ');
+
+  nav.onclick = e => {
+    if (e.target.dataset.p) {
+      selectTeam(TEAM, $('#equipos-list li.sel'), Number(e.target.dataset.p));
+    }
+  };
 }
 
 function selHTML (val, iep, perid) {
@@ -153,19 +235,35 @@ async function updateEstado (e) {
   if (!j.ok) alert(j.error);
 }
 
+/* ─── Etiquetas legibles de los 3 últimos periodos ─── */
+const QTXT = ['Enero-Abril', 'Mayo-Agosto', 'Septiembre-Diciembre'];
+
+/* offset = 0 → periodo “corriente”; −1 → el anterior; −2 → el más antiguo */
+function periodLabel(offset = 0){
+  const today   = new Date();
+  let   q       = Math.floor(today.getMonth() / 4);   // 0,1,2
+  let   year    = today.getFullYear();
+
+  q += offset;                         // desplazamos…
+  while (q < 0){ q += 3; year--; }     // …hacia atrás
+  while (q > 2){ q -= 3; year++; }     // …o hacia delante
+
+  return `${QTXT[q]} ${year}`;         // «Enero-Abril 2025», etc.
+}
+
 /* ------------------------------------------------ columnas */
 const COLS = [
   { key: 'nombre',   label: 'Nombre completo',         def: 1 },
-  { key: 'dia_mes',  label: 'Día y Mes',               def: 1 },
+  { key: 'dia_mes',  label: 'Día-Mes',               def: 1 },
   { key: 'edad',     label: 'Edad',                    def: 1 },
   { key: 'correo',   label: 'Correo electrónico',      def: 1 },
   { key: 'nacimiento',           label: 'Nacimiento' },
   { key: 'telefonos',            label: 'N° contacto' },
   { key: 'rut_dni_fmt',          label: 'RUT / DNI' },
-  { key: 'ubicacion',            label: 'Ciudad/Región/País' },
+  { key: 'ubicacion',            label: 'Ciudad / Región / País' },
   { key: 'direccion',            label: 'Dirección' },
-  { key: 'iglesia_ministerio',   label: 'Iglesia/Ministerio' },
-  { key: 'profesion_oficio_estudio', label: 'Profesión/Oficio/Estudio' },
+  { key: 'iglesia_ministerio',   label: 'Iglesia / Ministerio' },
+  { key: 'profesion_oficio_estudio', label: 'Profesión / Oficio / Estudio' },
   { key: 'ingreso',              label: 'Fecha de ingreso' },
   { key: 'ultima_act',           label: 'Última actualización' }
 ];
@@ -543,7 +641,7 @@ async function submitEdit (ev) {
       alert('Guardado ✓');
       hide($('#modal-edit'));
       /* recarga tabla */
-      selectTeam(TEAM, $(`#equipos-list li[data-id="${TEAM}"]`));
+      selectTeam(TEAM, $(`#equipos-list li[data-id="${TEAM}"]`), PAGE);
   } else alert(j.error);
 }
 
@@ -562,13 +660,32 @@ const estadoNom = id => {
 /* ------------------------------------------------ init */
 document.addEventListener('DOMContentLoaded', () => {
   buildColMenu();
+  if (typeof PRE_INTEGRANTES !== 'undefined'){
+      DATA = PRE_INTEGRANTES;
+      refreshTable();          // pinta de inmediato
+  }
   loadSidebar();
   syncPaisDoc();
   /* ——— selector de columnas ——— */
   btnCols.onclick = e => {
+    /* 1) calcula la posición del botón en la ventana */
+    const rect = btnCols.getBoundingClientRect();
+    /* 2) fija coordenadas del pop-up (8 px de margen) */
+    colsMenu.style.top  = (rect.bottom + 8) + 'px';
+    colsMenu.style.left = rect.left + 'px';
+
+    /* 3) muestra / oculta */
     colsMenu.classList.toggle('show');
-    e.stopPropagation();               /* evita que el click cierre al instante */
+    e.stopPropagation();              // evita cierre inmediato
   };
+
+  /* ── NO dejes que los clics del menú lleguen al botón ── */
+  colsMenu.addEventListener('click', e => e.stopPropagation());
+
+  /* si el usuario hace scroll o redimensiona, oculta el pop-up
+    (para no dejarlo flotando “en el aire”) */
+  window.addEventListener('scroll', () => colsMenu.classList.remove('show'));
+  window.addEventListener('resize', () => colsMenu.classList.remove('show'));
 
   /* cerrar si se hace click fuera */
   document.addEventListener('click',ev=>{

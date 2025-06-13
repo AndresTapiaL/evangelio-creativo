@@ -89,59 +89,95 @@ try {
 
   /* ════════════════ 1) LISTA INTEGRANTES ════════════════ */
   case 'GET:lista': {
-      $team = $_GET['team'] ?? 0;                          // 0=general ‖ 'ret'
+      $team   = $_GET['team'] ?? '0';
+      $page   = max(1,(int)($_GET['page']??1));
+      $per    = max(1,min(200,(int)($_GET['per']??50)));   // 50 por defecto
+      $sort   = $_GET['sort'] ?? 'nombre';
+      $dir    = strtoupper($_GET['dir']??'ASC')==='DESC' ? 'DESC':'ASC';
+      /* blinda los nombres de columna que sí se permiten ordenar */
+      $okSort = ['nombre','edad','ingreso','ultima_act','correo','dia_mes'];
+      if(!in_array($sort,$okSort)) $sort='nombre';
       /* util para RUT chileno                                                */
       $fmt_rut = function($rut){
          if(!preg_match('/^\d{7,9}$/',$rut)) return $rut;
          $dv=substr($rut,-1); $num=substr($rut,0,-1);
          return number_format($num,0,'','.').'-'.$dv;
       };
+      /* ---------- columnas / joins de estados según el equipo ------------- */
+      $selectEstados = '';
+      $joinEstados   = '';
+
+      if ($team !== '0' && $team !== 'ret') {       // Equipos o Proyectos “reales”
+          $selectEstados = "
+              lep1.id_tipo_estado_actividad                         AS est1,
+              lep2.id_tipo_estado_actividad                         AS est2,
+              lep3.id_tipo_estado_actividad                         AS est3,
+              COALESCE( lep1.id_periodo,
+                        (SELECT id_periodo FROM periodos
+                        WHERE fecha_termino >= :hoy
+                        ORDER BY fecha_termino LIMIT 1) )          AS per1_id,
+              COALESCE( lep2.id_periodo,
+                        (SELECT id_periodo FROM periodos
+                        WHERE fecha_termino <  :hoy
+                        ORDER BY fecha_termino DESC LIMIT 1) )     AS per2_id,
+              COALESCE( lep3.id_periodo,
+                        (SELECT id_periodo FROM periodos
+                        WHERE fecha_termino <  :hoy
+                        ORDER BY fecha_termino DESC LIMIT 1 OFFSET 1) ) AS per3_id,
+          ";
+
+          $joinEstados = "
+              LEFT JOIN v_last_estado_periodo lep1
+                    ON lep1.id_integrante_equipo_proyecto = iep.id_integrante_equipo_proyecto
+                    AND lep1.id_periodo = (SELECT id_periodo FROM periodos
+                                            WHERE fecha_termino >= :hoy
+                                        ORDER BY fecha_termino LIMIT 1)
+
+              LEFT JOIN v_last_estado_periodo lep2
+                    ON lep2.id_integrante_equipo_proyecto = iep.id_integrante_equipo_proyecto
+                    AND lep2.id_periodo = (SELECT id_periodo FROM periodos
+                                            WHERE fecha_termino <  :hoy
+                                        ORDER BY fecha_termino DESC LIMIT 1)
+
+              LEFT JOIN v_last_estado_periodo lep3
+                    ON lep3.id_integrante_equipo_proyecto = iep.id_integrante_equipo_proyecto
+                    AND lep3.id_periodo = (SELECT id_periodo FROM periodos
+                                            WHERE fecha_termino <  :hoy
+                                        ORDER BY fecha_termino DESC LIMIT 1 OFFSET 1)
+          ";
+      } else {                                    // “General” o “Retirados”
+          $selectEstados = "
+              NULL AS est1,
+              NULL AS est2,
+              NULL AS est3,
+              NULL AS per1_id,
+              NULL AS per2_id,
+              NULL AS per3_id,
+          ";
+          /* $joinEstados queda vacío */
+      }
       /* ——— query base ——— */
-      $sql = "SELECT
-                u.id_usuario,
-                CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS nombre,
-                DATE_FORMAT(u.fecha_nacimiento,'%d-%m-%Y')  AS nacimiento,
-                DATE_FORMAT(u.fecha_nacimiento,'%d-%m')     AS dia_mes,
-                TIMESTAMPDIFF(YEAR,u.fecha_nacimiento,:hoy) AS edad,
-                u.rut_dni AS rut_fmt,
-                GROUP_CONCAT(DISTINCT CONCAT(t.telefono,' (',dt.nombre_descripcion_telefono,')')
-                             ORDER BY t.es_principal DESC SEPARATOR ' / ')               AS telefonos,
-                ce.correo_electronico                                                    AS correo,
-                CONCAT_WS(' / ',cc.nombre_ciudad_comuna,re.nombre_region_estado,
-                                    p.nombre_pais)                                        AS ubicacion,
-                u.direccion,
-                u.iglesia_ministerio,
-                u.profesion_oficio_estudio,
-                DATE_FORMAT(u.fecha_registro,'%d-%m-%Y')                                  AS ingreso,
-                TIMESTAMPDIFF(MONTH ,u.ultima_actualizacion,:hoy)                         AS meses_desde_update,
-                DATE_FORMAT(u.ultima_actualizacion,'%d-%m-%Y')                            AS ultima_act,
-                lep1.id_tipo_estado_actividad est1,
-                lep2.id_tipo_estado_actividad est2,
-                lep3.id_tipo_estado_actividad est3,
-                /* si el LEFT JOIN no encontró nada,
-                    usamos el id del período directamente */
-                COALESCE( lep1.id_periodo,
-                        (SELECT id_periodo
-                            FROM periodos
-                            WHERE fecha_termino >= :hoy
-                            ORDER BY fecha_termino
-                            LIMIT 1)
-                        )                        AS per1_id,
-                COALESCE( lep2.id_periodo,
-                        (SELECT id_periodo
-                            FROM periodos
-                            WHERE fecha_termino < :hoy
-                            ORDER BY fecha_termino DESC
-                            LIMIT 1 OFFSET 0)
-                        )                        AS per2_id,
-                COALESCE( lep3.id_periodo,
-                        (SELECT id_periodo
-                            FROM periodos
-                            WHERE fecha_termino < :hoy
-                            ORDER BY fecha_termino DESC
-                            LIMIT 1 OFFSET 1)
-                        )                        AS per3_id,
-                iep.id_integrante_equipo_proyecto
+      /* ——— query base ——— */
+      $sql = "
+              SELECT
+                  u.id_usuario,
+                  CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS nombre,
+                  DATE_FORMAT(u.fecha_nacimiento,'%d-%m-%Y')  AS nacimiento,
+                  DATE_FORMAT(u.fecha_nacimiento,'%d-%m')     AS dia_mes,
+                  TIMESTAMPDIFF(YEAR,u.fecha_nacimiento,:hoy) AS edad,
+                  u.rut_dni                                   AS rut_fmt,
+                  GROUP_CONCAT(DISTINCT CONCAT(t.telefono,' (',dt.nombre_descripcion_telefono,')')
+                              ORDER BY t.es_principal DESC SEPARATOR ' / ')    AS telefonos,
+                  ce.correo_electronico                                         AS correo,
+                  CONCAT_WS(' / ',cc.nombre_ciudad_comuna,re.nombre_region_estado,p.nombre_pais) AS ubicacion,
+                  u.direccion,
+                  u.iglesia_ministerio,
+                  u.profesion_oficio_estudio,
+                  DATE_FORMAT(u.fecha_registro,'%d-%m-%Y')                       AS ingreso,
+                  TIMESTAMPDIFF(MONTH ,u.ultima_actualizacion,:hoy)              AS meses_desde_update,
+                  DATE_FORMAT(u.ultima_actualizacion,'%d-%m-%Y')                 AS ultima_act,
+                  $selectEstados
+                  iep.id_integrante_equipo_proyecto
               FROM usuarios u
               LEFT JOIN paises p   ON p.id_pais=u.id_pais
               LEFT JOIN ciudad_comuna cc ON cc.id_ciudad_comuna=u.id_ciudad_comuna
@@ -149,27 +185,41 @@ try {
               LEFT JOIN correos_electronicos ce ON ce.id_usuario=u.id_usuario
               LEFT JOIN telefonos t ON t.id_usuario=u.id_usuario
               LEFT JOIN descripcion_telefonos dt ON dt.id_descripcion_telefono=t.id_descripcion_telefono
-              LEFT JOIN integrantes_equipos_proyectos iep ON iep.id_usuario=u.id_usuario
               /* tres últimos periodos */
-              LEFT JOIN v_last_estado_periodo lep1 ON lep1.id_integrante_equipo_proyecto=iep.id_integrante_equipo_proyecto
-                AND lep1.id_periodo=(SELECT id_periodo FROM periodos WHERE fecha_termino>=:hoy ORDER BY fecha_termino LIMIT 1)
-              LEFT JOIN v_last_estado_periodo lep2 ON lep2.id_integrante_equipo_proyecto=iep.id_integrante_equipo_proyecto
-                AND lep2.id_periodo=(SELECT id_periodo FROM periodos WHERE fecha_termino<:hoy ORDER BY fecha_termino DESC LIMIT 1 OFFSET 0)
-              LEFT JOIN v_last_estado_periodo lep3 ON lep3.id_integrante_equipo_proyecto=iep.id_integrante_equipo_proyecto
-                AND lep3.id_periodo=(SELECT id_periodo FROM periodos WHERE fecha_termino<:hoy ORDER BY fecha_termino DESC LIMIT 1 OFFSET 1)
-              WHERE 1 ";
+              LEFT JOIN integrantes_equipos_proyectos iep
+                    ON iep.id_usuario = u.id_usuario
+                    AND iep.habilitado = 1
+              $joinEstados
+              WHERE 1";
 
       if($team==='ret'){
           $sql.=" AND u.id_usuario IN (SELECT id_usuario FROM retirados) ";
-      }elseif($team!=0){
-          $sql.=" AND iep.id_equipo_proyecto=:team ";
-      }else{
-          $sql.=" AND u.id_usuario NOT IN (SELECT id_usuario FROM retirados) ";
+      }elseif($team!=='ret' && $team!='0'){
+          $sql.=" AND iep.id_equipo_proyecto=:team
+                    AND iep.habilitado = 1 ";
+      }else{                 /* General */
+          $sql.=" AND u.id_usuario NOT IN (SELECT id_usuario FROM retirados)
+                  AND EXISTS (SELECT 1
+                                FROM integrantes_equipos_proyectos ie2
+                                WHERE ie2.id_usuario = u.id_usuario
+                                  AND ie2.habilitado = 1)";
       }
-      $sql.=" GROUP BY u.id_usuario ORDER BY nombre";
+
+      /* total antes del LIMIT → para paginación */
+      $sqlCnt = 'SELECT COUNT(*) FROM ('.$sql.' GROUP BY u.id_usuario) x';
+      $tot = $pdo->prepare($sqlCnt);
+      if($team!=0 && $team!=='ret') $tot->bindValue(':team',$team,PDO::PARAM_INT);
+      $tot->bindValue(':hoy',$hoy); $tot->execute();
+      $totalRows = (int)$tot->fetchColumn();
+
+      $sql .= " GROUP BY u.id_usuario
+                ORDER BY $sort $dir
+                LIMIT :off,:per";
 
       $st=$pdo->prepare($sql);
       $st->bindValue(':hoy',$hoy);
+      $st->bindValue(':off',($page-1)*$per,PDO::PARAM_INT);
+      $st->bindValue(':per',$per,PDO::PARAM_INT);
       if($team!=0 && $team!=='ret') $st->bindValue(':team',$team,PDO::PARAM_INT);
       $st->execute();
       $rows=$st->fetchAll(PDO::FETCH_ASSOC);
@@ -177,7 +227,13 @@ try {
         $r['rut_dni_fmt']=$fmt_rut($r['rut_fmt']);
         unset($r['rut_fmt']);
       }
-      echo json_encode(['ok'=>true,'integrantes'=>$rows]);
+      echo json_encode([
+            'ok'=>true,
+            'integrantes'=>$rows,
+            'total'=>$totalRows,
+            'page'=>$page,
+            'per'=>$per
+      ]);
       break;
   }
 

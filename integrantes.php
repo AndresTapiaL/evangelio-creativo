@@ -16,6 +16,51 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute(['id'=>$id]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+/* ---------- precarga servidor ---------- */
+$teamDefault = 0;                    // “General”
+/* equipos para el sidebar */
+$equiposInit = [['id'=>0,'nombre'=>'General','es_equipo'=>null]];
+$equiposInit = array_merge(
+        $equiposInit,
+        $pdo->query("SELECT id_equipo_proyecto AS id,
+                            nombre_equipo_proyecto AS nombre,
+                            es_equipo
+                       FROM equipos_proyectos
+                   ORDER BY es_equipo DESC,nombre_equipo_proyecto")
+            ->fetchAll(PDO::FETCH_ASSOC));
+$equiposInit[] = ['id'=>'ret','nombre'=>'Retirados','es_equipo'=>null];
+
+/* integrantes del equipo por defecto (misma query que usa la API) */
+$st = $pdo->prepare("
+   SELECT u.id_usuario,
+          CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS nombre,
+          DATE_FORMAT(u.fecha_nacimiento,'%d-%m')        AS dia_mes,
+          TIMESTAMPDIFF(YEAR,u.fecha_nacimiento,CURDATE()) AS edad,
+          (SELECT correo_electronico FROM correos_electronicos
+              WHERE id_usuario=u.id_usuario LIMIT 1)     AS correo,
+          CONCAT_WS(' / ',cc.nombre_ciudad_comuna,re.nombre_region_estado,p.nombre_pais) AS ubicacion,
+          DATE_FORMAT(u.fecha_registro,'%d-%m-%Y')       AS ingreso,
+          DATE_FORMAT(u.ultima_actualizacion,'%d-%m-%Y') AS ultima_act,
+          iep.id_integrante_equipo_proyecto,
+          NULL AS est1,NULL AS est2,NULL AS est3,
+          NULL AS per1_id,NULL AS per2_id,NULL AS per3_id
+     FROM usuarios u
+     LEFT JOIN ciudad_comuna  cc ON cc.id_ciudad_comuna=u.id_ciudad_comuna
+     LEFT JOIN region_estado  re ON re.id_region_estado=u.id_region_estado
+     LEFT JOIN paises         p  ON p.id_pais=u.id_pais
+     LEFT JOIN integrantes_equipos_proyectos iep
+             ON iep.id_usuario = u.id_usuario
+           AND iep.habilitado = 1          /* ← solo vínculos vigentes */
+    WHERE u.id_usuario NOT IN (SELECT id_usuario FROM retirados)
+      AND EXISTS (SELECT 1                        /* ← asegura al menos uno */
+                    FROM integrantes_equipos_proyectos ie2
+                  WHERE ie2.id_usuario = u.id_usuario
+                    AND ie2.habilitado = 1)
+    GROUP BY u.id_usuario
+    ORDER BY nombre");
+$st->execute();
+$integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -187,18 +232,6 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
   /* ← 3.5 Pop-up de columnas */
   #section-table{position:relative;}          /* contenedor ancla */
 
-  #cols-menu{
-    position:absolute;
-    top:48px; right:0;
-    background:#fff;
-    border-radius:var(--radius);
-    box-shadow:var(--shadow);
-    padding:1rem 1.2rem;
-    width:220px;max-height:70vh;overflow:auto;
-
-    opacity:0;pointer-events:none;transform:translateY(-6px);
-    transition:opacity .18s ease, transform .18s ease;
-  }
   #cols-menu.show{opacity:1;pointer-events:auto;transform:none;}
 
   #cols-menu label{
@@ -337,7 +370,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
     border-radius:var(--radius);
     box-shadow:var(--shadow);
     padding:1rem 1.2rem;
-    width:220px; max-height:65vh; overflow:auto;
+    width:280px; max-height:65vh; overflow:auto;
 
     opacity:0; pointer-events:none; transform:translateY(-6px);
     transition:opacity .2s, transform .2s;
@@ -361,6 +394,89 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 box-shadow:var(--shadow);}
 
   td:last-child{position:sticky;right:0;background:#fff;}
+
+  /* pop-up pegado al botón (sale hacia abajo) */
+  #btn-cols .cols-menu{
+    position:absolute;
+    top:100%;          /* justo debajo del botón  */
+    right:0;
+    margin-top:.4rem;
+    z-index:200;       /* por encima de la tabla  */
+  }
+
+  /* pequeño facelift */
+  /* pop-up pegado al botón */
+  #btn-cols .cols-menu{
+    position:fixed;                  /* ⬅  antes era absolute            */
+    z-index:1100;                    /* ⬆  más alto que sidebar (0) y nav (500) */
+    background:#fff;
+    border:1px solid #e6e8f0;
+    box-shadow:0 12px 28px rgba(0,0,0,.12);
+  }
+
+  /* facelift y color legible */
+  #btn-cols .cols-menu label{
+    border-radius:8px;
+    padding:.35rem .45rem;
+    color:var(--text-main);          /* ⬅  texto oscuro */
+  }
+  #btn-cols .cols-menu label:hover{
+    background:#f0f3ff;
+  }
+
+  /* misma lógica sticky que los <td> del extremo derecho */
+  thead th.sticky-right{
+    position:sticky;
+    right:0;
+    background:#fff;
+    z-index:3;                 /* para que quede sobre el body */
+  }
+
+  /* ░░░░ PAGINADOR ░░░░ */
+  #pager{
+    display:flex;
+    flex-wrap:wrap;
+    gap:.5rem;
+    margin:2rem 0;
+    user-select:none;
+  }
+
+  /* botón genérico */
+  #pager button{
+    all:unset;                     /* resetea herencia */
+    cursor:pointer;
+    padding:.45rem .85rem;
+    border-radius:8px;
+    font:500 .9rem/1 "Poppins",sans-serif;
+    color:var(--primary);
+    background:#fff;
+    border:1.5px solid var(--primary);
+    box-shadow:0 3px 10px rgba(0,0,0,.06);
+    transition:.18s;
+  }
+
+  /* interacción */
+  #pager button:hover:not([disabled]){
+    background:var(--primary);
+    color:#fff;
+    transform:translateY(-2px);
+    box-shadow:0 6px 14px rgba(0,0,0,.12);
+  }
+
+  /* página actual */
+  #pager button[disabled]{
+    background:var(--primary);
+    color:#fff;
+    cursor:default;
+    box-shadow:none;
+    transform:none;
+  }
+
+  /* accesibilidad (teclado) */
+  #pager button:focus-visible{
+    outline:3px solid #a9b1ff;
+    outline-offset:2px;
+  }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -397,6 +513,11 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
   })();
   </script>
   <!-- ═══════════════════════════════════════════════════════ -->
+  <script>
+    /* primera carga sin round-trip AJAX */
+    const PRE_EQUIPOS     = <?= json_encode($equiposInit ,JSON_UNESCAPED_UNICODE) ?>;
+    const PRE_INTEGRANTES = <?= json_encode($integrantesInit,JSON_UNESCAPED_UNICODE) ?>;
+  </script>
 </head>
 
 <body>
@@ -441,11 +562,12 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
     <main>
       <h1>Integrantes</h1>
 
-      <button id="btn-cols" class="btn"><i class="fa-solid fa-sliders"></i>&nbsp;Columnas</button>
+      <button id="btn-cols" class="btn" style="position:relative">
+        <i></i>Columnas
+        <div id="cols-menu" class="cols-menu"></div>
+      </button>
 
       <section id="section-table">
-          <div id="cols-menu" class="cols-menu"></div>
-
           <table id="tbl-integrantes">
             <thead></thead>
             <tbody></tbody>
