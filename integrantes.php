@@ -71,6 +71,9 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
   <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Teléfonos internacionales -->
+  <link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">
   <link rel="preload" href="styles/poppins-v23-latin-400.woff2"
         as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="styles/poppins-v23-latin-500.woff2"
@@ -279,12 +282,16 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
 
   .modal-box dl{
     display:grid;
-    grid-template-columns:160px 1fr;
+    grid-template-columns:220px 1fr;
     row-gap:.4rem;column-gap:1rem;
     font-size:.9rem;
   }
   .modal-box dl dt{font-weight:600;color:var(--primary);text-align:right;}
   .modal-box dl dd{margin:0;}
+
+  .modal-box dl dt{
+    white-space:nowrap;                 /* nunca corte en 2 líneas */
+  }
 
   @keyframes slideDown{from{translate:0 -20px;opacity:.3;}}
 
@@ -477,7 +484,89 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
     outline:3px solid #a9b1ff;
     outline-offset:2px;
   }
+
+  /* ░░░░ Botones navegación años (modal Detalles) ░░░░ */
+  .yr-btn{
+    all:unset;
+    cursor:pointer;
+    padding:.35rem .6rem;
+    border-radius:7px;
+    font:500 .9rem/1 "Poppins",sans-serif;
+    color:var(--primary);
+    background:#fff;
+    border:1.5px solid var(--primary);
+    box-shadow:0 2px 8px rgba(0,0,0,.06);
+    transition:.18s;
+  }
+  .yr-btn:hover:not([disabled]){
+    background:var(--primary);
+    color:#fff;
+    transform:translateY(-1px);
+    box-shadow:0 6px 16px rgba(0,0,0,.12);
+  }
+  .yr-btn[disabled]{
+    opacity:.45;
+    cursor:default;
+    transform:none;
+  }
+
+  /*  ─── botones primario / secundario ─── */
+  .btn-prim{
+    background:var(--primary);
+    color:#fff;
+    padding:.6rem 1.2rem;
+    border:0;
+    border-radius:8px;
+    font-weight:600;
+    cursor:pointer;
+    transition:background var(--transition);
+  }
+  .btn-prim:hover{background:var(--primary-dark);}
+
+  .btn-sec{
+    background:#e5e7eb;
+    color:var(--text-main);
+    padding:.6rem 1.2rem;
+    border:0;
+    border-radius:8px;
+    font-weight:500;
+    margin-right:.6rem;
+    cursor:pointer;
+    transition:background var(--transition);
+  }
+  .btn-sec:hover{background:#d1d5db;}
+
+  /*  ─── selects de descripción teléfono más bajos ─── */
+  .phone-row select{padding:.3rem .6rem;font-size:.82rem;}
+
+  /*  ─── para que la ✖ quede dentro del cuadro ─── */
+  .modal-box{position:relative;}
+
+  /* ───────── Teléfono · ajusta alto y alineación del <select> descripción ───────── */
+  #phone-container .phone-row{
+    /* ya está en grid; solo bajamos el eje para que “toque” al input */
+    align-items:end;                 /* bottom-align */
+  }
+
+  #phone-container .phone-row select{
+    padding:.55rem .8rem;            /* igual que los <input> */
+    font-size:.88rem;
+    height:40px;                     /* ≈ alto del input (ajusta si cambias) */
+    border:1px solid #d6d9e2;        /* mismo borde */
+    border-radius:8px;
+    box-sizing:border-box;
+  }
+
+  /* Ocupaciones verticales */
+  #ocup-container{
+    display:flex;
+    flex-direction:column;     /* una debajo de otra */
+    gap:.6rem;
+  }
   </style>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js"></script>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
   <script>
@@ -638,6 +727,7 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
             <div class="foto-box">
                 <img id="ed-foto" class="avatar">
                 <button type="button" id="btn-del-photo" class="btn">🗑️ Eliminar foto</button>
+                <input type="hidden" id="del_foto" name="del_foto" value="0">
             </div>
 
             <!-- fila 1 : nombres -->
@@ -705,21 +795,21 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
               <!-- fila teléfono principal -->
               <div class="phone-row">
                 <label>📞 Teléfono&nbsp;1&nbsp;(principal)
-                  <input name="tel0" maxlength="16">
+                  <input name="tel0" type="tel" maxlength="20" class="tel">
                 </label>
                 <select name="tel_desc0"></select>
               </div>
               <!-- Tel 2 -->
               <div class="phone-row">
                 <label>📞 Teléfono&nbsp;2
-                  <input name="tel1" maxlength="16">
+                  <input name="tel1" type="tel" maxlength="20" class="tel">
                 </label>
                 <select name="tel_desc1"></select>
               </div>
               <!-- Tel 3 -->
               <div class="phone-row">
                 <label>📞 Teléfono&nbsp;3
-                  <input name="tel2" maxlength="16">
+                  <input name="tel2" type="tel" maxlength="20" class="tel">
                 </label>
                 <select name="tel_desc2"></select>
               </div>
@@ -742,6 +832,7 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
 
           <!-- Guardar -->
           <div style="text-align:right;margin-top:1rem">
+            <button type="button" id="btn-cancel-edit" class="btn-sec">Cancelar</button>
             <button class="btn-prim">Guardar cambios</button>
           </div>
         </form>

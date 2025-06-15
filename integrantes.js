@@ -10,6 +10,9 @@ const API = 'integrantes_api.php';          // ← punto único de entrada
 const $  = sel => document.querySelector(sel);
 const $$ = sel => document.querySelectorAll(sel);
 
+/*  👉  promesas que indica cada input cuando termina de cargar utils.js */
+let phoneInitPromises = [];
+
 /* referencias reutilizadas */
 const btnCols  = $('#btn-cols');     // botón engranaje
 const colsMenu = $('#cols-menu');    // pop-up de columnas
@@ -24,6 +27,8 @@ const hide = el =>{
   el.classList.add('hidden');
 };
 
+const DEFAULT_PHOTO = 'uploads/fotos/default.png';
+
 /* ------------------------------------------------ catálogo de estados */
 let C_ESTADOS = [];
 fetch(`${API}?accion=estados`)
@@ -35,23 +40,68 @@ let YEAR_MAX = null;   // último año con registros
 
 /* ─── paginación y orden ─────────────────────────────── */
 let PAGE    = 1;          // página actual
-const PER   = 3;         // 50 registros por página
+const PER   = 50;         // 50 registros por página
 let TOTAL   = 0;          // total de filas que devuelve la API
 let SORT_BY = 'nombre';   // columna por la que se ordena
 let DIR     = 'ASC';      // ASC | DESC
 
-let EQUI_COMBO_HTML='';
-(async()=>{ const d=await (await fetch(`${API}?accion=equipos`)).json();
-            EQUI_COMBO_HTML='<option value=""></option>'+
-                 d.equipos.filter(e=>e.id&&e.id!=='ret')
-                 .map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
-})();
-function loadRolesInto(sel,eq,selVal=''){
-   if(!eq){ sel.innerHTML='<option></option>'; return;}
+/*  lista de equipos (validos) precargada una sola vez  */
+let   EQUI_COMBO_HTML = '';
+const EQUIPOS_PROMISE = fetch(`${API}?accion=equipos`)
+  .then(r => r.json())
+  .then(d => {
+      EQUI_COMBO_HTML = '<option value=""></option>' +
+          d.equipos
+           .filter(e => e.id && e.id !== 'ret')        // quita General y Retirados
+           .map   (e => `<option value="${e.id}">${e.nombre}</option>`)
+           .join('');
+  });
+
+function initIntlTelInputs () {
+  phoneInitPromises = [];                       // ← reinicia el array
+  document.querySelectorAll('#phone-container input[type="tel"]').forEach(inp=>{
+    if (inp._iti) inp._iti.destroy();           // evita doble init
+
+    const iti = intlTelInput(inp,{
+      separateDialCode : false,
+      nationalMode     : false,                 // siempre nº internacional
+      initialCountry   : 'cl',
+      utilsScript      : 'https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js'
+    });
+    inp._iti = iti;
+
+    /* guarda la promise para saber CUANDO el utils-script ya está listo */
+    phoneInitPromises.push(iti.promise);
+  });
+}
+
+/* +++++++++ VALIDAR Y NORMALIZAR TELÉFONOS +++++++++ */
+async function validateAndNormalizePhones () {
+
+  /* 1) esperamos a que se cargue utils.js en TODOS los inputs */
+  await Promise.all(phoneInitPromises);
+
+  /* 2) validador “real” ----------------------------------- */
+  for (const inp of document.querySelectorAll('#phone-container input.tel')) {
+    const val = inp.value.trim();
+    if (!val) continue;                          // caja vacía → ok
+
+    const iti = inp._iti;
+
+    const e164 = iti && iti.isValidNumber()
+                    ? iti.getNumber(intlTelInputUtils.numberFormat.E164) // ← con +
+                    : null;
+    if (e164) inp.value = e164;
+  }
+  return true;
+}
+
+function loadRolesInto(sel, eq, selVal='', allowBlank = true){
+   if(!eq){ sel.innerHTML = allowBlank ? '<option value=""></option>' : ''; return;}
    fetch(`${API}?accion=roles&eq=`+eq)
      .then(r=>r.json())
      .then(j=>{
-        sel.innerHTML='<option></option>'+
+        sel.innerHTML = (allowBlank ? '<option value=""></option>' : '') +
            j.roles.map(r=>`<option value="${r.id}">${r.nom}</option>`).join('');
         sel.value=selVal;
      });
@@ -122,10 +172,12 @@ function refreshTable () {
   const showStates = (TEAM !== '0' && TEAM !== 'ret');
 
   /* encabezados */
-  let headHTML = cols.map(k => {
-    const arrow = (SORT_BY === k) ? (DIR === 'ASC' ? ' ▲' : ' ▼') : '';
-    return `<th data-key="${k}" style="cursor:pointer">
-              ${COLS.find(c => c.key === k).label}${arrow}
+  let headHTML = cols.map(k=>{
+    const c      = COLS.find(x=>x.key===k);
+    const active = (SORT_BY===c.sort);
+    const arrow  = active ? (DIR==='ASC'?' ▲':' ▼') : '';
+    return `<th data-sort="${c.sort}" style="cursor:pointer">
+              ${c.label}${arrow}
             </th>`;
   }).join('');
   /* columnas de estado: más antiguo → más presente */
@@ -136,15 +188,12 @@ function refreshTable () {
   headHTML += '<th class="sticky-right">Acciones</th>';
   thead.innerHTML = `<tr>${headHTML}</tr>`;
 
-  thead.querySelectorAll('th[data-key]').forEach(th => {
-    th.onclick = () => {
-      if (SORT_BY === th.dataset.key) {
-          DIR = (DIR === 'ASC' ? 'DESC' : 'ASC');  // segundo clic → alterna
-      } else {
-          SORT_BY = th.dataset.key;                // nueva columna → empieza ASC
-          DIR     = 'ASC';
-      }
-      selectTeam(TEAM, $('#equipos-list li.sel'), 1);   // vuelve a página 1
+  thead.querySelectorAll('th[data-sort]').forEach(th=>{
+    th.onclick = ()=>{
+      const s = th.dataset.sort;
+      SORT_BY = (SORT_BY===s) ? s : s;            // mantiene valor
+      DIR     = (SORT_BY===s) ? (DIR==='ASC'?'DESC':'ASC') : 'ASC';
+      selectTeam(TEAM, $('#equipos-list li.sel'), 1);
     };
   });
 
@@ -253,19 +302,19 @@ function periodLabel(offset = 0){
 
 /* ------------------------------------------------ columnas */
 const COLS = [
-  { key: 'nombre',   label: 'Nombre completo',         def: 1 },
-  { key: 'dia_mes',  label: 'Día-Mes',               def: 1 },
-  { key: 'edad',     label: 'Edad',                    def: 1 },
-  { key: 'correo',   label: 'Correo electrónico',      def: 1 },
-  { key: 'nacimiento',           label: 'Nacimiento' },
-  { key: 'telefonos',            label: 'N° contacto' },
-  { key: 'rut_dni_fmt',          label: 'RUT / DNI' },
-  { key: 'ubicacion',            label: 'Ciudad / Región / País' },
-  { key: 'direccion',            label: 'Dirección' },
-  { key: 'iglesia_ministerio',   label: 'Iglesia / Ministerio' },
-  { key: 'profesion_oficio_estudio', label: 'Profesión / Oficio / Estudio' },
-  { key: 'ingreso',              label: 'Fecha de ingreso' },
-  { key: 'ultima_act',           label: 'Última actualización' }
+  { key:'nombre',  label:'Nombre completo',          def:1, sort:'nombre' },
+  { key:'dia_mes', label:'Día-Mes',                  def:1, sort:'dia_mes' },
+  { key:'edad',    label:'Edad',                     def:1, sort:'edad' },
+  { key:'correo',  label:'Correo electrónico',       def:1, sort:'correo' },
+  { key:'nacimiento',             label:'Nacimiento',               sort:'nacimiento' },
+  { key:'telefonos',              label:'Nº contacto',              sort:'telefonos' },
+  { key:'rut_dni_fmt',            label:'RUT / DNI',                sort:'rut_dni_fmt'},
+  { key:'ubicacion',              label:'Ciudad / Región / País',   sort:'ubicacion' },
+  { key:'direccion',              label:'Dirección',                sort:'direccion' },
+  { key:'iglesia_ministerio',     label:'Iglesia / Ministerio',     sort:'iglesia_ministerio'},
+  { key:'profesion_oficio_estudio',label:'Profesión / Oficio / Estudio', sort:'profesion_oficio_estudio'},
+  { key:'ingreso',                label:'Fecha de ingreso',         sort:'ingreso' },
+  { key:'ultima_act',             label:'Última actualización',     sort:'ultima_act'}
 ];
 
 function buildColMenu () {
@@ -292,12 +341,12 @@ async function loadEstadosYear(idUsuario, anio) {
   const HEADS = { T1:'Ene-Abr', T2:'May-Ago', T3:'Sep-Dic' };
   $('#det-tab-estados thead').innerHTML = `
       <tr>
-         <th rowspan="2">Equipo / Rol</th>
-         <th colspan="3">
-             <button id="yr-prev">◀</button>
-             <span id="yr-label">${anio}</span>
-             <button id="yr-next">▶</button>
-         </th>
+        <th rowspan="2">Equipo / Rol</th>
+        <th colspan="3" style="text-align:center">
+          <button id="yr-prev" class="yr-btn"  title="Año anterior">‹</button>
+          <span  id="yr-label" style="margin:0 .7rem;font-weight:600">${anio}</span>
+          <button id="yr-next" class="yr-btn"  title="Año siguiente">›</button>
+        </th>
       </tr>
       <tr>
          <th>${HEADS.T1}</th><th>${HEADS.T2}</th><th>${HEADS.T3}</th>
@@ -427,21 +476,35 @@ $('#det-close').onclick = () => hide($('#modal-det'));
 
 /* ------------------------------------------------ modal: editar */
 let CURR_USER = null;
+let EQUIP_TAKEN = new Set();
 
 async function openEdit (e) {
   const id = e.currentTarget.dataset.id;
   const j  = await (await fetch(`${API}?accion=detalles&id=` + id)).json();
   if (!j.ok) { alert(j.error); return; }
+  await EQUIPOS_PROMISE;
+  j.user.equip_now = j.equip_now;
   CURR_USER = j;
+  EQUIP_TAKEN = new Set((j.user.equip_now || []).map(r => String(r.eq)));
   fillEditForm(j.user);
   show($('#modal-edit'));
 }
 $('#edit-close').onclick = () => hide($('#modal-edit'));
+/* cerrar modal Editar con click fuera o con Cancelar */
+$('#modal-edit').addEventListener('click',e=>{
+  if(e.target.id==='modal-edit') hide(e.currentTarget);
+});
+document.body.addEventListener('click',e=>{
+  if(e.target.id==='btn-cancel-edit') hide($('#modal-edit'));
+});
 $('#btn-add-eq').onclick = addEqRow;
 $('#form-edit').onsubmit = submitEdit;
 
 /* ---------- COMPLETA TODOS LOS CAMPOS DEL FORM ---------- */
 function fillEditForm (u) {
+  $('#del_foto').value = '0';
+  $('#btn-del-photo').textContent = '🗑️ Eliminar foto';
+  $('#ed-foto').dataset.deleted = '0';
   /* limpia y vuelca equipos actuales */
   $('#eq-container').innerHTML='';
   (u.equip_now||[]).forEach(row=>{
@@ -451,9 +514,10 @@ function fillEditForm (u) {
     const se = document.createElement('select');
     se.innerHTML = EQUI_COMBO_HTML;   // ver nota abajo
     se.value = row.eq;
+    se.disabled = true;
     // selector rol
     const sr = document.createElement('select');
-    loadRolesInto(sr,row.eq,row.rol); // helper
+    loadRolesInto(sr, row.eq, row.rol, false);   // sin blanco
     se.onchange = ()=> loadRolesInto(sr,se.value);
     div.append(se,sr);
     $('#eq-container').appendChild(div);
@@ -499,7 +563,7 @@ function fillEditForm (u) {
       $(`[name="tel${i}"]`).value     = tel.num;
       $(`[name="tel_desc${i}"]`).value= tel.desc||'';
     });
-  });
+  }).then(initIntlTelInputs);   /** PEGAR DESPUÉS **/
 
   /* ocupaciones (check-list) */
   populateOcupaciones().then(list=>{
@@ -513,6 +577,25 @@ function fillEditForm (u) {
     }).join('');
   });
 }
+
+$('#btn-del-photo').onclick = () => {
+  const img   = $('#ed-foto');
+  const flag  = $('#del_foto');
+  const btn   = $('#btn-del-photo');
+
+  if (img.dataset.deleted === '1') {          // ↩️ Restaurar
+      img.src           = img.dataset.orig;
+      img.dataset.deleted = '0';
+      flag.value          = '0';
+      btn.textContent     = '🗑️ Eliminar foto';
+  } else {                                    // 🗑️ Eliminar
+      img.dataset.orig   = img.src;           // guarda la real
+      img.src            = DEFAULT_PHOTO;
+      img.dataset.deleted = '1';
+      flag.value          = '1';
+      btn.textContent     = '↩️ Restaurar foto';
+  }
+};
 
 /* ========== HELPERS QUE FALTABAN ========== */
 
@@ -539,23 +622,30 @@ async function populatePaises () {
   $('#ed-pais').onchange = e => populateRegiones(e.target.value);
 }
 
-/* ---- Sincronización País <-> Tipo Documento ---- */
-function syncPaisDoc(){
-  const selDoc = $('#ed-doc-type');
-  const selPais= $('#ed-pais');
+/* ---------- País ⇄ Tipo documento ---------- */
+function syncPaisDoc () {
+  const selDoc  = $('#ed-doc-type');   // RUT / INT
+  const selPais = $('#ed-pais');       // lista de países
 
-  selDoc.onchange = () =>{
-      if(selDoc.value==='CL' && selPais.value!=='1') selPais.value='1';
-      if(selDoc.value==='INT' && selPais.value==='1') selPais.value='';
-      populateRegiones(selPais.value);          // dispara cascade
-  };
-  selPais.onchange = () =>{
-      if(selPais.value==='1' && selDoc.value!=='CL') selDoc.value='CL';
-      if(selPais.value!=='' && selPais.value!=='1' && selDoc.value!=='INT') selDoc.value='INT';
-      /* limpiar dependientes */
-      if(!selPais.value){ $('#ed-region').innerHTML='<option value=""></option>';
-                         $('#ed-ciudad').innerHTML='<option value=""></option>'; }
-  };
+  /* Tipo  ⇒ País */
+  selDoc.addEventListener('change', () => {
+    if (selDoc.value === 'CL'  && selPais.value !== '1') selPais.value = '1';
+    if (selDoc.value === 'INT' && selPais.value === '1') selPais.value = '';
+    populateRegiones(selPais.value);          // mantiene la cascada viva
+  });
+
+  /* País  ⇒ Tipo */
+  selPais.addEventListener('change', () => {
+    if (selPais.value === '1' && selDoc.value !== 'CL')  selDoc.value = 'CL';
+    if (selPais.value && selPais.value !== '1' && selDoc.value !== 'INT')
+        selDoc.value = 'INT';
+
+    /* si deja país en blanco vaciamos los dependientes            */
+    if (!selPais.value) {
+      $('#ed-region').innerHTML = '<option value=""></option>';
+      $('#ed-ciudad').innerHTML = '<option value=""></option>';
+    }
+  });
 }
 
 /* catálogo Regiones según país ---------------------------------------- */
@@ -569,6 +659,8 @@ async function populateRegiones (idPais) {
   const j = await (await fetch(`${API}?accion=regiones&pais=`+idPais)).json();
   sel.innerHTML = '<option value="">— región —</option>' +
       j.regiones.map(r => `<option value="${r.id}">${r.nom}</option>`).join('');
+  sel.value = '';                                   // reset región
+  $('#ed-ciudad').innerHTML = '<option value=""></option>';  // reset ciudad
   sel.onchange = e => populateCiudades(e.target.value);
 }
 
@@ -588,7 +680,7 @@ async function populatePhoneDescs () {
   const opts = j.descs.map(d => `<option value="${d.id}">${d.nom}</option>`).join('');
   ['tel_desc0','tel_desc1','tel_desc2']
     .forEach(n => $(`[name="${n}"]`).innerHTML =
-        '<option value="">— desc —</option>' + opts);
+        '<option value="">— descripción —</option>' + opts);
 }
 
 /* ocupaciones ---------------------------------------------------------- */
@@ -598,22 +690,53 @@ async function populateOcupaciones () {
 }
 
 async function addEqRow () {
+
+  /* 1)  calcula los equipos que ya están en filas creadas
+         (puede haber varias llamadas a addEqRow)          */
+  const rowsTaken = new Set(
+        [...$('#eq-container').querySelectorAll('select.eq-sel')]
+           .map(s => s.value).filter(Boolean)   // solo los ya elegidos
+  );
+
+  /* 2)  une los conjuntos: vínculos activos + ya elegidos */
+  const blocked = new Set(
+        [...EQUIP_TAKEN, ...rowsTaken].map(String)   // 🔸
+  );
+
+  /* 3)  trae catálogo completo y lo filtra                */
+  const d = await (await fetch(`${API}?accion=equipos`)).json();
+  const opciones = d.equipos
+        .filter(e => e.id && e.id !== 'ret' && !blocked.has(String(e.id)))
+        .map(e => `<option value="${e.id}">${e.nombre}</option>`)
+        .join('');
+
+  if (!opciones) {                // nada más disponible
+      alert('Ya no quedan equipos/proyectos por asignar.');
+      return;
+  }
+
+  /* 4)  construye la nueva fila                            */
   const row  = document.createElement('div');
   row.className = 'eq-row';
 
-  /* combo equipos */
-  const selEq = document.createElement('select');
-  const data  = await (await fetch(`${API}?accion=equipos`)).json();
-  selEq.innerHTML = '<option value="">— equipo —</option>' +
-       data.equipos.filter(e => e.id != 0 && e.id !== 'ret')
-                   .map(e => `<option value="${e.id}">${e.nombre}</option>`)
-                   .join('');
+  // selector de equipo
+  const selEq  = document.createElement('select');
+  selEq.className = 'eq-sel';      // ← para detectarlo arriba
+  selEq.innerHTML = '<option value="">— equipo —</option>' + opciones;
 
-  /* combo roles */
+  // selector de rol
   const selRol = document.createElement('select');
 
   selEq.onchange = async () => {
-      const j = await (await fetch(`${API}?accion=roles&eq=` + selEq.value)).json();
+      if (!selEq.value) { selRol.innerHTML=''; return; }
+      if ([...$$('.eq-sel')].some(
+              s => s !== selEq && s.value === selEq.value)){
+          alert('Ese equipo ya está seleccionado.');
+          selEq.value = '';
+          selRol.innerHTML = '';
+          return;
+      }
+      const j = await (await fetch(`${API}?accion=roles&eq=`+selEq.value)).json();
       selRol.innerHTML = '<option value="">— rol —</option>' +
                          j.roles.map(r => `<option value="${r.id}">${r.nom}</option>`).join('');
   };
@@ -625,7 +748,11 @@ async function addEqRow () {
 
 async function submitEdit (ev) {
   ev.preventDefault();
-  const fd = new FormData(ev.target);
+
+  /* 👉 aborta si algún teléfono no pasa la validación */
+  if (!(await validateAndNormalizePhones())) return;
+
+  const fd = new FormData(ev.target);      // ahora sí incluye "+56…"
   fd.append('accion', 'editar');
 
   /* empaquetar equipos nuevos */

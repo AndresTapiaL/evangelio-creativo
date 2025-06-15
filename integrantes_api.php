@@ -92,11 +92,54 @@ try {
       $team   = $_GET['team'] ?? '0';
       $page   = max(1,(int)($_GET['page']??1));
       $per    = max(1,min(200,(int)($_GET['per']??50)));   // 50 por defecto
-      $sort   = $_GET['sort'] ?? 'nombre';
-      $dir    = strtoupper($_GET['dir']??'ASC')==='DESC' ? 'DESC':'ASC';
-      /* blinda los nombres de columna que sí se permiten ordenar */
-      $okSort = ['nombre','edad','ingreso','ultima_act','correo','dia_mes'];
-      if(!in_array($sort,$okSort)) $sort='nombre';
+
+      $sort = $_GET['sort'] ?? 'nombre';              // alias pedido desde el front
+      $dir  = (strtoupper($_GET['dir']??'ASC')==='DESC') ? 'DESC' : 'ASC';
+
+      /*  mapa alias ⇒ expresión SQL real  */
+      $orderMap = [
+      'nombre'                     => 'nombre',
+      'edad'                       => 'edad',
+      'ingreso'                    => 'u.fecha_registro',
+      'ultima_act'                 => 'u.ultima_actualizacion',
+      'correo'                     => 'ce.correo_electronico',
+      'dia_mes'                    => 'MONTH(u.fecha_nacimiento), DAY(u.fecha_nacimiento)',
+      'nacimiento'                 => 'u.fecha_nacimiento',
+      'telefonos'                  => 'telefonos',
+      'rut_dni_fmt'                => 'rut_dni_fmt',
+      'ubicacion'                  => 'ubicacion',
+      'direccion'                  => 'direccion',
+      'iglesia_ministerio'         => 'u.iglesia_ministerio',
+      'profesion_oficio_estudio'   => 'u.profesion_oficio_estudio'
+      ];
+
+      /* ───── columna (o expresión) a ordenar ───── */
+      switch ($sort) {
+      case 'dia_mes':          // «Día-Mes»
+          /* mes y día por separado, ambos con la misma dirección */
+          $orderBy = "MONTH(u.fecha_nacimiento) $dir,
+                      DAY(u.fecha_nacimiento)   $dir";
+          $dir = '';          // ← ya está incluido
+          break;
+
+      case 'rut_dni_fmt':      // «RUT / DNI»
+          /* quita todo lo que no sea dígito y ordénalo numéricamente        */
+          /* MySQL 8  → REGEXP_REPLACE;   MySQL 5  → REPLACE encadenados     */
+          $orderByClean = "CAST(REGEXP_REPLACE(u.rut_dni,'[^0-9]','') AS UNSIGNED)";
+          $orderBy = "$orderByClean $dir";
+          $dir = '';          // dirección incluida
+          break;
+
+      default:
+          if (isset($orderMap[$sort])) {
+              $orderBy = $orderMap[$sort];          // expresión mapeada
+          } elseif (preg_match('/^[a-z_]+$/i', $sort)) {
+              $orderBy = $sort;                     // alias simple
+          } else {
+              $orderBy = 'nombre';                  // fallback seguro
+          }
+      }
+
       /* util para RUT chileno                                                */
       $fmt_rut = function($rut){
          if(!preg_match('/^\d{7,9}$/',$rut)) return $rut;
@@ -165,6 +208,7 @@ try {
                   DATE_FORMAT(u.fecha_nacimiento,'%d-%m-%Y')  AS nacimiento,
                   DATE_FORMAT(u.fecha_nacimiento,'%d-%m')     AS dia_mes,
                   TIMESTAMPDIFF(YEAR,u.fecha_nacimiento,:hoy) AS edad,
+                  u.id_pais                                   AS id_pais,
                   u.rut_dni                                   AS rut_fmt,
                   GROUP_CONCAT(DISTINCT CONCAT(t.telefono,' (',dt.nombre_descripcion_telefono,')')
                               ORDER BY t.es_principal DESC SEPARATOR ' / ')    AS telefonos,
@@ -213,8 +257,8 @@ try {
       $totalRows = (int)$tot->fetchColumn();
 
       $sql .= " GROUP BY u.id_usuario
-                ORDER BY $sort $dir
-                LIMIT :off,:per";
+              ORDER BY $orderBy $dir
+              LIMIT :off,:per";
 
       $st=$pdo->prepare($sql);
       $st->bindValue(':hoy',$hoy);
@@ -223,9 +267,18 @@ try {
       if($team!=0 && $team!=='ret') $st->bindValue(':team',$team,PDO::PARAM_INT);
       $st->execute();
       $rows=$st->fetchAll(PDO::FETCH_ASSOC);
-      foreach($rows as &$r){           // RUT visual
-        $r['rut_dni_fmt']=$fmt_rut($r['rut_fmt']);
-        unset($r['rut_fmt']);
+      foreach ($rows as &$r) {
+
+        /* Chile (id_pais = 1) → 12.345.678-K
+        Otros          → solo dígitos                           */
+        if ($r['id_pais'] == 1) {
+            $r['rut_dni_fmt'] = $fmt_rut($r['rut_fmt']);
+        } else {
+            $r['rut_dni_fmt'] = preg_replace('/\D/', '', $r['rut_fmt']);
+        }
+
+        /* limpia columnas internas que no viajan al front */
+        unset($r['rut_fmt'], $r['id_pais']);
       }
       echo json_encode([
             'ok'=>true,
@@ -251,13 +304,22 @@ try {
 
   /* ════════════════ 3) ROLES POR EQUIPO ════════════════ */
   case 'GET:roles': {
-      $eq=$_GET['eq']??'null';
-      $st=$pdo->prepare("SELECT id_rol AS id,nombre_rol AS nom
-                           FROM roles
-                          WHERE ".($eq==='null'?'id_equipo_proyecto IS NULL':'id_equipo_proyecto=:eq')."
-                          ORDER BY nom");
-      if($eq!=='null') $st->bindValue(':eq',$eq,PDO::PARAM_INT);
-      $st->execute();
+      $eq = $_GET['eq'] ?? null;
+      if ($eq === 'null') {
+          $sql = "SELECT id_rol AS id, nombre_rol AS nom
+                  FROM roles
+                  WHERE id_equipo_proyecto IS NULL
+              ORDER BY nombre_rol";
+          $st  = $pdo->query($sql);
+      } else {
+          $sql = "SELECT id_rol AS id, nombre_rol AS nom
+                  FROM roles
+                  WHERE id_equipo_proyecto IS NULL
+                      OR id_equipo_proyecto = :eq
+              ORDER BY nombre_rol";
+          $st  = $pdo->prepare($sql);
+          $st->execute([':eq'=>$eq]);
+      }
       echo json_encode(['ok'=>true,'roles'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
       break;
   }
@@ -377,7 +439,8 @@ try {
                       LIMIT 1 OFFSET 1
               )
           LEFT JOIN periodos p3  ON p3.id_periodo = le3.id_periodo
-         WHERE iep.id_usuario = :id";
+         WHERE iep.id_usuario = :id
+           AND iep.habilitado = 1";
 
     $stmt = $pdo->prepare($sqlEquip);
     $stmt->execute([':id' => $id]);
@@ -386,9 +449,10 @@ try {
     /* ---- equipos actuales (para edición) ---- */
     $equipNowStmt = $pdo->prepare("
         SELECT id_equipo_proyecto AS eq,
-                id_rol             AS rol
-          FROM integrantes_equipos_proyectos
-          WHERE id_usuario = ?");
+            id_rol             AS rol
+        FROM integrantes_equipos_proyectos
+        WHERE id_usuario = ?
+        AND habilitado = 1");
     $equipNowStmt->execute([$id]);
     $equip_now = $equipNowStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -421,6 +485,7 @@ try {
        JOIN periodos p        ON p.id_periodo = le.id_periodo
       WHERE iep.id_usuario = :id
         AND p.nombre_periodo RLIKE CONCAT('^', :yr, '-T[123]$')
+        AND iep.habilitado = 1
       ORDER BY ep.nombre_equipo_proyecto, p.nombre_periodo";
    $st=$pdo->prepare($sql);
    $st->execute([':id'=>$id,':yr'=>$yr]);
@@ -459,6 +524,19 @@ try {
       $id=(int)($_POST['id']??0);
       if(!$id) throw new Exception('id');
       $pdo->beginTransaction();
+
+      /* ---- helper local ---- */
+      function insertar_historial(PDO $pdo,int $iepId): void {
+          $per = $pdo->query("SELECT get_period_id(CURDATE())")->fetchColumn();
+          $pdo->prepare("INSERT INTO historial_estados_actividad
+                  (id_integrante_equipo_proyecto,id_tipo_estado_actividad,id_periodo,fecha_estado_actividad)
+                  VALUES (:iep,5,:per,CURDATE())
+              ON DUPLICATE KEY UPDATE
+                  id_tipo_estado_actividad = 5,
+                  fecha_estado_actividad   = CURDATE()")
+              ->execute([':iep'=>$iepId,':per'=>$per]);
+      }
+
         /* 1) Datos personales -------------------------------------------------- */
         $sql = "UPDATE usuarios SET
                 nombres                     = :nom,
@@ -489,11 +567,26 @@ try {
             ':pro' => $_POST['profesion_oficio_estudio']?? ''
         ]);
 
-        /* 1-bis) ¿quitar foto de perfil? -------------------------------------- */
+        /* 1-bis) ¿quitar foto de perfil? */
         if (!empty($_POST['del_foto']) && $_POST['del_foto']==='1') {
+
+            // ① localiza la ruta guardada
+            $old = $pdo->prepare("SELECT foto_perfil
+                                    FROM usuarios
+                                WHERE id_usuario = :id");
+            $old->execute([':id'=>$id]);
+            $path = $old->fetchColumn();
+
+            // ② borra el archivo físico (si existe y está dentro de /uploads/fotos/)
+            if ($path && file_exists($path) && str_starts_with($path,'uploads/fotos/')) {
+                @unlink($path);
+            }
+
+            // ③ vacía la columna
             $pdo->prepare("UPDATE usuarios
                             SET foto_perfil = NULL
-                            WHERE id_usuario = :id")->execute([':id'=>$id]);
+                        WHERE id_usuario = :id")
+                ->execute([':id'=>$id]);
         }
 
         /* 2) Correo electrónico ------------------------------------------------ */
@@ -510,32 +603,74 @@ try {
 
         for ($i = 0; $i < 3; $i++) {
             if (empty($_POST["tel$i"])) continue;
+
+            // el front end ya normaliza a +E.164
+            $tel = preg_replace('/\s+/', '', $_POST["tel$i"]);
+
+            // (opcional) validación ultra-básica: debe empezar con “+” y 8-15 dígitos
+            if (!preg_match('/^\+\d{8,15}$/', $tel)) {
+                throw new Exception("Teléfono $i con formato inválido");
+            }
+
             $pdo->prepare("INSERT INTO telefonos
-                (id_usuario, telefono, es_principal, id_descripcion_telefono)
-                VALUES (:id, :tel, :pri, :des)")
+                    (id_usuario, telefono, es_principal, id_descripcion_telefono)
+                    VALUES (:id, :tel, :pri, :des)")
                 ->execute([
                     ':id'  => $id,
-                    ':tel' => $_POST["tel$i"],
+                    ':tel' => $tel,                    //  ← lo guardamos tal cual
                     ':pri' => $i === 0 ? 1 : 0,
                     ':des' => $_POST["tel_desc$i"] ?: null
                 ]);
         }
 
-        /* 4) Equipos / proyectos nuevos --------------------------------------- */
+        /* 4) Equipos / proyectos */
         if (!empty($_POST['equip'])) {
-            $arr = json_decode($_POST['equip'], true);
-            foreach ($arr as $row) {
-                if (empty($row['eq']) || empty($row['rol'])) continue;
-                $pdo->prepare("INSERT IGNORE INTO integrantes_equipos_proyectos
-                    (id_usuario, id_equipo_proyecto, id_rol)
-                    VALUES (:u, :e, :r)")
-                    ->execute([
-                        ':u' => $id,
-                        ':e' => $row['eq'],
-                        ':r' => $row['rol']
-                    ]);
+            $rows = json_decode($_POST['equip'], true) ?: [];
+            foreach ($rows as $r) {
+                $eq  = (int)$r['eq'];   $rol = (int)$r['rol'];
+                if (!$eq || !$rol) continue;
+
+                /* ¿ya existe vínculo? */
+                $st  = $pdo->prepare("
+                    SELECT id_integrante_equipo_proyecto   AS iep,
+                        habilitado
+                    FROM integrantes_equipos_proyectos
+                    WHERE id_usuario = :u AND id_equipo_proyecto = :e
+                    LIMIT 1");
+                $st->execute([':u'=>$id, ':e'=>$eq]);
+                $ex  = $st->fetch(PDO::FETCH_ASSOC);
+
+                if ($ex) {                               // — ya existía —
+                    $iepId = $ex['iep'];
+
+                    // si estaba deshabilitado ⇒ lo re-habilitamos
+                    if (!$ex['habilitado']) {
+                        $pdo->prepare("UPDATE integrantes_equipos_proyectos
+                                        SET habilitado = 1,
+                                            id_rol     = :r
+                                        WHERE id_integrante_equipo_proyecto = :iep")
+                            ->execute([':r'=>$rol, ':iep'=>$iepId]);
+
+                        insertar_historial($pdo,$iepId); // ← helper (abajo)
+                    } else {
+                        // sólo cambio de rol
+                        $pdo->prepare("UPDATE integrantes_equipos_proyectos
+                                        SET id_rol = :r
+                                        WHERE id_integrante_equipo_proyecto = :iep")
+                            ->execute([':r'=>$rol, ':iep'=>$iepId]);
+                    }
+                } else {                                // — totalmente nuevo —
+                    $pdo->prepare("INSERT INTO integrantes_equipos_proyectos
+                        (id_usuario,id_equipo_proyecto,id_rol)
+                        VALUES (:u,:e,:r)")
+                        ->execute([':u'=>$id,':e'=>$eq,':r'=>$rol]);
+
+                    $iepId = $pdo->lastInsertId();
+                    insertar_historial($pdo,$iepId);
+                }
             }
         }
+
       $pdo->commit();
       echo json_encode(['ok'=>true]);
       break;
@@ -554,7 +689,8 @@ try {
          JOIN   integrantes_equipos_proyectos iep
                       ON iep.id_integrante_equipo_proyecto = le.id_integrante_equipo_proyecto
         WHERE  iep.id_usuario = :id
-          AND p.nombre_periodo RLIKE '-T[123]$'";
+          AND p.nombre_periodo RLIKE '-T[123]$'
+          AND iep.habilitado = 1";
         
     $st = $pdo->prepare($sql);
     $st->execute([':id'=>$id]);
