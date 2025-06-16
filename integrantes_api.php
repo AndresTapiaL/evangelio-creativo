@@ -110,7 +110,10 @@ try {
       'ubicacion'                  => 'ubicacion',
       'direccion'                  => 'direccion',
       'iglesia_ministerio'         => 'u.iglesia_ministerio',
-      'profesion_oficio_estudio'   => 'u.profesion_oficio_estudio'
+      'profesion_oficio_estudio'   => 'u.profesion_oficio_estudio',
+      'fecha_retiro_fmt'           => 'r.fecha_retiro',
+      'ex_equipo'                  => 'r.ex_equipo',
+      'es_difunto'                 => 'r.es_difunto'
       ];
 
       /* ───── columna (o expresión) a ordenar ───── */
@@ -199,7 +202,19 @@ try {
           ";
           /* $joinEstados queda vacío */
       }
-      /* ——— query base ——— */
+
+      /* ===== join exclusivos para Retirados  ===== */
+      $selectRet = $joinRet = '';
+      if ($team === 'ret') {
+          $selectRet = "
+              r.razon,
+              r.es_difunto,
+              r.ex_equipo,
+              DATE_FORMAT(r.fecha_retiro,'%d-%m-%Y') AS fecha_retiro_fmt,
+          ";
+          $joinRet = "JOIN retirados r ON r.id_usuario = u.id_usuario";
+      }
+
       /* ——— query base ——— */
       $sql = "
               SELECT
@@ -220,9 +235,11 @@ try {
                   DATE_FORMAT(u.fecha_registro,'%d-%m-%Y')                       AS ingreso,
                   TIMESTAMPDIFF(MONTH ,u.ultima_actualizacion,:hoy)              AS meses_desde_update,
                   DATE_FORMAT(u.ultima_actualizacion,'%d-%m-%Y')                 AS ultima_act,
+                  {$selectRet}
                   $selectEstados
                   iep.id_integrante_equipo_proyecto
               FROM usuarios u
+              {$joinRet}
               LEFT JOIN paises p   ON p.id_pais=u.id_pais
               LEFT JOIN ciudad_comuna cc ON cc.id_ciudad_comuna=u.id_ciudad_comuna
               LEFT JOIN region_estado re ON re.id_region_estado=u.id_region_estado
@@ -279,6 +296,12 @@ try {
 
         /* limpia columnas internas que no viajan al front */
         unset($r['rut_fmt'], $r['id_pais']);
+
+        if ($team === 'ret') {
+            $r['es_difunto']   = $r['es_difunto'] ? 'Sí' : 'No';
+            $r['fecha_retiro'] = $r['fecha_retiro_fmt'];
+            unset($r['fecha_retiro_fmt']);     // ya no se envía al front
+        }
       }
       echo json_encode([
             'ok'=>true,
@@ -445,6 +468,23 @@ try {
     $stmt = $pdo->prepare($sqlEquip);
     $stmt->execute([':id' => $id]);
     $equip = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $esRetirado = $pdo->query("SELECT 1 FROM retirados WHERE id_usuario=$id")->fetchColumn();
+    if ($esRetirado){
+        $ret = $pdo->query("
+            SELECT razon, es_difunto, ex_equipo, fecha_retiro
+            FROM retirados
+            WHERE id_usuario = $id
+        ")->fetch(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'ok'      => true,
+            'user'    => $u,
+            'ret'     => $ret,
+            'equipos' => []        // ← evita TypeError en el front-end
+        ]);
+        return;
+    }
 
     /* ---- equipos actuales (para edición) ---- */
     $equipNowStmt = $pdo->prepare("
@@ -697,6 +737,183 @@ try {
     $row = $st->fetch(PDO::FETCH_ASSOC) ?: ['anio_min'=>null,'anio_max'=>null];
 
     echo json_encode(['ok'=>true]+$row);
+    break;
+  }
+
+    /* ════════════════ 7) ELIMINAR VÍNCULO / RETIRO ════════════════ */
+  case 'POST:eliminar': {
+    $iep  = (int)($_POST['iep']   ?? 0);
+    $forceret = (int)($_POST['force'] ?? 0);          // 1 = retiro confirmado
+    $motivo   = trim($_POST['motivo'] ?? '');
+    $difunto  = (int)($_POST['difunto'] ?? 0);
+
+    if (!$iep) throw new Exception('iep');
+
+    $pdo->beginTransaction();
+
+    /* 1)  datos del vínculo */
+    $q = $pdo->prepare("SELECT iep.id_usuario,
+                                iep.id_equipo_proyecto,
+                                ep.nombre_equipo_proyecto,
+                                ep.es_equipo
+                            FROM integrantes_equipos_proyectos iep
+                            JOIN equipos_proyectos ep
+                            ON ep.id_equipo_proyecto = iep.id_equipo_proyecto
+                        WHERE iep.id_integrante_equipo_proyecto = ?");
+    $q->execute([$iep]);
+    $row = $q->fetch(PDO::FETCH_ASSOC);
+    if (!$row) throw new Exception('vinculo');
+
+    $uid   = $row['id_usuario'];
+    $eqNom = $row['nombre_equipo_proyecto'];
+
+    /* 2) ¿tiene OTRO equipo real (es_equipo=1) habilitado? */
+    $q2 = $pdo->prepare("
+        SELECT COUNT(*) FROM integrantes_equipos_proyectos iep
+        JOIN equipos_proyectos ep ON ep.id_equipo_proyecto = iep.id_equipo_proyecto
+        WHERE iep.id_usuario = :u
+            AND iep.habilitado = 1
+            AND ep.es_equipo  = 1
+            AND iep.id_integrante_equipo_proyecto <> :iep");
+    $q2->execute([':u'=>$uid,':iep'=>$iep]);
+    $otros = (int)$q2->fetchColumn();
+
+    /* periodo actual (crea si no existe) */
+    $per = $pdo->query("SELECT get_period_id(CURDATE())")->fetchColumn();
+
+    /* helper para insertar/actualizar historial */
+    $hist = $pdo->prepare("
+            INSERT INTO historial_estados_actividad
+                (id_integrante_equipo_proyecto,id_tipo_estado_actividad,id_periodo,fecha_estado_actividad)
+            VALUES (?,?,?,CURDATE())
+            ON DUPLICATE KEY UPDATE
+                id_tipo_estado_actividad = VALUES(id_tipo_estado_actividad),
+                fecha_estado_actividad   = CURDATE()");
+
+    /* ─────────── CASO A: aún le quedan otros equipos ─────────── */
+    if ($otros > 0) {
+            $pdo->prepare("UPDATE integrantes_equipos_proyectos
+                            SET habilitado = 0
+                            WHERE id_integrante_equipo_proyecto = ?")
+                ->execute([$iep]);
+            $hist->execute([$iep, 6, $per]);       // 6 = Retirado / inactivo
+        $pdo->commit();
+        echo json_encode(['ok'=>true]);
+        break;
+    }
+
+    /* ─────────── CASO B: último equipo ─────────── */
+    if (!$forceret) {
+        /* →  el front mostrará modal confirmación */
+        $un = $pdo->query("SELECT CONCAT_WS(' ',nombres,apellido_paterno,apellido_materno)
+                            FROM usuarios WHERE id_usuario = $uid")->fetchColumn();
+
+        $pdo->rollBack();
+
+        echo json_encode([
+            'ok'=>false,
+            'needRetiro'=>1,
+            'usuario'=>$un,
+            'eq'=>$eqNom
+        ]);
+        break;
+    }
+
+    /*  B-2  “Continuar” → retiro definitivo  */
+
+        /* 3.1  deshabilita TODOS los vínculos */
+        $ips = $pdo->prepare("
+            SELECT id_integrante_equipo_proyecto
+            FROM integrantes_equipos_proyectos
+            WHERE id_usuario = :u AND habilitado = 1");
+        $ips->execute([':u'=>$uid]);
+        while ($r = $ips->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->prepare("UPDATE integrantes_equipos_proyectos
+                            SET habilitado = 0
+                        WHERE id_integrante_equipo_proyecto = ?")
+                ->execute([$r['id_integrante_equipo_proyecto']]);
+            $hist->execute([$r['id_integrante_equipo_proyecto'],6,$per]);
+        }
+
+        /* 3.2  inserta (o actualiza) en `retirados` */
+        $pdo->prepare("
+            INSERT INTO retirados
+                (id_usuario,fecha_retiro,razon,ex_equipo,es_difunto)
+            VALUES (:u,CURDATE(),:raz,:ex,:dif)
+            ON DUPLICATE KEY UPDATE
+                fecha_retiro = VALUES(fecha_retiro),
+                razon        = VALUES(razon),
+                ex_equipo    = VALUES(ex_equipo),
+                es_difunto   = VALUES(es_difunto)")
+            ->execute([
+                ':u'=>$uid,
+                ':raz'=>$motivo ?: null,
+                ':ex'=>$eqNom,
+                ':dif'=>$difunto
+            ]);
+
+    $pdo->commit();
+    echo json_encode(['ok'=>true,'retirado'=>1]);
+    break;
+  }
+
+  case 'POST:reingresar': {
+    $id     = (int)($_POST['id_usuario']??0);
+    $eq     = (int)($_POST['id_equipo']??0);
+    $rol    = (int)($_POST['id_rol']??0);
+    if(!$id||!$eq||!$rol) throw new Exception('params');
+
+    $pdo->beginTransaction();
+
+    /* a)  ¿existe vínculo deshabilitado? */
+    $st=$pdo->prepare("SELECT id_integrante_equipo_proyecto
+                            FROM integrantes_equipos_proyectos
+                        WHERE id_usuario=:u AND id_equipo_proyecto=:e
+                        LIMIT 1");
+    $st->execute([':u'=>$id,':e'=>$eq]);
+    $iep = $st->fetchColumn();
+
+    if($iep){
+        /* rehabi­lita y cambia rol */
+        $pdo->prepare("UPDATE integrantes_equipos_proyectos
+                            SET habilitado=1, id_rol=:r
+                        WHERE id_integrante_equipo_proyecto=:iep")
+            ->execute([':r'=>$rol,':iep'=>$iep]);
+    }else{
+        $pdo->prepare("INSERT INTO integrantes_equipos_proyectos
+                        (id_usuario,id_equipo_proyecto,id_rol,habilitado)
+                        VALUES (:u,:e,:r,1)")
+            ->execute([':u'=>$id,':e'=>$eq,':r'=>$rol]);
+        $iep = $pdo->lastInsertId();
+    }
+
+    /* b)  inserta historial estado “5 = Nuevo” */
+    $per = $pdo->query("SELECT get_period_id(CURDATE())")->fetchColumn();
+    $pdo->prepare("INSERT INTO historial_estados_actividad
+            (id_integrante_equipo_proyecto,id_tipo_estado_actividad,id_periodo,fecha_estado_actividad)
+            VALUES (:iep,5,:per,CURDATE())
+            ON DUPLICATE KEY UPDATE
+                id_tipo_estado_actividad=5,
+                fecha_estado_actividad = CURDATE()")
+        ->execute([':iep'=>$iep,':per'=>$per]);
+
+    /* c)  fecha_registro ahora */
+    $pdo->prepare("UPDATE usuarios SET fecha_registro=CURDATE()
+                        WHERE id_usuario=:u")->execute([':u'=>$id]);
+
+    /* d)  remueve de retirados */
+    $pdo->prepare("DELETE FROM retirados WHERE id_usuario=:u")->execute([':u'=>$id]);
+
+    $pdo->commit();
+    echo json_encode(['ok'=>true]);
+    break;
+  }
+
+  case 'POST:delete_user': {
+    $id=(int)($_POST['id_usuario']??0);
+    if(!$id) throw new Exception('id');
+    $pdo->prepare("DELETE FROM usuarios WHERE id_usuario=?")->execute([$id]);
+    echo json_encode(['ok'=>true]);
     break;
   }
 

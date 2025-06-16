@@ -10,6 +10,10 @@ const API = 'integrantes_api.php';          // ← punto único de entrada
 const $  = sel => document.querySelector(sel);
 const $$ = sel => document.querySelectorAll(sel);
 
+const overlay   = document.getElementById('overlay');
+const spinOn  = ()=> overlay.classList.remove('hidden');
+const spinOff = ()=> overlay.classList.add('hidden');
+
 /*  👉  promesas que indica cada input cuando termina de cargar utils.js */
 let phoneInitPromises = [];
 
@@ -28,6 +32,53 @@ const hide = el =>{
 };
 
 const DEFAULT_PHOTO = 'uploads/fotos/default.png';
+
+/* ========= TOAST ligero (sin librerías externas) ========= */
+function toast (msg, ms = 3000){
+  const box = document.createElement('div');
+  box.textContent = msg;
+  Object.assign(box.style,{
+      position:'fixed',top:'20px',right:'20px',zIndex:2000,
+      background:'#5562ff',color:'#fff',padding:'10px 14px',
+      borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.15)',
+      font:'500 14px/1 Poppins,sans-serif',opacity:0,
+      transition:'opacity .25s'
+  });
+  document.body.appendChild(box);
+  requestAnimationFrame(()=> box.style.opacity = 1);
+  setTimeout(()=>{
+      box.style.opacity = 0;
+      box.addEventListener('transitionend',()=> box.remove());
+  },ms);
+}
+
+async function fetchJSON(url, opts = {}, timeout = 30000){       // 30 s
+  const ctrl = new AbortController();
+  const tId  = setTimeout(()=>ctrl.abort(), timeout);
+  try{
+    spinOn();
+    const res = await fetch(url, {...opts, signal: ctrl.signal});
+    const j   = await res.json();
+    return j;
+  }catch(err){
+    if(err.name === 'AbortError')
+      throw new Error('Timeout');
+    throw err;
+  }finally{
+    clearTimeout(tId);
+    spinOff();
+  }
+}
+
+function handleError (err){
+  if (err.message === 'Timeout'){
+      toast('El servidor está ocupado. Intenta de nuevo en un momento.');
+  } else if (/1205/.test(err.message)){          // ER_LOCK_WAIT_TIMEOUT
+      toast('Otro usuario está actualizando este registro. Prueba más tarde.');
+  } else {
+      toast('Error: ' + err.message);
+  }
+}
 
 /* ------------------------------------------------ catálogo de estados */
 let C_ESTADOS = [];
@@ -213,12 +264,26 @@ function refreshTable () {
     /* ─────────────–– fila final ───────────── */
     let fila = `<tr>${tdCols}`;      // columnas “normales”
     if (showStates) fila += tdSel;   // solo si corresponde mostrar estados
-    fila += `
-        <td>
-          <button class="btn-det"  data-id="${r.id_usuario}">👁️</button>
-          <button class="btn-edit" data-id="${r.id_usuario}">✏️</button>
-        </td>
-      </tr>`;
+    let acciones = `
+      <button class="btn-det"  data-id="${r.id_usuario}">👁️</button>
+      <button class="btn-edit" data-id="${r.id_usuario}">✏️</button>`;
+
+    if (TEAM==='ret'){
+      acciones += `
+        <button class="btn-rein" data-id="${r.id_usuario}">🡒 Reingresar</button>
+        <button class="btn-delusr" data-id="${r.id_usuario}">🗑️ Borrar</button>`;
+    }
+
+    if (TEAM !== '0' && TEAM !== 'ret') {         // solo en equipos/proyectos reales
+      acciones +=
+        `<button class="btn-del-eq"
+                title="Eliminar de este equipo/proyecto"
+                data-iep="${r.id_integrante_equipo_proyecto}"
+                data-uname="${r.nombre}"
+        >🗑️</button>`;
+    }
+
+    fila += `<td class="sticky-right">${acciones}</td></tr>`;
 
     return fila;
   }).join('');
@@ -227,6 +292,9 @@ function refreshTable () {
   $$('.sel-estado').forEach(s => s.onchange = updateEstado);
   $$('.btn-det')    .forEach(b => b.onclick = openDetalle);
   $$('.btn-edit')   .forEach(b => b.onclick = openEdit);
+  $$('.btn-del-eq').forEach(b => b.onclick = delVinculo);
+  $$('.btn-rein').forEach(b => b.onclick = openReingreso);
+  $$('.btn-delusr').forEach(b => b.onclick = eliminarDef);
 }
 
 /* ─────────────────── paginador numérico ─────────────────── */
@@ -271,17 +339,24 @@ function selHTML (val, iep, perid) {
 
 /* actualizar estado inline */
 async function updateEstado (e) {
-  /* si el usuario deja ‘---’ no hacemos nada */
-  if (!e.target.value) return;
+  if (!e.target.value) return;                 // “---”  →  no hacer nada
 
   const fd = new FormData();
-  fd.append('accion',   'estado');
-  fd.append('id_iep',   e.target.dataset.iep);
+  fd.append('accion',    'estado');
+  fd.append('id_iep',    e.target.dataset.iep);
   fd.append('id_estado', e.target.value);
   fd.append('id_periodo', e.target.dataset.periodo || '');
 
-  const j = await (await fetch(API, { method: 'POST', body: fd })).json();
-  if (!j.ok) alert(j.error);
+  try{
+      const j = await fetchJSON(API,{method:'POST',body:fd});
+      if (j.ok){
+          toast('Estado guardado ✓');
+      }else{
+          toast(j.error || 'Error inesperado');
+      }
+  }catch(err){
+      handleError(err);
+  }
 }
 
 /* ─── Etiquetas legibles de los 3 últimos periodos ─── */
@@ -314,7 +389,10 @@ const COLS = [
   { key:'iglesia_ministerio',     label:'Iglesia / Ministerio',     sort:'iglesia_ministerio'},
   { key:'profesion_oficio_estudio',label:'Profesión / Oficio / Estudio', sort:'profesion_oficio_estudio'},
   { key:'ingreso',                label:'Fecha de ingreso',         sort:'ingreso' },
-  { key:'ultima_act',             label:'Última actualización',     sort:'ultima_act'}
+  { key:'ultima_act',             label:'Última actualización',     sort:'ultima_act'},
+  { key:'fecha_retiro', label:'Fecha retiro', sort:'fecha_retiro_fmt' },
+  { key:'ex_equipo',    label:'Ex equipo',    sort:'ex_equipo'       },
+  { key:'es_difunto',   label:'¿Difunto?',    sort:'es_difunto'      }
 ];
 
 function buildColMenu () {
@@ -387,6 +465,61 @@ async function loadEstadosYear(idUsuario, anio) {
 const DESC_TEL = {1:'Solo llamadas',2:'Solo WhatsApp',3:'Llamadas y WhatsApp',4:'# Emergencia'};
 const descNom = id => DESC_TEL[id] || '';
 
+async function delVinculo (ev) {
+  const iep = ev.currentTarget.dataset.iep;
+  const uname = ev.currentTarget.dataset.uname;
+
+  if (!confirm(`¿Eliminar a ${uname} de este equipo/proyecto?`)) return;
+
+  const fd = new FormData();
+  fd.append('accion', 'eliminar');
+  fd.append('iep', iep);
+
+  try{
+      const j = await fetchJSON(API,{method:'POST',body:fd});
+      if (j.ok){
+          toast('Integrante eliminado del equipo ✓');
+          selectTeam(TEAM, $('#equipos-list li.sel'), PAGE);
+      }else if (j.needRetiro){
+          showRetiroModal(iep, j.usuario, j.eq);
+      }else{
+          toast(j.error || 'Error inesperado');
+      }
+  }catch(err){
+      handleError(err);
+  }
+}
+
+function showRetiroModal (iep, nombre, exEq) {
+  $('#ret-adv').innerHTML =
+      `<b>${nombre}</b> ya no pertenece a ningún otro equipo. `
+    + `Si continúas quedará retirado de Evangelio Creativo.`;
+  $('#ret-iep').value = iep;
+  $('#modal-ret').classList.add('show');
+}
+
+$('#ret-close').onclick = ()=> hide($('#modal-ret'));
+$('#ret-cancel').onclick = ()=> hide($('#modal-ret'));
+
+$('#form-ret').onsubmit = async ev =>{
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  fd.append('accion','eliminar');
+
+  try{
+      const j = await fetchJSON(API,{method:'POST',body:fd});
+      if (j.ok){
+          toast('Integrante retirado ✓');
+          hide($('#modal-ret'));
+          selectTeam(TEAM, $('#equipos-list li.sel'), PAGE);
+      }else{
+          toast(j.error || 'Error inesperado');
+      }
+  }catch(err){
+      handleError(err);
+  }
+};
+
 async function openDetalle (e) {
   const id = e.currentTarget.dataset.id;
   const j  = await (await fetch(`${API}?accion=detalles&id=` + id)).json();
@@ -429,17 +562,42 @@ async function openDetalle (e) {
           .then(j=>C_ESTADOS = j.estados);
   }
 
-  /* tabla de estados últimos periodos */
-  const tb = $('#det-tab-estados tbody');
-  tb.innerHTML = j.equipos.map(x => `
-    <tr>
-      <td>${x.nombre_equipo_proyecto} (${x.nombre_rol})</td>
-      <td>${estadoNom(x.est3)}</td>
-      <td>${estadoNom(x.est2)}</td>
-      <td>${estadoNom(x.est1)}</td>
-    </tr>`).join('');
+  if (TEAM==='ret'){
+    $('#estados-wrap').style.display='none';
+
+    const ret = j.ret;
+    $('#det-razon').textContent      = ret.razon || '-';
+    $('#det-fallecido').textContent  = ret.es_difunto ? 'Sí' : 'No';
+    $('#det-exeq').textContent       = ret.ex_equipo || '-';
+    const [y,m,d] = ret.fecha_retiro.split('-');
+    $('#det-fretiro').textContent = `${d}-${m}-${y}`;
+
+    $('#retired-extra').style.display='block';
+  }else{
+    $('#retired-extra').style.display='none';
+  }
+
+  /* ── Tabla de estados (tres últimos periodos) ── */
+  const tb      = $('#det-tab-estados tbody');
+  const filasEq = Array.isArray(j.equipos) ? j.equipos : [];
+
+  if (filasEq.length) {
+      tb.innerHTML = filasEq.map(x => `
+          <tr>
+            <td>${x.nombre_equipo_proyecto} (${x.nombre_rol})</td>
+            <td>${estadoNom(x.est3)}</td>
+            <td>${estadoNom(x.est2)}</td>
+            <td>${estadoNom(x.est1)}</td>
+          </tr>`).join('');
+      $('#estados-wrap').style.display = 'block';
+  } else {
+      tb.innerHTML =
+          '<tr><td colspan="4" style="padding:.5rem">Sin registros</td></tr>';
+      $('#estados-wrap').style.display = 'none';
+  }
 
   CURR_YEAR = new Date().getFullYear();          // resetea el valor global
+
   if (!await loadEstadosYear(id, CURR_YEAR)) {
       $('#det-tab-estados tbody').innerHTML =
           '<tr><td colspan="4" style="padding:.5rem">Sin registros</td></tr>';
@@ -746,6 +904,61 @@ async function addEqRow () {
   $('#eq-container').appendChild(row);
 }
 
+async function openReingreso(e){
+   const uid = e.currentTarget.dataset.id;
+   $('#modal-rein').dataset.uid = uid;
+
+   /* carga combos */
+   const d  = await fetchJSON(API+'?accion=equipos');
+   $('#rein-eq').innerHTML = d.equipos
+        .filter(x=>x.id && x.id!=='ret')
+        .map(x=>`<option value="${x.id}">${x.nombre}</option>`).join('');
+   $('#rein-rol').innerHTML='';         // vacía primero
+   $('#rein-eq').onchange = () =>
+        loadRolesInto($('#rein-rol'), $('#rein-eq').value,'',false);
+
+   $('#rein-eq').dispatchEvent(new Event('change'));
+   show($('#modal-rein'));
+}
+$('#rein-close').onclick=$('#rein-cancel').onclick=()=>hide($('#modal-rein'));
+
+$('#rein-ok').onclick = async ()=>{
+   const uid  = $('#modal-rein').dataset.uid;
+   const eq   = $('#rein-eq').value;
+   const rol  = $('#rein-rol').value;
+   if(!eq||!rol) return alert('Debes escoger equipo y rol');
+
+   const fd = new FormData();
+   fd.append('accion','reingresar');
+   fd.append('id_usuario',uid);
+   fd.append('id_equipo',eq);
+   fd.append('id_rol',rol);
+   const j = await fetchJSON(API,{method:'POST',body:fd});
+   if(j.ok){
+       toast('Usuario reingresado ✓');
+       hide($('#modal-rein'));
+       selectTeam('0', $('[data-id="ret"]'), 1);   // refresca Retirados
+   }else toast(j.error||'Error');
+};
+
+let DEL_UID=0;
+function eliminarDef(e){
+   DEL_UID = e.currentTarget.dataset.id;
+   show($('#modal-del'));
+}
+$('#del-close').onclick=$('#del-cancel').onclick=()=>hide($('#modal-del'));
+$('#del-ok').onclick=async()=>{
+   const fd=new FormData();
+   fd.append('accion','delete_user');
+   fd.append('id_usuario',DEL_UID);
+   const j=await fetchJSON(API,{method:'POST',body:fd});
+   if(j.ok){
+     toast('Usuario eliminado');
+     hide($('#modal-del'));
+     selectTeam('ret', $('[data-id="ret"]'), 1);
+   }else toast(j.error||'Error');
+};
+
 async function submitEdit (ev) {
   ev.preventDefault();
 
@@ -763,13 +976,18 @@ async function submitEdit (ev) {
   }).filter(Boolean);
   fd.append('equip', JSON.stringify(arr));
 
-  const j = await (await fetch(API, { method: 'POST', body: fd })).json();
-  if (j.ok) {
-      alert('Guardado ✓');
-      hide($('#modal-edit'));
-      /* recarga tabla */
-      selectTeam(TEAM, $(`#equipos-list li[data-id="${TEAM}"]`), PAGE);
-  } else alert(j.error);
+  try{
+      const j = await fetchJSON(API,{method:'POST',body:fd});
+      if (j.ok){
+          toast('Cambios guardados ✓');
+          hide($('#modal-edit'));
+          selectTeam(TEAM, $(`#equipos-list li[data-id="${TEAM}"]`), PAGE);
+      }else{
+          toast(j.error || 'Error inesperado');
+      }
+  }catch(err){
+      handleError(err);
+  }
 }
 
 /* ------------------------------------------------ helpers */

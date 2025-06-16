@@ -970,33 +970,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
 
 <body>
   <!-- ░░░░ NAV ░░░░ -->
-  <nav>
-    <div class="menu">
-      <a href="home.php">Inicio</a>
-      <a href="eventos.php">Eventos</a>
-      <a href="integrantes.php">Integrantes</a>
-      <a href="asistencia.php">Asistencia</a>
-      <a href="ver_mis_datos.php">Mis datos</a>
-      <?php
-      require_once 'lib_auth.php';
-      $uid = $_SESSION['id_usuario'] ?? 0;
-      if (user_can_use_reports($pdo,$uid)): ?>
-          <a href="reportes.php">Reportes</a>
-      <?php endif; ?>
-      <a href="admision.php">Admisión</a>
-      <a href="#"><i class="fas fa-bell"></i></a>
-    </div>
-    <div class="perfil">
-      <span id="nombre-usuario">
-        <?= htmlspecialchars($navUser['nombres']) ?>
-      </span>
-      <img
-        id="foto-perfil-nav"
-        src="<?= htmlspecialchars($navUser['foto_perfil']) ?>"
-        alt="Foto de <?= htmlspecialchars($navUser['nombres']) ?>">
-      <a href="#" id="logout" title="Cerrar sesión">🚪</a>
-    </div>
-  </nav>
+  <?php require_once 'navegador.php'; ?>
 
   <!-- ░░░░ CONTENIDO PRINCIPAL ░░░░ -->
   <main>

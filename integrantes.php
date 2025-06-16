@@ -262,6 +262,20 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
   th{white-space:nowrap;color:var(--text-muted);font-weight:600;}
   td button{background:none;border:0;cursor:pointer;font-size:1rem}
 
+  /* solo en la tabla grande de la vista principal */
+  #tbl-integrantes thead th.sticky-right{
+    position:sticky;
+    right:0;
+    background:#fff;
+    z-index:3;
+  }
+
+  #tbl-integrantes td:last-child{     /* <── OJO */
+    position:sticky;
+    right:0;
+    background:#fff;
+  }
+
   /* ───────────  BOTONES  ─────────── */
   .btn{padding:.5rem .95rem;border-radius:8px;border:0;font-weight:500;
       background:var(--primary);color:#fff;cursor:pointer;
@@ -400,8 +414,6 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
   #section-table{background:#fff;border-radius:var(--radius);
                 box-shadow:var(--shadow);}
 
-  td:last-child{position:sticky;right:0;background:#fff;}
-
   /* pop-up pegado al botón (sale hacia abajo) */
   #btn-cols .cols-menu{
     position:absolute;
@@ -429,14 +441,6 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
   }
   #btn-cols .cols-menu label:hover{
     background:#f0f3ff;
-  }
-
-  /* misma lógica sticky que los <td> del extremo derecho */
-  thead th.sticky-right{
-    position:sticky;
-    right:0;
-    background:#fff;
-    z-index:3;                 /* para que quede sobre el body */
   }
 
   /* ░░░░ PAGINADOR ░░░░ */
@@ -563,6 +567,23 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
     flex-direction:column;     /* una debajo de otra */
     gap:.6rem;
   }
+
+  .btn-del-eq{margin-left:.25rem}
+
+  /* dentro del <style> ya existente */
+  .overlay{
+    position:fixed;inset:0;display:flex;
+    justify-content:center;align-items:center;
+    background:rgba(255,255,255,.65);z-index:1800;
+    backdrop-filter:blur(2px);transition:opacity .25s;
+  }
+  .overlay.hidden{opacity:0;pointer-events:none}
+  .spinner{
+    width:48px;height:48px;border:4px solid #ccc;
+    border-top-color:var(--primary);border-radius:50%;
+    animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 
   <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
@@ -611,33 +632,7 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
 
 <body>
   <!-- ░░░░ NAV ░░░░ -->
-  <nav>
-    <div class="menu">
-      <a href="home.php">Inicio</a>
-      <a href="eventos.php">Eventos</a>
-      <a href="integrantes.php">Integrantes</a>
-      <a href="asistencia.php">Asistencia</a>
-      <a href="ver_mis_datos.php">Mis datos</a>
-      <?php
-      require_once 'lib_auth.php';
-      $uid = $_SESSION['id_usuario'] ?? 0;
-      if (user_can_use_reports($pdo,$uid)): ?>
-          <a href="reportes.php">Reportes</a>
-      <?php endif; ?>
-      <a href="admision.php">Admisión</a>
-      <a href="#"><i class="fas fa-bell"></i></a>
-    </div>
-    <div class="perfil">
-      <span id="nombre-usuario">
-        <?= htmlspecialchars($user['nombres']) ?>
-      </span>
-      <img
-        id="foto-perfil-nav"
-        src="<?= htmlspecialchars($user['foto_perfil']) ?>"
-        alt="Foto de <?= htmlspecialchars($user['nombres']) ?>">
-      <a href="#" id="logout" title="Cerrar sesión">🚪</a>
-    </div>
-  </nav>
+  <?php require_once 'navegador.php'; ?>
 
   <!-- ░░░░ CONTENIDO PRINCIPAL ░░░░ -->
   <!-- contenedor de DOS columnas -->
@@ -694,6 +689,16 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
           <dt>Teléfonos</dt>         <dd id="det-tels"></dd>
           <dt>Ocupaciones</dt>       <dd id="det-ocup"></dd>
         </dl>
+
+        <div id="retired-extra" style="display:none">
+          <hr>
+          <dl>
+            <dt>Razón retiro</dt><dd id="det-razon"></dd>
+            <dt>Fallecido</dt><dd id="det-fallecido"></dd>
+            <dt>Ex-equipo</dt><dd id="det-exeq"></dd>
+            <dt>Fecha de retiro</dt><dd id="det-fretiro"></dd>
+          </dl>
+        </div>
 
         <!-- Tabla estado periodos -->
         <div id="estados-wrap" style="margin-top:1.5rem">
@@ -839,6 +844,82 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
       </div>
     </div>
 
+    <!-- ░░░░ MODAL ─ RETIRO DEFINITIVO ░░░░ -->
+    <div id="modal-ret" class="modal hidden">
+      <div class="modal-box" style="max-width:480px">
+        <button id="ret-close" class="close">✖</button>
+        <h2 style="margin-bottom:1rem">Retirar integrante</h2>
+
+        <p id="ret-adv"
+          style="background:#fff7d3;color:#735f00;
+                  border:1px solid #e9d98b;border-radius:8px;
+                  padding:.8rem;font-size:.9rem;margin-bottom:1.2rem">
+        </p>
+
+        <form id="form-ret">
+          <input type="hidden" name="iep" id="ret-iep">
+          <input type="hidden" name="force" value="1">
+
+          <label style="display:block;margin-bottom:.9rem">
+            Motivo de retiro<br>
+            <textarea name="motivo" rows="3" required
+                      style="width:100%;padding:.6rem;border-radius:8px;
+                            border:1px solid #d6d9e2;font:inherit"></textarea>
+          </label>
+
+          <label style="display:flex;align-items:center;gap:.6rem;margin-bottom:1.5rem">
+            <span>¿Falleció?</span>
+            <select name="difunto" required>
+              <option value="0">No</option>
+              <option value="1">Sí</option>
+            </select>
+          </label>
+
+          <div style="text-align:right">
+            <button type="button" class="btn-sec" id="ret-cancel">Cancelar</button>
+            <button class="btn-prim">Confirmar retiro</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="modal-del" class="modal hidden">
+      <div class="modal-box" style="max-width:420px">
+        <button class="close" id="del-close">✖</button>
+        <h2>Eliminar usuario</h2>
+        <p style="color:#a94442;background:#fdf2f2;padding:.8rem;border:1px solid #f5c6cb">
+          ¡Advertencia!  Se borrará toda la información del usuario definitivamente y podrían cambiar los porcentajes de reportes.
+        </p>
+        <div style="text-align:right;margin-top:1rem">
+          <button class="btn-sec" id="del-cancel">Cancelar</button>
+          <button class="btn-prim" id="del-ok">Eliminar definitivamente</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay" class="overlay hidden">
+      <div class="spinner"></div>
+    </div>
+
+    <div id="modal-rein" class="modal hidden">
+      <div class="modal-box" style="max-width:420px">
+        <button class="close" id="rein-close">✖</button>
+        <h2>Reingresar usuario</h2>
+        <p>¿Seguro que quieres reingresar a este usuario?</p>
+
+        <label>Equipo / Proyecto
+          <select id="rein-eq" required></select>
+        </label>
+        <label>Rol
+          <select id="rein-rol" required></select>
+        </label>
+
+        <div style="text-align:right;margin-top:1rem">
+          <button class="btn-sec" id="rein-cancel">Cancelar</button>
+          <button class="btn-prim" id="rein-ok">Aceptar</button>
+        </div>
+      </div>
+    </div>
   <!-- ═════════ utilidades ═════════ -->
   <script>
   document.getElementById('logout').addEventListener('click', async e => {
