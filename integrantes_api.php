@@ -116,6 +116,13 @@ try {
       'es_difunto'                 => 'r.es_difunto'
       ];
 
+      // columnas que solo existen en Retirados
+      $retOnly = ['ex_equipo','es_difunto','fecha_retiro_fmt'];
+
+      if ($team !== 'ret' && in_array($sort, $retOnly, true)) {
+          $sort = 'nombre';
+      }
+
       /* ───── columna (o expresión) a ordenar ───── */
       switch ($sort) {
       case 'dia_mes':          // «Día-Mes»
@@ -477,11 +484,12 @@ try {
             WHERE id_usuario = $id
         ")->fetch(PDO::FETCH_ASSOC);
 
+        $u['ret'] = $ret;            // ya lo tenías
         echo json_encode([
             'ok'      => true,
-            'user'    => $u,
-            'ret'     => $ret,
-            'equipos' => []        // ← evita TypeError en el front-end
+            'user'    => $u,          // incluye ret anidado
+            'ret'     => $ret,        // ← añadimos de nuevo para el JS viejo
+            'equipos' => []
         ]);
         return;
     }
@@ -709,6 +717,28 @@ try {
                     insertar_historial($pdo,$iepId);
                 }
             }
+        }
+
+        /* 5)  Si vienen campos de retiro, actualiza la tabla retirados  */
+        if (
+            !empty($_POST['razon_ret']) ||
+            !empty($_POST['ex_equipo_ret']) ||
+            (isset($_POST['es_difunto_ret']) && $_POST['es_difunto_ret'] !== '0')
+        ) {
+            $pdo->prepare("
+                INSERT INTO retirados
+                    (id_usuario, fecha_retiro, razon, ex_equipo, es_difunto)
+                VALUES (:id, CURDATE(), :raz, :ex, :dif)
+                ON DUPLICATE KEY UPDATE
+                    razon      = VALUES(razon),
+                    ex_equipo  = VALUES(ex_equipo),
+                    es_difunto = VALUES(es_difunto)
+            ")->execute([
+                ':id'  => $id,
+                ':raz' => $_POST['razon_ret']        ?: null,
+                ':ex'  => $_POST['ex_equipo_ret']    ?: null,
+                ':dif' => (int)($_POST['es_difunto_ret'] ?? 0)
+            ]);
         }
 
       $pdo->commit();

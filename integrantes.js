@@ -160,44 +160,67 @@ function loadRolesInto(sel, eq, selVal='', allowBlank = true){
 
 /* ------------------------------------------------ sidebar */
 async function loadSidebar () {
+  const aside = document.querySelector('.sidebar');   // contenedor con scroll
+  const yPos  = aside.scrollTop;                     // ① memoriza posición
+
   const ul = $('#equipos-list');
-  ul.innerHTML = '';
-  const source = typeof PRE_EQUIPOS !== 'undefined' ? {equipos:PRE_EQUIPOS}
-                : await (await fetch(`${API}?accion=equipos`)).json();
   ul.innerHTML = '<li>Cargando…</li>';
 
-  const j = await (await fetch(`${API}?accion=equipos`)).json();
+  /* Trae el catálogo – ya no necesitamos la constante `source` */
+  const { equipos } = await fetch(`${API}?accion=equipos`).then(r => r.json());
   ul.innerHTML = '';
 
-  j.equipos.forEach(e => {
+  equipos.forEach(e => {
     const li = document.createElement('li');
     li.textContent = e.nombre;
     li.dataset.id  = e.id;
     li.onclick     = () => selectTeam(String(e.id), li);
+
+    /* ② si es el equipo actualmente seleccionado, mantén la clase .sel */
+    if (String(e.id) === TEAM) li.classList.add('sel');
+
     ul.appendChild(li);
   });
 
-  selectTeam('0', ul.firstChild, 1);
+  /* ③ restaura el desplazamiento una vez pintada la lista */
+  requestAnimationFrame(() => { aside.scrollTop = yPos; });
 }
 
 /* ------------------------------------------------ tabla */
 let DATA = [], TEAM = '0';
 
 function visibleCols () {
-  /* Oculta est1-3 cuando se está en “General” o “Retirados” */
+  /* columnas marcadas en el pop-up */
   const cols = [...$$('#cols-menu input')]
                  .filter(c => c.checked)
                  .map   (c => c.dataset.key);
-  return (TEAM === '0' || TEAM === 'ret')
-         ? cols.filter(k => !/^est[123]$/.test(k))
-         : cols;
+
+  /* estados: sólo en equipos/proyectos */
+  const base = (TEAM === '0' || TEAM === 'ret')
+               ? cols.filter(k => !/^est[123]$/.test(k))
+               : cols;
+
+  /* columnas exclusivas de Retirados */
+  return (TEAM === 'ret')
+         ? base
+         : base.filter(k => !['fecha_retiro','ex_equipo','es_difunto'].includes(k));
 }
 
 async function selectTeam (id, li, page = 1) {
   /* normalizamos el identificador */
   id       = (id === 'ret') ? 'ret' : id.toString();
+  const cambioSeccion = (id !== TEAM);
+
+  /* ➊  si salimos de Retirados, reseteamos el orden incompatible */
+  const RET_ONLY = ['ex_equipo', 'es_difunto', 'fecha_retiro_fmt'];
+  if (id !== 'ret' && RET_ONLY.includes(SORT_BY)) {
+      SORT_BY = 'nombre';
+      DIR     = 'ASC';
+  }
+
   TEAM     = id;                 // ← guarda “0”, “5”, “ret”…
   PAGE     = page;
+  updateColsMenu();
 
   /* ► marca el ítem del sidebar */
   if (li) {
@@ -214,6 +237,13 @@ async function selectTeam (id, li, page = 1) {
 
   refreshTable();
   buildPager();
+
+  /* ------------- AHORA sí podemos resetear el scroll ------------- */
+  if (cambioSeccion) {
+    const cont = document.getElementById('section-table');
+    cont.scrollLeft = 0;                     // 1ª pasada
+    requestAnimationFrame(() => cont.scrollLeft = 0); // 2ª tras el repintado
+  }
 }
 
 function refreshTable () {
@@ -495,6 +525,9 @@ function showRetiroModal (iep, nombre, exEq) {
       `<b>${nombre}</b> ya no pertenece a ningún otro equipo. `
     + `Si continúas quedará retirado de Evangelio Creativo.`;
   $('#ret-iep').value = iep;
+  /* ← reinicia campos */
+  $('#form-ret textarea[name="motivo"]').value = '';
+  $('#form-ret select[name="difunto"]').value  = '0';
   $('#modal-ret').classList.add('show');
 }
 
@@ -635,6 +668,7 @@ $('#det-close').onclick = () => hide($('#modal-det'));
 /* ------------------------------------------------ modal: editar */
 let CURR_USER = null;
 let EQUIP_TAKEN = new Set();
+let IS_RET = false;
 
 async function openEdit (e) {
   const id = e.currentTarget.dataset.id;
@@ -734,6 +768,24 @@ function fillEditForm (u) {
               </label>`;
     }).join('');
   });
+
+  /* ——— sección Retirados ——— */
+  const isRet = !!u.ret;              // viene solo si está retirado
+  IS_RET = isRet;
+  $('#fs-retirados').style.display = isRet ? 'block' : 'none';
+  $('#fs-equipos'  ).style.display = isRet ? 'none'  : 'block';
+
+  ['ed-razon-ret','ed-exeq-ret','ed-difunto-ret'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (isRet) el.removeAttribute('disabled');
+    else       el.setAttribute('disabled','disabled');
+  });
+
+  if (isRet){
+    $('#ed-razon-ret'  ).value = u.ret.razon      || '';
+    $('#ed-exeq-ret'   ).value = u.ret.ex_equipo  || '';
+    $('#ed-difunto-ret').value = u.ret.es_difunto || '0';
+  }
 }
 
 $('#btn-del-photo').onclick = () => {
@@ -910,8 +962,9 @@ async function openReingreso(e){
 
    /* carga combos */
    const d  = await fetchJSON(API+'?accion=equipos');
+   /*  solo equipos reales  (es_equipo = 1)  */
    $('#rein-eq').innerHTML = d.equipos
-        .filter(x=>x.id && x.id!=='ret')
+        .filter(x=>x.id && x.id!=='ret' && x.es_equipo==1)
         .map(x=>`<option value="${x.id}">${x.nombre}</option>`).join('');
    $('#rein-rol').innerHTML='';         // vacía primero
    $('#rein-eq').onchange = () =>
@@ -937,7 +990,7 @@ $('#rein-ok').onclick = async ()=>{
    if(j.ok){
        toast('Usuario reingresado ✓');
        hide($('#modal-rein'));
-       selectTeam('0', $('[data-id="ret"]'), 1);   // refresca Retirados
+       selectTeam('ret', $('[data-id="ret"]'), 1); // refresca Retirados
    }else toast(j.error||'Error');
 };
 
@@ -965,8 +1018,17 @@ async function submitEdit (ev) {
   /* 👉 aborta si algún teléfono no pasa la validación */
   if (!(await validateAndNormalizePhones())) return;
 
+  if (IS_RET && !$('#ed-razon-ret').value.trim()){
+    alert('La razón de retiro no puede quedar vacía'); return;
+  }
+
   const fd = new FormData(ev.target);      // ahora sí incluye "+56…"
   fd.append('accion', 'editar');
+
+  if (!IS_RET) {
+    ['razon_ret', 'ex_equipo_ret', 'es_difunto_ret']
+      .forEach(k => fd.delete(k));
+  }
 
   /* empaquetar equipos nuevos */
   const arr = [...$$('.eq-row')].map(r => {
@@ -981,7 +1043,8 @@ async function submitEdit (ev) {
       if (j.ok){
           toast('Cambios guardados ✓');
           hide($('#modal-edit'));
-          selectTeam(TEAM, $(`#equipos-list li[data-id="${TEAM}"]`), PAGE);
+          await loadSidebar();
+          selectTeam(TEAM, $(`#equipos-list li[data-id="${TEAM}"]`), 1);
       }else{
           toast(j.error || 'Error inesperado');
       }
@@ -1002,9 +1065,33 @@ const estadoNom = id => {
   return obj ? obj.nom : '-';
 };
 
+/* ─── mostrar/ocultar checks según el TEAM activo ─── */
+function updateColsMenu () {
+  const soloRet = TEAM === 'ret';
+  ['fecha_retiro', 'ex_equipo', 'es_difunto'].forEach(k => {
+    const cb     = document.getElementById('chk_' + k);   // <input>
+    if (!cb) return;
+    const label  = cb.parentElement;                      // <label>
+
+    if (soloRet) {
+      label.style.display = '';
+    } else {
+      cb.checked = false;          // fuerza a quitar la selección
+      label.style.display = 'none';
+    }
+  });
+}
+
 /* ------------------------------------------------ init */
 document.addEventListener('DOMContentLoaded', () => {
   buildColMenu();
+  updateColsMenu();
+
+  loadSidebar().then(() => {
+    // primera carga → General
+    selectTeam('0', document.querySelector('#equipos-list li[data-id="0"]'), 1);
+  });
+
   if (typeof PRE_INTEGRANTES !== 'undefined'){
       DATA = PRE_INTEGRANTES;
       refreshTable();          // pinta de inmediato

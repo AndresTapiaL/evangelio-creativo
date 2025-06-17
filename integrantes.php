@@ -303,6 +303,11 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
   .modal-box dl dt{font-weight:600;color:var(--primary);text-align:right;}
   .modal-box dl dd{margin:0;}
 
+  /* aire extra antes de la sección «Retirados» */
+  #retired-extra{
+    margin-top: .5rem;      /* mismo espacio vertical que el resto de filas */
+  }
+
   .modal-box dl dt{
     white-space:nowrap;                 /* nunca corte en 2 líneas */
   }
@@ -584,6 +589,9 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
     animation:spin 1s linear infinite;
   }
   @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* en cualquier hoja CSS o dentro del <style> ya existente */
+  #retired-extra hr{display:none;}
   </style>
 
   <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
@@ -691,7 +699,6 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
         </dl>
 
         <div id="retired-extra" style="display:none">
-          <hr>
           <dl>
             <dt>Razón retiro</dt><dd id="det-razon"></dd>
             <dt>Fallecido</dt><dd id="det-fallecido"></dd>
@@ -829,10 +836,30 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
           </fieldset>
 
           <!-- Equipos / Proyectos -->
-          <fieldset>
+          <fieldset id="fs-equipos">
             <legend>Equipos / Proyectos (añadir)</legend>
             <div id="eq-container"></div>
             <button type="button" id="btn-add-eq" class="btn">+ Añadir</button>
+          </fieldset>
+
+          <!-- ——— SOLO PARA USUARIOS RETIRADOS ——— -->
+          <fieldset id="fs-retirados" style="display:none">
+            <legend>Información de retiro</legend>
+
+            <label>Razón del retiro
+              <input id="ed-razon-ret" name="razon_ret" maxlength="255">
+            </label>
+
+            <label>Ex-equipo
+              <input id="ed-exeq-ret" name="ex_equipo_ret" maxlength="50">
+            </label>
+
+            <label>¿Fallecido?
+              <select id="ed-difunto-ret" name="es_difunto_ret">
+                <option value="0">No</option>
+                <option value="1">Sí</option>
+              </select>
+            </label>
           </fieldset>
 
           <!-- Guardar -->
