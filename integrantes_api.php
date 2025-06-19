@@ -5,6 +5,7 @@
    © Evangelio Creativo – 2025
 ----------------------------------------------------------------*/
 require 'conexion.php';
+session_start();
 header('Content-Type: application/json; charset=utf-8');
 
 $accion = $_GET['accion']    ?? $_POST['accion'] ?? 'lista';   // default »lista«
@@ -571,6 +572,66 @@ try {
   case 'POST:editar': {
       $id=(int)($_POST['id']??0);
       if(!$id) throw new Exception('id');
+
+      /* ── 1. VALIDACIÓN de nombres / apellidos ─────────────────────── */
+      $nombres          = trim($_POST['nombres']          ?? '');
+      $apellido_paterno = trim($_POST['apellido_paterno'] ?? '');
+      $apellido_materno = trim($_POST['apellido_materno'] ?? '');
+
+      /* —— back-end mirror de la validación —— */
+      $reNombre = '/^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$/u';
+
+      $chk = [
+        ['val' => $nombres,          'max' => 60],
+        ['val' => $apellido_paterno, 'max' => 30],
+        ['val' => $apellido_materno, 'max' => 30],
+      ];
+
+      foreach ($chk as $c) {
+          if ($c['val'] === '') continue;              // materno puede venir vacío
+          if (mb_strlen($c['val']) > $c['max'] ||
+              !preg_match($reNombre, $c['val'])) {
+              echo json_encode([
+                  'ok'    => false,
+                  'error' => 'Formato de nombre/apellido no válido'
+              ]);
+              exit;
+          }
+      }
+
+      /* —— VALIDACIÓN fecha de nacimiento —— */
+      $fnac = trim($_POST['fecha_nacimiento'] ?? '');
+
+      if ($fnac === '') {
+          echo json_encode(['ok'=>false,'error'=>'La fecha de nacimiento es obligatoria']); exit;
+      }
+      if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fnac)) {
+          echo json_encode(['ok'=>false,'error'=>'Formato de fecha AAAA-MM-DD no válido']); exit;
+      }
+      $dtFnac = DateTime::createFromFormat('Y-m-d', $fnac);
+      if (!$dtFnac) {
+          echo json_encode(['ok'=>false,'error'=>'Fecha de nacimiento inválida']); exit;
+      }
+      $today = new DateTime('today');
+      $edad  = $dtFnac->diff($today)->y;
+      if ($edad < 12) {
+          echo json_encode(['ok'=>false,'error'=>'El integrante debe tener al menos 12 años']); exit;
+      }
+      if ($edad > 200) {
+          echo json_encode(['ok'=>false,'error'=>'La edad no puede superar los 200 años']); exit;
+      }
+
+      /* -- comparar contra fecha_registro -- */
+      $regStmt = $pdo->prepare("SELECT fecha_registro FROM usuarios WHERE id_usuario=:id");
+      $regStmt->execute([':id'=>$id]);
+      $fechaReg = $regStmt->fetchColumn();
+      if ($fechaReg && $fnac > $fechaReg){
+          $regFmt = DateTime::createFromFormat('Y-m-d', $fechaReg)->format('d-m-Y');
+          echo json_encode(['ok'=>false,
+              'error'=>"La fecha de nacimiento no puede ser posterior a la fecha de registro ($regFmt)"]);
+          exit;
+      }
+
       $pdo->beginTransaction();
 
       /* ---- helper local ---- */
@@ -602,10 +663,10 @@ try {
                 WHERE id_usuario              = :id";
         $pdo->prepare($sql)->execute([
             ':id'  => $id,
-            ':nom' => $_POST['nombres']                 ?? '',
-            ':ap'  => $_POST['apellido_paterno']        ?? '',
-            ':am'  => $_POST['apellido_materno']        ?? '',
-            ':fnac'=> $_POST['fecha_nacimiento']        ?? null,
+            ':nom'  => $nombres,           // ← variable validada
+            ':ap'   => $apellido_paterno,  // ← variable validada
+            ':am'   => $apellido_materno,  // ← variable validada
+            ':fnac'=> $fnac,
             ':rut' => $_POST['rut_dni']                 ?? '',
             ':pais'=> $_POST['id_pais']                 ?: null,
             ':reg' => $_POST['id_region_estado']        ?: null,

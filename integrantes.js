@@ -126,6 +126,87 @@ function initIntlTelInputs () {
   });
 }
 
+/* —— VALIDACIÓN nombres / apellidos —— */
+const NAME_RE = /^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$/u;
+
+function validateNameField (inp){
+  const max = parseInt(inp.getAttribute('maxlength'),10) || 255;
+  const txt = inp.value.trim();
+  let msg = '';
+
+  if (txt.length > max){
+      msg = `Máx ${max} caracteres.`;
+  } else if (txt && !NAME_RE.test(txt)){
+      msg = '* Solo letras, números, espacios, saltos de línea y . , # ¿ ¡ ! ? ( ) / -';
+  }
+
+  const err = inp.parentElement.querySelector('.err-msg');
+  if (msg){
+      err.textContent   = msg;
+      err.style.display = 'block';
+      inp.classList.add('invalid');
+  }else{
+      err.textContent   = '';
+      err.style.display = 'none';
+      inp.classList.remove('invalid');
+  }
+  return !msg;
+}
+
+/* —— VALIDACIÓN fecha de nacimiento —— */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;          // AAAA-MM-DD
+
+/* ——— limita la entrada del <input type="date"> a dígitos y ‘-’ (máx 10) ——— */
+function maskDateInput (ev){
+    const inp = ev.target;
+    inp.value = inp.value                       // solo 0-9 y guiones
+                     .replace(/[^\d-]/g, '')
+                     .slice(0, 10);             // AAAA-MM-DD = 10 caracteres
+}
+
+function validateBirthDate (inp, regDateStr = '') {
+    const msgBox = inp.parentElement.querySelector('.err-msg');
+    let   msg    = '';
+    const raw    = inp.value.trim();
+
+    /* 1) obligatorio + patrón --------------------------------------- */
+    if (!raw){
+        msg = '* Obligatorio';
+    } else if (!DATE_RE.test(raw) || raw.length !== 10){
+        msg = '* Formato DD-MM-AAAA';
+    } else {
+        /* 2) fecha válida ------------------------------------------- */
+        const born = new Date(raw + 'T00:00:00');
+        if (Number.isNaN(born.getTime()))       msg = '* Fecha inválida';
+        else {
+            const today = new Date();
+            const age   = today.getFullYear() - born.getFullYear()
+                         - ( today < new Date(today.getFullYear(), born.getMonth(), born.getDate()) );
+            if (age < 12)        msg = '* Debe tener ≥ 12 años';
+            else if (age > 200)  msg = '* ¿Seguro? más de 200 años';
+            /* 3) no posterior a registro ----------------------------- */
+            if (!msg && regDateStr){
+                const reg = new Date(regDateStr.split('-').reverse().join('-') + 'T00:00:00');
+                if (born > reg){
+                    msg = `* No puede ser > fecha de registro (${regDateStr})`;
+                }
+            }
+        }
+    }
+
+    /* feedback visual ----------------------------------------------- */
+    if (msg){
+        msgBox.textContent   = msg;
+        msgBox.style.display = 'block';
+        inp.classList.add('invalid');
+    }else{
+        msgBox.textContent   = '';
+        msgBox.style.display = 'none';
+        inp.classList.remove('invalid');
+    }
+    return !msg;
+}
+
 /* +++++++++ VALIDAR Y NORMALIZAR TELÉFONOS +++++++++ */
 async function validateAndNormalizePhones () {
 
@@ -786,6 +867,22 @@ function fillEditForm (u) {
     $('#ed-exeq-ret'   ).value = u.ret.ex_equipo  || '';
     $('#ed-difunto-ret').value = u.ret.es_difunto || '0';
   }
+
+  /* —— listeners de validación en vivo —— */
+  ['ed-nom','ed-ap','ed-am'].forEach(id=>{
+      const el = document.getElementById(id);
+      el.oninput = () => validateNameField(el);
+  });
+  // valídalos inmediatamente con los valores precargados
+  ['ed-nom','ed-ap','ed-am'].forEach(id=> validateNameField(document.getElementById(id)));
+
+  /* guardar la fecha de registro para el chequeo */
+  const regDateStr = u.fecha_registro_fmt || '';   // «dd-mm-aaaa»
+
+  const fnacInp = $('#ed-fnac');
+  fnacInp.oninput = () => validateBirthDate(fnacInp, regDateStr);
+  fnacInp.addEventListener('input', maskDateInput);   // ← NUEVO
+  validateBirthDate(fnacInp, regDateStr);          // valida valor precargado
 }
 
 $('#btn-del-photo').onclick = () => {
@@ -1017,6 +1114,41 @@ async function submitEdit (ev) {
 
   /* 👉 aborta si algún teléfono no pasa la validación */
   if (!(await validateAndNormalizePhones())) return;
+
+  // ► valida los tres campos
+  const nameOK   = validateNameField($('#ed-nom'));
+  const apOK     = validateNameField($('#ed-ap'));
+  const amOK     = validateNameField($('#ed-am'));   // puede estar vacío; ya controla patrón
+  if (!nameOK || !apOK || !amOK){
+      // desplaza suavemente hasta el primer campo con error
+      const firstBad = $('.invalid');
+      firstBad?.scrollIntoView({
+          behavior: 'smooth',   // ← desplazamiento animado
+          block:    'center'
+      });
+      firstBad?.focus({preventScroll:true}); // evita scroll extra del focus
+      return; // aborta envío
+  }
+
+  const fnacOK = validateBirthDate($('#ed-fnac'),
+                                  CURR_USER.user.fecha_registro_fmt||'');
+
+  if (!fnacOK){
+      const firstBad = $('.invalid');
+      if (firstBad){
+          const box = $('#modal-edit .modal-box');      // contenedor con scrollbar
+          /* distancia entre el campo con error y la parte superior del contenedor,
+            teniendo en cuenta el desplazamiento actual (scrollTop) */
+          const y = firstBad.getBoundingClientRect().top
+                  - box.getBoundingClientRect().top
+                  + box.scrollTop
+                  - (box.clientHeight / 2);             // lo deja ± centrado
+
+          box.scrollTo({ top: y, behavior: 'smooth' }); // ← animación real
+          setTimeout(() => firstBad.focus({preventScroll:true}), 500);
+      }
+      return;          // ⟵ no envía
+  }
 
   if (IS_RET && !$('#ed-razon-ret').value.trim()){
     alert('La razón de retiro no puede quedar vacía'); return;

@@ -592,10 +592,32 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
 
   /* en cualquier hoja CSS o dentro del <style> ya existente */
   #retired-extra hr{display:none;}
+
+  /* ——— mensajes de error inline ——— */
+  .err-msg{
+    color:#d93025;          /* rojo Google-Style */
+    font-size:.80rem;
+    margin-top:.25rem;
+    display:none;
+  }
+  input.invalid{
+    border-color:#d93025 !important;
+    box-shadow:0 0 0 2px rgba(217,48,37,.25) !important;
+  }
+
+  html{
+    scroll-behavior:smooth;
+  }
+
+  /* desplazamientos dentro de la caja del modal con animación */
+  .modal-box{
+    scroll-behavior:smooth;        /* ← hace que cualquier scroll sea “deslizado” */
+    max-height:90vh;             /* ← NUEVO (imprescindible)      */
+    overflow-y:auto;             /* ← NUEVO (permite el scroll)   */
+  }
   </style>
 
   <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js"></script>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
   <script>
@@ -745,17 +767,27 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
             <!-- fila 1 : nombres -->
             <label>Nombres
               <input id="ed-nom" name="nombres" required maxlength="60">
+              <small class="err-msg"></small>
             </label>
             <label>Apellido paterno
               <input id="ed-ap" name="apellido_paterno" required maxlength="30">
+              <small class="err-msg"></small>
             </label>
             <label>Apellido materno
               <input id="ed-am" name="apellido_materno" maxlength="30">
+              <small class="err-msg"></small>
             </label>
 
             <!-- fila 2 : fecha + tipo doc + nro -->
             <label>Fecha de nacimiento
-              <input type="date" id="ed-fnac" name="fecha_nacimiento">
+              <input
+                  type="date"
+                  id="ed-fnac"
+                  name="fecha_nacimiento"
+                  required
+                  pattern="\d{4}-\d{2}-\d{2}"
+                  maxlength="10">
+              <small class="err-msg"></small> <!-- mensaje inline -->
             </label>
             <label>Tipo documento
               <select id="ed-doc-type">
