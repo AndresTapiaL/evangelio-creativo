@@ -599,6 +599,30 @@ try {
           }
       }
 
+      /* —— VALIDACIÓN Dirección / Iglesia / Profesión —— */
+      $dir = trim($_POST['direccion']                ?? '');
+      $ig  = trim($_POST['iglesia_ministerio']       ?? '');
+      $pro = trim($_POST['profesion_oficio_estudio'] ?? '');
+
+      $reGeneral = '/^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$/u';
+
+      foreach ([
+              ['v'=>$dir,'et'=>'Dirección'],
+              ['v'=>$ig ,'et'=>'Iglesia / Ministerio'],
+              ['v'=>$pro,'et'=>'Profesión / Oficio / Estudio']
+          ] as $f){
+
+          /* ⬇︎  ahora son obligatorios */
+          if ($f['v'] === ''){
+              echo json_encode(['ok'=>false,
+                  'error'=>"{$f['et']} es obligatoria"]); exit;
+          }
+          if (mb_strlen($f['v']) > 255 || !preg_match($reGeneral,$f['v'])){
+              echo json_encode(['ok'=>false,
+                  'error'=>"{$f['et']} no válida (formato o longitud)"]); exit;
+          }
+      }
+
       /* —— VALIDACIÓN fecha de nacimiento —— */
       $fnac = trim($_POST['fecha_nacimiento'] ?? '');
 
@@ -631,6 +655,93 @@ try {
               'error'=>"La fecha de nacimiento no puede ser posterior a la fecha de registro ($regFmt)"]);
           exit;
       }
+
+      /* —— VALIDACIÓN N° documento —— */
+      $rutRaw = trim($_POST['rut_dni'] ?? '');
+      if ($rutRaw === '') {
+          echo json_encode(['ok'=>false,'error'=>'El N° documento es obligatorio']); exit;
+      } {
+
+          if (mb_strlen($rutRaw) > 13) {
+              echo json_encode(['ok'=>false,'error'=>'N° documento excede 13 caracteres']); exit;
+          }
+
+          $rutSan = strtoupper(preg_replace('/[^0-9K]/i', '', $rutRaw));
+
+          if (strpos($rutSan,'K') !== false && substr($rutSan,-1) !== 'K'){
+              echo json_encode(['ok'=>false,'error'=>'La K solo puede ir al final']); exit;
+          }
+
+          if (!empty($_POST['id_pais']) && $_POST['id_pais'] == 1){   // Chile
+              if (!preg_match('/^\d{7,8}[0-9K]$/', $rutSan)){
+                  echo json_encode(['ok'=>false,'error'=>'Formato RUT chileno inválido']); exit;
+              }
+              $num = substr($rutSan, 0, -1);
+              $dv  = substr($rutSan, -1);
+              $sum = 0; $mul = 2;
+              for ($i = strlen($num) - 1; $i >= 0; $i--){
+                  $sum += intval($num[$i]) * $mul;
+                  $mul  = ($mul == 7 ? 2 : $mul + 1);
+              }
+              $rest   = 11 - ($sum % 11);
+              $dvCalc = $rest == 11 ? '0' : ($rest == 10 ? 'K' : strval($rest));
+              if ($dvCalc !== $dv){
+                  echo json_encode(['ok'=>false,'error'=>'RUT chileno inválido']); exit;
+              }
+          } elseif (!preg_match('/^\d{1,13}$/', $rutSan)){
+              echo json_encode(['ok'=>false,'error'=>'Documento: solo dígitos']); exit;
+          }
+      }
+
+      /* —— VALIDACIÓN Correo electrónico —— */
+      $email = trim($_POST['correo'] ?? '');
+      if ($email === '') {
+          echo json_encode(['ok'=>false,'error'=>'El correo electrónico es obligatorio']); exit;
+      }
+      if (mb_strlen($email) > 320) {
+          echo json_encode(['ok'=>false,'error'=>'Correo excede 320 caracteres']); exit;
+      }
+      if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+          echo json_encode(['ok'=>false,'error'=>'Correo electrónico no válido']); exit;
+      }
+
+      /* ─── Ubicación ─── */
+      $pais   = trim($_POST['id_pais']           ?? '');
+      $region = trim($_POST['id_region_estado']  ?? '');
+      $ciudad = trim($_POST['id_ciudad_comuna']  ?? '');
+
+      /* A) País */
+      if ($pais !== '') {
+          $ok = (bool)$pdo->query("SELECT 1 FROM paises WHERE id_pais = $pais")->fetchColumn();
+          if (!$ok) { echo json_encode(['ok'=>false,'error'=>'País inválido']); exit; }
+      }
+
+      /* B) Región → debe existir y pertenecer al país (si se indicó país) */
+      if ($region !== '') {
+          $st = $pdo->prepare("SELECT id_pais FROM region_estado WHERE id_region_estado = ?");
+          $st->execute([$region]);
+          $row = $st->fetch(PDO::FETCH_ASSOC);
+          if (!$row)                 { echo json_encode(['ok'=>false,'error'=>'Región/Estado inválido']); exit; }
+          if ($pais && $row['id_pais'] != $pais){
+              echo json_encode(['ok'=>false,'error'=>'Región no pertenece al país']); exit;
+          }
+      }
+
+      /* C) Ciudad → debe existir y pertenecer a la región (si se indicó región) */
+      if ($ciudad !== '') {
+          $st = $pdo->prepare("SELECT id_region_estado FROM ciudad_comuna WHERE id_ciudad_comuna = ?");
+          $st->execute([$ciudad]);
+          $row = $st->fetch(PDO::FETCH_ASSOC);
+          if (!$row) { echo json_encode(['ok'=>false,'error'=>'Ciudad/Comuna inválida']); exit; }
+          if ($region && $row['id_region_estado'] != $region){
+              echo json_encode(['ok'=>false,'error'=>'Ciudad no pertenece a la región']); exit;
+          }
+      }
+
+      /* Normaliza a NULL los vacíos antes del UPDATE */
+      $pais   = $pais   === '' ? null : $pais;
+      $region = $region === '' ? null : $region;
+      $ciudad = $ciudad === '' ? null : $ciudad;
 
       $pdo->beginTransaction();
 
@@ -667,10 +778,10 @@ try {
             ':ap'   => $apellido_paterno,  // ← variable validada
             ':am'   => $apellido_materno,  // ← variable validada
             ':fnac'=> $fnac,
-            ':rut' => $_POST['rut_dni']                 ?? '',
-            ':pais'=> $_POST['id_pais']                 ?: null,
-            ':reg' => $_POST['id_region_estado']        ?: null,
-            ':ciu' => $_POST['id_ciudad_comuna']        ?: null,
+            ':rut'  => $rutSan,
+            ':pais'=> $pais,
+            ':reg' => $region,
+            ':ciu' => $ciudad,
             ':dir' => $_POST['direccion']               ?? '',
             ':ig'  => $_POST['iglesia_ministerio']      ?? '',
             ':pro' => $_POST['profesion_oficio_estudio']?? ''
@@ -703,7 +814,36 @@ try {
             $pdo->prepare("UPDATE correos_electronicos
                             SET correo_electronico = :c
                             WHERE id_usuario = :id")
-                ->execute([':c'=>$_POST['correo'], ':id'=>$id]);
+                ->execute([':c'=>$email, ':id'=>$id]);
+        }
+
+        /* 3-bis) Validación teléfonos (orden, descripción y formato) */
+        $phones = [];
+        for ($i = 0; $i < 3; $i++) {
+        $phones[$i] = [
+            'num'  => trim($_POST["tel$i"]       ?? ''),
+            'desc' => trim($_POST["tel_desc$i"]  ?? '')
+        ];
+        }
+
+        /* A) exige contigüidad: no puede haber huecos */
+        for ($i = 0; $i < 2; $i++) {
+        if ($phones[$i]['num'] === '' && $phones[$i+1]['num'] !== '') {
+            echo json_encode(['ok'=>false,
+                'error'=>"Completa Teléfono ".($i+1)." antes de Teléfono ".($i+2)]); exit;
+        }
+        }
+
+        /* B) nº ⇒ descripción obligatoria y viceversa */
+        foreach ($phones as $idx => $ph) {
+        if ($ph['num'] !== '' && $ph['desc'] === '') {
+            echo json_encode(['ok'=>false,
+                'error'=>"Selecciona descripción para Teléfono ".($idx+1)]); exit;
+        }
+        if ($ph['num'] === '' && $ph['desc'] !== '') {
+            echo json_encode(['ok'=>false,
+                'error'=>"Elimina la descripción o ingresa número en Teléfono ".($idx+1)]); exit;
+        }
         }
 
         /* 3) Teléfonos (máx 3) ------------------------------------------------- */
@@ -717,9 +857,39 @@ try {
             $tel = preg_replace('/\s+/', '', $_POST["tel$i"]);
 
             // (opcional) validación ultra-básica: debe empezar con “+” y 8-15 dígitos
+            // + y 8-15 dígitos totales
             if (!preg_match('/^\+\d{8,15}$/', $tel)) {
                 throw new Exception("Teléfono $i con formato inválido");
             }
+
+            /* longitudes máximas para móviles hispanohablantes (sin prefijo) */   //  <<< NUEVO
+            $MOBILE_MAX_ES = [                                                    //  <<< NUEVO
+            '54'=>11,'56'=>9,'34'=>9,'57'=>10,'52'=>10,'51'=>9,'593'=>9,'598'=>9,'595'=>9,
+            '58'=>10,'591'=>8,'506'=>8,'53'=>8,'1809'=>10,'1829'=>10,'1849'=>10,
+            '502'=>8,'504'=>8,'505'=>8,'507'=>8,'599'=>7                            //  <<< NUEVO
+            ];                                                                      //  <<< NUEVO
+
+            $MOBILE_MIN_ES = [
+                '54'=>11,'591'=>8,'56'=>9,'57'=>10,'506'=>8,'53'=>8,
+                '1809'=>10,'1829'=>10,'1849'=>10,'593'=>9,'503'=>8,'240'=>9,
+                '502'=>8,'504'=>8,'52'=>10,'505'=>8,'507'=>8,'595'=>9,
+                '51'=>9,'1787'=>10,'1939'=>10,'34'=>9,'598'=>9,'58'=>10
+            ];
+
+            $digits = ltrim($tel, '+');                                             //  <<< NUEVO
+            foreach ($MOBILE_MAX_ES as $cc => $lim){                                //  <<< NUEVO
+                if (str_starts_with($digits, $cc)){                                 //  <<< NUEVO
+                    $rest = substr($digits, strlen($cc));                           //  <<< NUEVO
+                    if (strlen($rest) > $lim){                                      //  <<< NUEVO
+                        throw new Exception("Teléfono $i excede la longitud para +$cc"); //  <<< NUEVO
+                    }                                                               //  <<< NUEVO
+                    $min = $MOBILE_MIN_ES[$cc] ?? 8;
+                    if (strlen($rest) < $min){
+                        throw new Exception("Teléfono $i requiere al menos $min dígitos para +$cc");
+                    }
+                    break;                                                          //  <<< NUEVO
+                }                                                                   //  <<< NUEVO
+            }                                                                       //  <<< NUEVO
 
             $pdo->prepare("INSERT INTO telefonos
                     (id_usuario, telefono, es_principal, id_descripcion_telefono)

@@ -74,6 +74,8 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
   <!-- Teléfonos internacionales -->
   <link rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">
+  <!-- alternativa moderna en PNG -->
+  <link rel="icon" type="image/png" sizes="32x32" href="images/LogoEC.png">
   <link rel="preload" href="styles/poppins-v23-latin-400.woff2"
         as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="styles/poppins-v23-latin-500.woff2"
@@ -89,7 +91,7 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
   /* ===== Poppins (latin) ===== */
   @font-face{
     font-family:"Poppins";
-    src:url("/styles/poppins-v23-latin-400.woff2") format("woff2");
+    src:url("styles/poppins-v23-latin-400.woff2") format("woff2");
     font-weight:400;
     font-style:normal;
     font-display:swap;      /* evita FOIT, mejora LCP */
@@ -615,6 +617,12 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
     max-height:90vh;             /* ← NUEVO (imprescindible)      */
     overflow-y:auto;             /* ← NUEVO (permite el scroll)   */
   }
+
+  /* mismos colores que los <input> */
+  select.invalid{
+    border-color:#d93025 !important;
+    box-shadow:0 0 0 2px rgba(217,48,37,.25) !important;
+  }
   </style>
 
   <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
@@ -796,7 +804,12 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
               </select>
             </label>
             <label>N° documento
-              <input id="ed-rut" name="rut_dni" maxlength="20">
+              <input id="ed-rut"
+                    name="rut_dni"
+                    maxlength="13"
+                    pattern="[0-9Kk]{1,13}"
+                    required>
+              <small class="err-msg"></small>             <!-- msg inline -->
             </label>
           </fieldset>
 
@@ -804,27 +817,37 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
           <fieldset>
             <legend>Ubicación</legend>
             <label>País
-              <select id="ed-pais" name="id_pais"></select>
+              <select id="ed-pais" name="id_pais" class="loc-sel"></select>
+              <small class="err-msg"></small>          <!-- NUEVO -->
             </label>
             <label>Región / Estado
-              <select id="ed-region" name="id_region_estado"></select>
+              <select id="ed-region" name="id_region_estado" class="loc-sel"></select>
+              <small class="err-msg"></small>          <!-- NUEVO -->
             </label>
             <label>Ciudad / Comuna
-              <select id="ed-ciudad" name="id_ciudad_comuna"></select>
+              <select id="ed-ciudad" name="id_ciudad_comuna" class="loc-sel"></select>
+              <small class="err-msg"></small>          <!-- NUEVO -->
             </label>
+            <!-- Dirección -->
             <label>Dirección
-              <input id="ed-dir" name="direccion" maxlength="255">
+              <input id="ed-dir" name="direccion" required maxlength="255">
+              <small class="err-msg"></small>        <!-- ← NUEVO -->
             </label>
           </fieldset>
 
           <!-- Iglesia / Profesión -->
           <fieldset>
             <legend>Información adicional</legend>
+            <!-- Iglesia / Ministerio -->
             <label>Iglesia / Ministerio
-              <input id="ed-ig" name="iglesia_ministerio" maxlength="255">
+              <input id="ed-ig" name="iglesia_ministerio" required maxlength="255">
+              <small class="err-msg"></small>        <!-- ← NUEVO -->
             </label>
+
+            <!-- Profesión / Oficio / Estudio -->
             <label>Profesión / Oficio / Estudio
-              <input id="ed-pro" name="profesion_oficio_estudio" maxlength="255">
+              <input id="ed-pro" name="profesion_oficio_estudio" required maxlength="255">
+              <small class="err-msg"></small>        <!-- ← NUEVO -->
             </label>
           </fieldset>
 
@@ -833,27 +856,39 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
             <legend>Contacto</legend>
             <label>Correo electrónico
               <input id="ed-correo" name="correo" type="email" maxlength="320" required>
+              <small class="err-msg"></small>          <!-- ← NUEVO -->
             </label>
 
             <div id="phone-container">
               <!-- fila teléfono principal -->
               <div class="phone-row">
+                <!-- Teléfono 1 (principal) -->
                 <label>📞 Teléfono&nbsp;1&nbsp;(principal)
-                  <input name="tel0" type="tel" maxlength="20" class="tel">
+                  <input name="tel0" type="tel"
+                        maxlength="16"
+                        pattern="\+\d{8,15}"
+                        class="tel">
+                  <small class="err-msg"></small>   <!-- ⬅ mensaje inline -->
                 </label>
                 <select name="tel_desc0"></select>
               </div>
               <!-- Tel 2 -->
               <div class="phone-row">
+                <!-- Teléfono 2 -->
                 <label>📞 Teléfono&nbsp;2
-                  <input name="tel1" type="tel" maxlength="20" class="tel">
+                  <input name="tel1" type="tel"
+                        maxlength="16" pattern="\+\d{8,15}" class="tel">
+                  <small class="err-msg"></small>
                 </label>
                 <select name="tel_desc1"></select>
               </div>
               <!-- Tel 3 -->
               <div class="phone-row">
+                <!-- Teléfono 3 -->
                 <label>📞 Teléfono&nbsp;3
-                  <input name="tel2" type="tel" maxlength="20" class="tel">
+                  <input name="tel2" type="tel"
+                        maxlength="16" pattern="\+\d{8,15}" class="tel">
+                  <small class="err-msg"></small>
                 </label>
                 <select name="tel_desc2"></select>
               </div>

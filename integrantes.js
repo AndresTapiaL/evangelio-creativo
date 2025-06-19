@@ -96,17 +96,37 @@ let TOTAL   = 0;          // total de filas que devuelve la API
 let SORT_BY = 'nombre';   // columna por la que se ordena
 let DIR     = 'ASC';      // ASC | DESC
 
-/*  lista de equipos (validos) precargada una sola vez  */
+/*  lista de equipos (válidos) precargada una sola vez  */
 let   EQUI_COMBO_HTML = '';
 const EQUIPOS_PROMISE = fetch(`${API}?accion=equipos`)
   .then(r => r.json())
   .then(d => {
       EQUI_COMBO_HTML = '<option value=""></option>' +
-          d.equipos
-           .filter(e => e.id && e.id !== 'ret')        // quita General y Retirados
-           .map   (e => `<option value="${e.id}">${e.nombre}</option>`)
-           .join('');
+        d.equipos
+         .filter(e => e.id && e.id !== 'ret')           // quita General y Retirados
+         .map  (e => `<option value="${e.id}">${e.nombre}</option>`)
+         .join('');
+  })
+  /* ⬇︎ NUEVO: si la llamada falla, la promesa queda resuelta
+     (no «rejected») y no bloquea el modal Editar          */
+  .catch(err => {
+      console.error('Catálogo equipos:', err);
+      EQUI_COMBO_HTML = '<option value=""></option>';
   });
+
+/* —— TELÉFONOS —— */
+const PHONE_RE  = /^\+\d{8,15}$/;   // + y 8-15 dígitos
+const PHONE_MAX = 16;               // VARCHAR(16) (+ incluido)
+/*  nº máximo de DÍGITOS (sin prefijo) para móviles en países hispanohablantes */
+const MOBILE_MAX_ES = {
+  ar:11, bo:8, cl:9, co:10, cr:8, cu:8, do:10, ec:9, sv:8, gq:9,
+  gt:8, hn:8, mx:10, ni:8, pa:8, py:9, pe:9, pr:10, es:9, uy:9, ve:10
+};
+
+const MOBILE_MIN_ES = {
+  ar:11, bo:8, cl:9, co:10, cr:8, cu:8, do:10, ec:9, sv:8, gq:9,
+  gt:8, hn:8, mx:10, ni:8, pa:8, py:9, pe:9, pr:10, es:9, uy:9, ve:10
+};
 
 function initIntlTelInputs () {
   phoneInitPromises = [];                       // ← reinicia el array
@@ -119,7 +139,39 @@ function initIntlTelInputs () {
       initialCountry   : 'cl',
       utilsScript      : 'https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js'
     });
+    /* ——— calcula el largo máximo dinámico para ese país ——— */            //  <<< NUEVO
+    const setDynMax = () => {                                               //  <<< NUEVO
+      const data = iti.getSelectedCountryData();                            //  <<< NUEVO
+      const iso  = data.iso2;                                               //  <<< NUEVO
+      const pref = data.dialCode || '';                                     //  <<< NUEVO
+      const lim  = MOBILE_MAX_ES[iso] ?? 15;                                //  <<< NUEVO
+      inp._maxLen = 1 + pref.length + lim;          /* + «+» */             //  <<< NUEVO
+    };                                                                      //  <<< NUEVO
+    setDynMax();                                                            //  <<< NUEVO
+    inp.addEventListener('countrychange', setDynMax);                       //  <<< NUEVO
+
     inp._iti = iti;
+
+    /* máscara: solo ‘+’ al inicio y dígitos; máx 16 caracteres.
+      ── Nuevo ──  ahora permite borrar el campo por completo  */
+    inp.addEventListener('input', () => {
+      let v = inp.value.replace(/[^\d+]/g, '');   // quita todo lo que no sea + o dígitos
+      v = v.replace(/\+/g, '');                   // elimina todos los ‘+’ existentes
+
+      if (v === '') {                             // el usuario borró todo
+        inp.value = '';                           // deja el campo en blanco
+        return;                                   // ← sin forzar el ‘+’
+      }
+
+      v = '+' + v;                                // antepone un único ‘+’
+      const lim = inp._maxLen || PHONE_MAX;          //  <<< NUEVO
+      if (v.length > lim) v = v.slice(0, lim);       //  <<< NUEVO
+      inp.value = v;
+    });
+
+        /* ► validación en vivo */
+    inp.addEventListener('input', () => validatePhoneRows());
+    inp.addEventListener('blur',  () => validatePhoneRows());
 
     /* guarda la promise para saber CUANDO el utils-script ya está listo */
     phoneInitPromises.push(iti.promise);
@@ -134,7 +186,10 @@ function validateNameField (inp){
   const txt = inp.value.trim();
   let msg = '';
 
-  if (txt.length > max){
+  /* ⬇︎ NUEVO – obligatorio */
+  if (!txt && inp.required){
+      msg = '* Obligatorio';
+  } else if (txt.length > max){
       msg = `Máx ${max} caracteres.`;
   } else if (txt && !NAME_RE.test(txt)){
       msg = '* Solo letras, números, espacios, saltos de línea y . , # ¿ ¡ ! ? ( ) / -';
@@ -207,23 +262,237 @@ function validateBirthDate (inp, regDateStr = '') {
     return !msg;
 }
 
+/* —— VALIDACIÓN correo electrónico —— */
+/*  ⬇︎ sólo letras ASCII, números y  . _ % + -  antes de la @.
+    Nada de tildes, comillas ni espacios */
+const EMAIL_RE =
+      /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+function validateEmail (inp){
+  const max = 320;
+  const txt = inp.value.trim();
+  let   msg = '';
+
+  if (!txt){
+      msg = '* Obligatorio';
+  } else if (txt.length > max){
+      msg = `Máx ${max} caracteres.`;
+  } else if (!EMAIL_RE.test(txt)){
+      msg = '* Correo no válido';
+  }
+
+  const err = inp.parentElement.querySelector('.err-msg');
+  if (msg){
+      err.textContent   = msg;
+      err.style.display = 'block';
+      inp.classList.add('invalid');
+  }else{
+      err.textContent   = '';
+      err.style.display = 'none';
+      inp.classList.remove('invalid');
+  }
+  return !msg;
+}
+
+/* —— VALIDACIÓN N° documento —— */
+const DOC_MAX_LEN = 13;               // VARCHAR(13)
+
+function rutDV(numStr){
+  let sum = 0, mul = 2;
+  for (let i = numStr.length - 1; i >= 0; i--){
+    sum += +numStr[i] * mul;
+    mul  = (mul === 7 ? 2 : mul + 1);
+  }
+  const res = 11 - (sum % 11);
+  return res === 11 ? '0' : res === 10 ? 'K' : String(res);
+}
+
+function validateDocNumber(inp){
+  const msgBox  = inp.parentElement.querySelector('.err-msg');
+  const docType = $('#ed-doc-type').value;          // CL | INT
+  let   raw     = inp.value.toUpperCase().replace(/[.\-]/g, '');
+
+  /* limpia caracteres no permitidos y limita longitud */
+  raw = raw.replace(/[^0-9K]/g, '').slice(0, DOC_MAX_LEN);
+  inp.value = raw;
+
+  let msg = '';
+
+  /* ─── OBLIGATORIO ─── */
+  if (!raw){
+      msg = '* Obligatorio';
+
+  } else if (!/^[0-9K]+$/.test(raw)){
+      msg = '* Solo dígitos y K';
+
+  } else if (docType === 'CL'){
+      if (!/^\d{7,8}[0-9K]$/.test(raw))             msg = '* Formato RUT inválido';
+      else if (rutDV(raw.slice(0, -1)) !== raw.slice(-1))
+                                                   msg = '* RUT inválido';
+
+  } else if (!/^\d{1,13}$/.test(raw)){
+      msg = '* Solo dígitos (máx 13)';
+  }
+
+  /* feedback visual */
+  if (msg){
+      msgBox.textContent   = msg;
+      msgBox.style.display = 'block';
+      inp.classList.add('invalid');
+  } else {
+      msgBox.textContent   = '';
+      msgBox.style.display = 'none';
+      inp.classList.remove('invalid');
+  }
+  return !msg;
+}
+
+function validateLocSelect(sel){
+  /* vacío = permitido */
+  const val   = sel.value.trim();
+  const msgBx = sel.parentElement.querySelector('.err-msg');
+  let   msg   = '';
+
+  /* ① el valor debe corresponder a una option existente */
+  if (val && ![...sel.options].some(o => o.value === val)){
+      msg = '* Opción no válida';
+  }
+
+  /* ② coherencia jerárquica básica (front-end) */
+  if (!msg && sel.id === 'ed-region' && val && !$('#ed-pais').value){
+      msg = '* Primero selecciona País';
+  }
+  if (!msg && sel.id === 'ed-ciudad' && val && !$('#ed-region').value){
+      msg = '* Primero selecciona Región / Estado';
+  }
+
+  /* feedback visual */
+  if (msg){
+      sel.classList.add('invalid');
+      msgBx.textContent   = msg;
+      msgBx.style.display = 'block';
+  }else{
+      sel.classList.remove('invalid');
+      msgBx.textContent   = '';
+      msgBx.style.display = 'none';
+  }
+  return !msg;
+}
+
+function validatePhoneRows () {
+  let ok = true;
+  for (let i = 0; i < 3; i++) {
+    let  rowHasError = false;
+    const inp  = document.querySelector(`[name="tel${i}"]`);
+    const sel  = document.querySelector(`[name="tel_desc${i}"]`);
+    const val  = inp.value.trim();
+    const desc = sel.value.trim();
+    /*  localiza (o crea) la cajita de error  */
+    let err = inp.parentElement.querySelector('.err-msg');
+    if (!err) {
+        err           = document.createElement('small');
+        err.className = 'err-msg';
+        inp.parentElement.appendChild(err);
+    }
+    let   msg  = '';
+
+    if (val) {
+      /* ① formato global */
+      const digits = val.replace(/\D/g, '');   // cuenta solo los dígitos
+      const iti   = inp._iti;                             //  <<< NUEVO
+      const data  = iti ? iti.getSelectedCountryData() : null;   //  <<< NUEVO
+      const iso   = data ? data.iso2 : '';                //  <<< NUEVO
+      const pref  = data ? data.dialCode : '';            //  <<< NUEVO
+
+      const subscrLen = digits.length - pref.length;      //  <<< NUEVO
+
+      /* ─── chequeo de largo de suscriptor ─── */
+      const minSubscr = MOBILE_MIN_ES[iso] ?? 8;     // ← mínimo por país (o 8 global)
+      const maxSubscr = MOBILE_MAX_ES[iso] ?? 15;    // ← máximo por país
+
+      if (subscrLen < minSubscr){
+          msg = `* Mínimo ${minSubscr} dígitos`;
+          rowHasError = true;
+      } else if (subscrLen > maxSubscr){
+          msg = `* Máx ${maxSubscr} dígitos para ${iso.toUpperCase()}`;
+          rowHasError = true;
+      } else if (!PHONE_RE.test(val)){
+          msg = '* Solo + y dígitos';
+      }
+      else if (!desc){
+        if (!rowHasError)
+            msg = '* Ingresa número o quita descripción';    
+      } else {
+        for (let j = 0; j < i; j++) {
+          if (!document.querySelector(`[name="tel${j}"]`).value.trim()) {
+            msg = `* Completa Teléfono ${j+1} antes`;
+            break;
+          }
+        }
+      }
+    } else if (desc) {                          // nº vacío → desc no permitida
+      msg = '* Ingresa número o quita descripción';
+    }
+
+    /* feedback visual */
+    if (msg) {
+      err.textContent   = msg;
+      err.style.display = 'block';
+      inp.classList.add('invalid');
+      sel.classList.add('invalid');
+      ok = false;
+    } else {
+      err.textContent   = '';
+      err.style.display = 'none';
+      inp.classList.remove('invalid');
+      sel.classList.remove('invalid');
+    }
+    if (rowHasError) continue;
+  }
+  return ok;
+}
+
 /* +++++++++ VALIDAR Y NORMALIZAR TELÉFONOS +++++++++ */
 async function validateAndNormalizePhones () {
+  /* Esperamos a que TODAS las promesas terminen,
+     pero sin abortar si alguna se rechaza  */
+  await Promise.allSettled(phoneInitPromises);
 
-  /* 1) esperamos a que se cargue utils.js en TODOS los inputs */
-  await Promise.all(phoneInitPromises);
+  if (!validatePhoneRows()) {
+    /* localiza el primer campo con error                                */
+    const bad = document.querySelector('#phone-container .invalid');
+    if (bad) {
+      /* ─── 1) centra el campo *dentro* del modal ─── */
+      const box = document.querySelector('#modal-edit .modal-box');
+      if (box) {
+        const y = bad.getBoundingClientRect().top            // posición real
+                - box.getBoundingClientRect().top            // relativo al contenedor
+                + box.scrollTop                              // más desplazamiento actual
+                - box.clientHeight / 2;                      // lo deja ± centrado
+        box.scrollTo({ top: y, behavior: 'smooth' });
+      }
 
-  /* 2) validador “real” ----------------------------------- */
+      /* ─── 2) foco sin saltos extra ─── */
+      setTimeout(() => bad.focus({ preventScroll: true }), 400);
+    }
+    return false;                     // ← aborta el submit
+  }
+
+  /* normaliza a formato E.164 */
   for (const inp of document.querySelectorAll('#phone-container input.tel')) {
     const val = inp.value.trim();
-    if (!val) continue;                          // caja vacía → ok
-
+    if (!val) continue;
     const iti = inp._iti;
+    /*  Si utils.js no está disponible o la validación lanza un error,
+        dejamos el número tal cual y seguimos  */
+    let e164 = null;
+    try {
+        if (iti && iti.isValidNumber()) {
+            e164 = iti.getNumber(intlTelInputUtils.numberFormat.E164);
+        }
+    } catch (_) { /* ignora error y continúa */ }
 
-    const e164 = iti && iti.isValidNumber()
-                    ? iti.getNumber(intlTelInputUtils.numberFormat.E164) // ← con +
-                    : null;
-    if (e164) inp.value = e164;
+    if (e164) inp.value = e164;         // guarda con ‘+’
   }
   return true;
 }
@@ -751,17 +1020,30 @@ let CURR_USER = null;
 let EQUIP_TAKEN = new Set();
 let IS_RET = false;
 
+/* ------------------------------------------------ modal: editar */
 async function openEdit (e) {
-  const id = e.currentTarget.dataset.id;
-  const j  = await (await fetch(`${API}?accion=detalles&id=` + id)).json();
-  if (!j.ok) { alert(j.error); return; }
-  await EQUIPOS_PROMISE;
-  j.user.equip_now = j.equip_now;
-  CURR_USER = j;
-  EQUIP_TAKEN = new Set((j.user.equip_now || []).map(r => String(r.eq)));
-  fillEditForm(j.user);
-  show($('#modal-edit'));
+  try {
+      const id = e.currentTarget.dataset.id;
+
+      /* ── datos del usuario ── */
+      const res = await fetch(`${API}?accion=detalles&id=` + id);
+      const j   = await res.json();
+      if (!j.ok) { alert(j.error || 'Error'); return; }
+
+      /* ── catálogo de equipos (si falla no detiene el flujo) ── */
+      await EQUIPOS_PROMISE.catch(() => {});
+
+      j.user.equip_now = j.equip_now;               // conserva compatibilidad
+      CURR_USER   = j;
+      EQUIP_TAKEN = new Set((j.user.equip_now || []).map(r => String(r.eq)));
+
+      fillEditForm(j.user);                         // carga los campos
+      show($('#modal-edit'));                       // ← abre el modal
+  } catch (err) {
+      handleError(err);                             // toast genérico
+  }
 }
+
 $('#edit-close').onclick = () => hide($('#modal-edit'));
 /* cerrar modal Editar con click fuera o con Cancelar */
 $('#modal-edit').addEventListener('click',e=>{
@@ -808,21 +1090,45 @@ function fillEditForm (u) {
   /* tipo doc ↔ país  (Chile → “CL”, otro → “INT”) */
   $('#ed-doc-type').value = (u.id_pais == 1) ? 'CL' : 'INT';
 
+  const docInp = $('#ed-rut');
+  docInp.setAttribute('maxlength', DOC_MAX_LEN.toString());
+  docInp.oninput  = () => validateDocNumber(docInp);
+  $('#ed-doc-type').onchange = () => validateDocNumber(docInp);
+  validateDocNumber(docInp);                 // 1ª pasada
+
   /* dirección / extra */
   $('#ed-dir').value    = u.direccion              ?? '';
   $('#ed-ig').value     = u.iglesia_ministerio     ?? '';
   $('#ed-pro').value    = u.profesion_oficio_estudio ?? '';
   $('#ed-correo').value = u.correo_electronico     ?? '';
 
-  /* cascada País → Región → Ciudad (helpers abajo) */
-  populatePaises().then(() => {
-    $('#ed-pais').value = u.id_pais ?? '';
-    return populateRegiones(u.id_pais);
-  }).then(() => {
-    $('#ed-region').value = u.id_region_estado ?? '';
-    return populateCiudades(u.id_region_estado);
-  }).then(() => {
-    $('#ed-ciudad').value = u.id_ciudad_comuna ?? '';
+  /* cascada País → Región → Ciudad */
+  populatePaises()
+    .then(() => {
+      $('#ed-pais').value = u.id_pais ?? '';
+      return populateRegiones($('#ed-pais').value);   // ← cambio ①
+    })
+    .then(() => {
+      $('#ed-region').value = u.id_region_estado ?? '';
+      return populateCiudades($('#ed-region').value); // ← idem
+    })
+    .then(() => {
+      $('#ed-ciudad').value = u.id_ciudad_comuna ?? '';
+    });
+
+  ['ed-pais','ed-region','ed-ciudad'].forEach(id=>{
+    const s = document.getElementById(id);
+    s.onchange = null;                         // ← cambio ②
+    s.onchange = () => {
+      validateLocSelect(s);
+      if(id==='ed-pais'){
+        validateLocSelect($('#ed-region'));
+        validateLocSelect($('#ed-ciudad'));    // ← cambio ③
+      }
+      if(id==='ed-region'){
+        validateLocSelect($('#ed-ciudad'));
+      }
+    };
   });
 
   /* ----- TELÉFONOS ----- */
@@ -869,12 +1175,18 @@ function fillEditForm (u) {
   }
 
   /* —— listeners de validación en vivo —— */
-  ['ed-nom','ed-ap','ed-am'].forEach(id=>{
-      const el = document.getElementById(id);
-      el.oninput = () => validateNameField(el);
+  ['ed-nom','ed-ap','ed-am','ed-dir','ed-ig','ed-pro'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.oninput=()=>validateNameField(el);
   });
-  // valídalos inmediatamente con los valores precargados
-  ['ed-nom','ed-ap','ed-am'].forEach(id=> validateNameField(document.getElementById(id)));
+  ['ed-nom','ed-ap','ed-am','ed-dir','ed-ig','ed-pro'].forEach(id=>
+    validateNameField(document.getElementById(id))
+  );
+
+  /* —— correo —— */
+  const mailInp = $('#ed-correo');
+  mailInp.oninput = () => validateEmail(mailInp);
+  validateEmail(mailInp);                      // primera pasada
 
   /* guardar la fecha de registro para el chequeo */
   const regDateStr = u.fecha_registro_fmt || '';   // «dd-mm-aaaa»
@@ -941,42 +1253,73 @@ function syncPaisDoc () {
     populateRegiones(selPais.value);          // mantiene la cascada viva
   });
 
-  /* País  ⇒ Tipo */
+  /* País  ⇒ Tipo  +  reseteo de cascada */
   selPais.addEventListener('change', () => {
+    /* sincroniza tipo de documento */
     if (selPais.value === '1' && selDoc.value !== 'CL')  selDoc.value = 'CL';
     if (selPais.value && selPais.value !== '1' && selDoc.value !== 'INT')
         selDoc.value = 'INT';
 
-    /* si deja país en blanco vaciamos los dependientes            */
+    /* si queda en blanco, vacía los descendientes */
     if (!selPais.value) {
-      $('#ed-region').innerHTML = '<option value=""></option>';
-      $('#ed-ciudad').innerHTML = '<option value=""></option>';
+        $('#ed-region').innerHTML = '<option value=""></option>';
+        $('#ed-ciudad').innerHTML = '<option value=""></option>';
     }
+
+    /* ← NUEVO: (re)carga siempre las regiones del país actual,
+                incluso si acaba de volver de “— país —”            */
+    populateRegiones(selPais.value);
   });
 }
 
 /* catálogo Regiones según país ---------------------------------------- */
 async function populateRegiones (idPais) {
-  const sel = $('#ed-region');
+  const selReg = $('#ed-region');
+  const selCiu = $('#ed-ciudad');
+
+  /* país vacío ⇒ limpia y sal  */
   if (!idPais){
-    $('#ed-region').innerHTML = '<option value=""></option>';
-    $('#ed-ciudad').innerHTML = '<option value=""></option>'; /* ← nueva */
-    return;
+      selReg.innerHTML = '<option value=""></option>';
+      selCiu.innerHTML = '<option value=""></option>';
+      return;
   }
+
+  /* capturamos el país que *disparó* esta petición  */
+  const paisSolicitado = idPais;
+
   const j = await (await fetch(`${API}?accion=regiones&pais=`+idPais)).json();
-  sel.innerHTML = '<option value="">— región —</option>' +
+
+  /* si el usuario YA cambió otra vez de país, abortamos */
+  if ($('#ed-pais').value !== paisSolicitado) return;
+
+  selReg.innerHTML =
+      '<option value="">— región —</option>' +
       j.regiones.map(r => `<option value="${r.id}">${r.nom}</option>`).join('');
-  sel.value = '';                                   // reset región
-  $('#ed-ciudad').innerHTML = '<option value=""></option>';  // reset ciudad
-  sel.onchange = e => populateCiudades(e.target.value);
+  selReg.value = '';
+  selCiu.innerHTML = '<option value=""></option>';
+
+  /* handler solo una vez */
+  selReg.onchange = e => populateCiudades(e.target.value);
 }
 
 /* catálogo Ciudades según región -------------------------------------- */
 async function populateCiudades (idRegion) {
   const sel = $('#ed-ciudad');
-  if (!idRegion) { sel.innerHTML = '<option value="">—</option>'; return; }
+
+  if (!idRegion){
+      sel.innerHTML = '<option value="">—</option>';
+      return;
+  }
+
+  const regionSolicitada = idRegion;
+
   const j = await (await fetch(`${API}?accion=ciudades&region=`+idRegion)).json();
-  sel.innerHTML = '<option value="">— ciudad —</option>' +
+
+  /* si el usuario cambió de región antes de que llegara la respuesta, ignora */
+  if ($('#ed-region').value !== regionSolicitada) return;
+
+  sel.innerHTML =
+      '<option value="">— ciudad —</option>' +
       j.ciudades.map(c => `<option value="${c.id}">${c.nom}</option>`).join('');
 }
 
@@ -1115,19 +1458,20 @@ async function submitEdit (ev) {
   /* 👉 aborta si algún teléfono no pasa la validación */
   if (!(await validateAndNormalizePhones())) return;
 
-  // ► valida los tres campos
-  const nameOK   = validateNameField($('#ed-nom'));
-  const apOK     = validateNameField($('#ed-ap'));
-  const amOK     = validateNameField($('#ed-am'));   // puede estar vacío; ya controla patrón
-  if (!nameOK || !apOK || !amOK){
-      // desplaza suavemente hasta el primer campo con error
+  // ► valida los campos de texto
+  const nameOK  = validateNameField($('#ed-nom'));
+  const apOK    = validateNameField($('#ed-ap'));
+  const amOK    = validateNameField($('#ed-am'));
+  const dirOK   = validateNameField($('#ed-dir'));
+  const igOK    = validateNameField($('#ed-ig'));
+  const proOK   = validateNameField($('#ed-pro'));
+  const mailOK  = validateEmail       ($('#ed-correo'));
+
+  if (!nameOK || !apOK || !amOK || !dirOK || !igOK || !proOK || !mailOK){
       const firstBad = $('.invalid');
-      firstBad?.scrollIntoView({
-          behavior: 'smooth',   // ← desplazamiento animado
-          block:    'center'
-      });
-      firstBad?.focus({preventScroll:true}); // evita scroll extra del focus
-      return; // aborta envío
+      firstBad?.scrollIntoView({behavior:'smooth', block:'center'});
+      firstBad?.focus({preventScroll:true});
+      return;                                     // aborta envío
   }
 
   const fnacOK = validateBirthDate($('#ed-fnac'),
@@ -1150,8 +1494,43 @@ async function submitEdit (ev) {
       return;          // ⟵ no envía
   }
 
+  const docOK = validateDocNumber($('#ed-rut'));
+  if (!docOK){
+    const firstBad = $('.invalid');
+    firstBad?.scrollIntoView({behavior:'smooth', block:'center'});
+    firstBad?.focus({preventScroll:true});
+    return;                                     // aborta envío
+  }
+
+  /* normaliza (números+K) antes de empaquetar */
+  $('#ed-rut').value = $('#ed-rut').value.toUpperCase().replace(/[.\-]/g, '');
+
   if (IS_RET && !$('#ed-razon-ret').value.trim()){
     alert('La razón de retiro no puede quedar vacía'); return;
+  }
+
+  const paisOK   = validateLocSelect($('#ed-pais'));
+  const regOK    = validateLocSelect($('#ed-region'));
+  const cityOK   = validateLocSelect($('#ed-ciudad'));
+
+  if (!paisOK || !regOK || !cityOK){
+      const firstBad = $('.invalid');
+      if (firstBad){
+          firstBad.scrollIntoView({behavior:'smooth',block:'center'});
+          firstBad.focus({preventScroll:true});
+      }
+      return;      // aborta el submit
+  }
+
+  /* —— confirmación si cambió el correo —— */
+  const correoInp  = $('#ed-correo');
+  const origCorreo = (CURR_USER?.user?.correo_electronico || '').trim();
+  if (correoInp.value.trim() !== origCorreo){
+      const ok = confirm(
+          'Has cambiado el correo electrónico.\n' +
+          'Recuerda que este dato se usa para iniciar sesión.\n\n' +
+          '¿Confirmas el cambio?');
+      if (!ok) return;           // el usuario cancela
   }
 
   const fd = new FormData(ev.target);      // ahora sí incluye "+56…"
