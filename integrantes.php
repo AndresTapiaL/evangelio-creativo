@@ -352,7 +352,23 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
 
   /* ───────────  TELÉFONOS  ─────────── */
   #phone-container .phone-row{
-    display:grid;grid-template-columns:1fr 200px;gap:1rem;margin-bottom:.8rem;}
+      display:grid;
+      /* 1.ª-columna: solo el ancho real del <input>        */
+      grid-template-columns:max-content 260px;   /* ← NUEVO */
+      gap:1rem;
+      margin-bottom:.8rem;
+  }
+
+  /* ── NUEVO ──   el <label> ya no se estira a todo el ancho */
+  #phone-container .phone-row label{
+      width:fit-content;     /* solo lo justo para el input + su padding */
+      flex:0 0 auto;         /* evita que FlexBox dentro lo expanda */
+  }
+
+  #phone-container .phone-row{
+      /* al aparecer el <small> de error el select ya no se descoloca */
+      align-items:start;               /* top-align */
+  }
 
   /* ───────────  OCUPACIONES (chips)  ─────────── */
   #ocup-container{
@@ -553,12 +569,6 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
   /*  ─── para que la ✖ quede dentro del cuadro ─── */
   .modal-box{position:relative;}
 
-  /* ───────── Teléfono · ajusta alto y alineación del <select> descripción ───────── */
-  #phone-container .phone-row{
-    /* ya está en grid; solo bajamos el eje para que “toque” al input */
-    align-items:end;                 /* bottom-align */
-  }
-
   #phone-container .phone-row select{
     padding:.55rem .8rem;            /* igual que los <input> */
     font-size:.88rem;
@@ -566,6 +576,7 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
     border:1px solid #d6d9e2;        /* mismo borde */
     border-radius:8px;
     box-sizing:border-box;
+    margin-top:1.7rem;               /* alinea con el input */
   }
 
   /* Ocupaciones verticales */
@@ -914,18 +925,21 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
             <legend>Información de retiro</legend>
 
             <label>Razón del retiro
-              <input id="ed-razon-ret" name="razon_ret" maxlength="255">
+              <input id="ed-razon-ret" name="razon_ret" required maxlength="255">
+              <small class="err-msg"></small>
             </label>
 
             <label>Ex-equipo
-              <input id="ed-exeq-ret" name="ex_equipo_ret" maxlength="50">
+              <input id="ed-exeq-ret" name="ex_equipo_ret" required maxlength="50">
+              <small class="err-msg"></small>
             </label>
 
             <label>¿Fallecido?
-              <select id="ed-difunto-ret" name="es_difunto_ret">
+              <select id="ed-difunto-ret" name="es_difunto_ret" required>
                 <option value="0">No</option>
                 <option value="1">Sí</option>
               </select>
+              <small class="err-msg"></small>
             </label>
           </fieldset>
 
@@ -956,9 +970,13 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
 
           <label style="display:block;margin-bottom:.9rem">
             Motivo de retiro<br>
-            <textarea name="motivo" rows="3" required
+            <textarea name="motivo"
+                      rows="3"
+                      required
+                      maxlength="255"
                       style="width:100%;padding:.6rem;border-radius:8px;
                             border:1px solid #d6d9e2;font:inherit"></textarea>
+            <small class="err-msg"></small>          <!-- NUEVO -->
           </label>
 
           <label style="display:flex;align-items:center;gap:.6rem;margin-bottom:1.5rem">
@@ -967,6 +985,7 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
               <option value="0">No</option>
               <option value="1">Sí</option>
             </select>
+            <small class="err-msg"></small>          <!-- NUEVO -->
           </label>
 
           <div style="text-align:right">

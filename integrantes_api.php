@@ -743,6 +743,29 @@ try {
       $region = $region === '' ? null : $region;
       $ciudad = $ciudad === '' ? null : $ciudad;
 
+      /* ——  VALIDACIÓN Retirados  (obligatorios) —— */
+      $razonRet    = trim($_POST['razon_ret']       ?? '');
+      $exeqRet     = trim($_POST['ex_equipo_ret']   ?? '');
+      $difuntoRet  = $_POST['es_difunto_ret']       ?? '0';
+
+      if ($razonRet === ''){
+          echo json_encode(['ok'=>false,'error'=>'La razón de retiro es obligatoria']); exit;
+      }
+      if (mb_strlen($razonRet) > 255 || !preg_match($reGeneral,$razonRet)){
+          echo json_encode(['ok'=>false,'error'=>'Razón de retiro inválida']); exit;
+      }
+
+      if ($exeqRet === ''){
+          echo json_encode(['ok'=>false,'error'=>'El ex-equipo es obligatorio']); exit;
+      }
+      if (mb_strlen($exeqRet) > 50 || !preg_match($reGeneral,$exeqRet)){
+          echo json_encode(['ok'=>false,'error'=>'Ex-equipo inválido']); exit;
+      }
+
+      if (!in_array($difuntoRet,['0','1'],true)){
+          echo json_encode(['ok'=>false,'error'=>'Valor de “Fallecido” no válido']); exit;
+      }
+
       $pdo->beginTransaction();
 
       /* ---- helper local ---- */
@@ -864,9 +887,10 @@ try {
 
             /* longitudes máximas para móviles hispanohablantes (sin prefijo) */   //  <<< NUEVO
             $MOBILE_MAX_ES = [                                                    //  <<< NUEVO
-            '54'=>11,'56'=>9,'34'=>9,'57'=>10,'52'=>10,'51'=>9,'593'=>9,'598'=>9,'595'=>9,
-            '58'=>10,'591'=>8,'506'=>8,'53'=>8,'1809'=>10,'1829'=>10,'1849'=>10,
-            '502'=>8,'504'=>8,'505'=>8,'507'=>8,'599'=>7                            //  <<< NUEVO
+                '54'=>11,'591'=>8,'56'=>9,'57'=>10,'506'=>8,'53'=>8,
+                '1809'=>10,'1829'=>10,'1849'=>10,'593'=>9,'503'=>8,'240'=>9,
+                '502'=>8,'504'=>8,'52'=>10,'505'=>8,'507'=>8,'595'=>9,
+                '51'=>9,'1787'=>10,'1939'=>10,'34'=>9,'598'=>9,'58'=>10
             ];                                                                      //  <<< NUEVO
 
             $MOBILE_MIN_ES = [
@@ -950,6 +974,55 @@ try {
             }
         }
 
+        /* ═════ Ocupaciones ═════ */
+        $rawOcup = $_POST['ocup'] ?? '[]';
+        /* id real de “Sin ocupación actual”.
+        Si no existe la creamos on-the-fly */
+        $sinId = (int)$pdo->query("
+                    SELECT id_ocupacion
+                    FROM ocupaciones
+                    WHERE nombre LIKE 'Sin ocupación%'
+                    LIMIT 1
+                ")->fetchColumn();
+
+        if (!$sinId) {
+            $pdo->exec("INSERT INTO ocupaciones (nombre) VALUES ('Sin ocupación actual')");
+            $sinId = (int)$pdo->lastInsertId();   // id recién creado
+        }
+
+        $ocupArr = json_decode($rawOcup, true);
+        if (!is_array($ocupArr)) {
+            echo json_encode(['ok'=>false,'error'=>'Ocupaciones: formato inválido']); exit;
+        }
+
+        /* 1. si no marcaron nada ⇒ forzamos “Sin ocupación actual” */
+        if (!$ocupArr) {
+            $ocupArr = [$sinId];             // siempre el id real
+        }
+
+        /* 2. si viene “Sin ocupación” + otras ⇒ quitamos la de “Sin ocupación” */
+        if (in_array($sinId, $ocupArr, true) && count($ocupArr) > 1) {
+            $ocupArr = array_values(array_diff($ocupArr, [$sinId]));
+        }
+
+        /* 3. valida que todas existan en la tabla */
+        $place = implode(',', array_fill(0,count($ocupArr),'?'));
+        $chk   = $pdo->prepare("SELECT COUNT(*) FROM ocupaciones WHERE id_ocupacion IN ($place)");
+        $chk->execute($ocupArr);
+        if ($chk->fetchColumn() != count($ocupArr)){
+            echo json_encode(['ok'=>false,'error'=>'Ocupación no válida']); exit;
+        }
+
+        /* 4. actualiza vínculo usuario ↔ ocupación */
+        $pdo->prepare("DELETE FROM usuarios_ocupaciones WHERE id_usuario=?")
+            ->execute([$id]);
+
+        $ins = $pdo->prepare("
+            INSERT INTO usuarios_ocupaciones (id_usuario,id_ocupacion)
+            VALUES (?,?)");
+        foreach ($ocupArr as $oc)
+            $ins->execute([$id,$oc]);
+
         /* 5)  Si vienen campos de retiro, actualiza la tabla retirados  */
         if (
             !empty($_POST['razon_ret']) ||
@@ -1007,6 +1080,21 @@ try {
     $forceret = (int)($_POST['force'] ?? 0);          // 1 = retiro confirmado
     $motivo   = trim($_POST['motivo'] ?? '');
     $difunto  = (int)($_POST['difunto'] ?? 0);
+
+    /* —— validación Motivo y Falleció —— */
+    $reGeneral = '/^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$/u';
+
+    if ($forceret){
+        if ($motivo === ''){
+            echo json_encode(['ok'=>false,'error'=>'El motivo de retiro es obligatorio']); exit;
+        }
+        if (mb_strlen($motivo) > 255 || !preg_match($reGeneral,$motivo)){
+            echo json_encode(['ok'=>false,'error'=>'Motivo de retiro inválido']); exit;
+        }
+        if (!in_array($difunto,[0,1],true)){
+            echo json_encode(['ok'=>false,'error'=>'Valor de “Falleció” no válido']); exit;
+        }
+    }
 
     if (!$iep) throw new Exception('iep');
 
@@ -1107,10 +1195,10 @@ try {
                 ex_equipo    = VALUES(ex_equipo),
                 es_difunto   = VALUES(es_difunto)")
             ->execute([
-                ':u'=>$uid,
-                ':raz'=>$motivo ?: null,
-                ':ex'=>$eqNom,
-                ':dif'=>$difunto
+                ':u'   => $uid,
+                ':raz' => $motivo,
+                ':ex'  => $eqNom,        // último equipo del que se retira
+                ':dif' => $difunto
             ]);
 
     $pdo->commit();

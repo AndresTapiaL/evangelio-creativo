@@ -36,20 +36,41 @@ const DEFAULT_PHOTO = 'uploads/fotos/default.png';
 /* ========= TOAST ligero (sin librerías externas) ========= */
 function toast (msg, ms = 3000){
   const box = document.createElement('div');
+  box.className = 'toast-box';               // ← marca identificable
   box.textContent = msg;
+
+  /* estilo base */
   Object.assign(box.style,{
-      position:'fixed',top:'20px',right:'20px',zIndex:2000,
-      background:'#5562ff',color:'#fff',padding:'10px 14px',
-      borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.15)',
-      font:'500 14px/1 Poppins,sans-serif',opacity:0,
-      transition:'opacity .25s'
+      position   :'fixed',
+      right      :'20px',
+      zIndex     : 2000,
+      background :'#5562ff',
+      color      :'#fff',
+      padding    :'10px 14px',
+      borderRadius:'8px',
+      boxShadow  :'0 4px 14px rgba(0,0,0,.15)',
+      font       :'500 14px/1 Poppins,sans-serif',
+      opacity    : 0,
+      transition :'opacity .25s'
   });
+
+  /* ── desplazamiento: 20 px + alto de cada toast visible + 10 px ── */
+  let offset = 20;
+  document.querySelectorAll('.toast-box').forEach(t => {
+      offset += t.offsetHeight + 10;         // 10 px de separación
+  });
+  box.style.top = offset + 'px';
+
   document.body.appendChild(box);
+
+  /* fade-in */
   requestAnimationFrame(()=> box.style.opacity = 1);
+
+  /* fade-out y limpieza */
   setTimeout(()=>{
       box.style.opacity = 0;
       box.addEventListener('transitionend',()=> box.remove());
-  },ms);
+  }, ms);
 }
 
 async function fetchJSON(url, opts = {}, timeout = 30000){       // 30 s
@@ -128,6 +149,15 @@ const MOBILE_MIN_ES = {
   gt:8, hn:8, mx:10, ni:8, pa:8, py:9, pe:9, pr:10, es:9, uy:9, ve:10
 };
 
+/* —— ISO (2-letras) → nombre país en español —— */
+const COUNTRY_ES = {
+  ar:'Argentina', bo:'Bolivia',   cl:'Chile',      co:'Colombia',
+  cr:'Costa Rica', cu:'Cuba',     do:'Rep. Dominicana', ec:'Ecuador',
+  sv:'El Salvador', gq:'Guinea Ecuatorial', gt:'Guatemala', hn:'Honduras',
+  mx:'México',     ni:'Nicaragua', pa:'Panamá',   py:'Paraguay',
+  pe:'Perú',       pr:'Puerto Rico', es:'España', uy:'Uruguay', ve:'Venezuela'
+};
+
 function initIntlTelInputs () {
   phoneInitPromises = [];                       // ← reinicia el array
   document.querySelectorAll('#phone-container input[type="tel"]').forEach(inp=>{
@@ -148,7 +178,22 @@ function initIntlTelInputs () {
       inp._maxLen = 1 + pref.length + lim;          /* + «+» */             //  <<< NUEVO
     };                                                                      //  <<< NUEVO
     setDynMax();                                                            //  <<< NUEVO
-    inp.addEventListener('countrychange', setDynMax);                       //  <<< NUEVO
+    inp.addEventListener('countrychange', () => {
+      /* mantiene el largo máximo dinámico */
+      setDynMax();
+
+      /* ─── 🆕 1) autocompleta el prefijo seleccionado ─── */
+      const data = iti.getSelectedCountryData();          // ej. {dialCode:'56', iso2:'cl', …}
+      const pref = data.dialCode || '';
+
+      /* ── Agrega el prefijo solo al campo que cambió ── */
+      if (inp.value.trim() === '') {
+        inp.value = '+' + pref;
+      }
+
+      /* 2) re-valida en vivo (mensaje, colores, etc.) */
+      validatePhoneRows();
+    });
 
     inp._iti = iti;
 
@@ -173,8 +218,10 @@ function initIntlTelInputs () {
     inp.addEventListener('input', () => validatePhoneRows());
     inp.addEventListener('blur',  () => validatePhoneRows());
 
-    /* guarda la promise para saber CUANDO el utils-script ya está listo */
-    phoneInitPromises.push(iti.promise);
+    // —–– Asegura que NUNCA quede pendiente: si utils.js falla, la promesa se resuelve igual
+    phoneInitPromises.push(
+      iti.promise.catch(() => null)   // ← ya está “settled”
+    );
   });
 }
 
@@ -379,6 +426,28 @@ function validateLocSelect(sel){
   return !msg;
 }
 
+/* —— Motivo de retiro (regex + longitud ≤255) —— */
+function validateMotivoRet(inp){
+  return validateNameField(inp);        // reutiliza la misma lógica
+}
+
+/* —— Select ¿Falleció?  —— */
+function validateDifunto(sel){
+  const err = sel.parentElement.querySelector('.err-msg');
+  let msg = '';
+  if (!['0','1'].includes(sel.value)){
+      msg = '* Opción no válida';
+  }
+  if (msg){
+      err.textContent = msg;  err.style.display='block';
+      sel.classList.add('invalid');
+      return false;
+  }
+  err.textContent=''; err.style.display='none';
+  sel.classList.remove('invalid');
+  return true;
+}
+
 function validatePhoneRows () {
   let ok = true;
   for (let i = 0; i < 3; i++) {
@@ -404,32 +473,43 @@ function validatePhoneRows () {
       const iso   = data ? data.iso2 : '';                //  <<< NUEVO
       const pref  = data ? data.dialCode : '';            //  <<< NUEVO
 
-      const subscrLen = digits.length - pref.length;      //  <<< NUEVO
-
-      /* ─── chequeo de largo de suscriptor ─── */
-      const minSubscr = MOBILE_MIN_ES[iso] ?? 8;     // ← mínimo por país (o 8 global)
-      const maxSubscr = MOBILE_MAX_ES[iso] ?? 15;    // ← máximo por país
-
-      if (subscrLen < minSubscr){
-          msg = `* Mínimo ${minSubscr} dígitos`;
+      /* ─── prefijo digitado ≠ prefijo de la bandera ─── */
+      if (val && !digits.startsWith(pref)) {
+          msg = '* Selecciona un prefijo real';
           rowHasError = true;
-      } else if (subscrLen > maxSubscr){
-          msg = `* Máx ${maxSubscr} dígitos para ${iso.toUpperCase()}`;
-          rowHasError = true;
-      } else if (!PHONE_RE.test(val)){
-          msg = '* Solo + y dígitos';
-      }
-      else if (!desc){
-        if (!rowHasError)
-            msg = '* Ingresa número o quita descripción';    
+
       } else {
-        for (let j = 0; j < i; j++) {
-          if (!document.querySelector(`[name="tel${j}"]`).value.trim()) {
-            msg = `* Completa Teléfono ${j+1} antes`;
-            break;
+          const subscrLen = digits.length - pref.length;      //  <<< NUEVO
+
+          /* ─── chequeo de largo de suscriptor ─── */
+          const minSubscr = MOBILE_MIN_ES[iso] ?? 8;     // ← mínimo por país (o 8 global)
+          const maxSubscr = MOBILE_MAX_ES[iso] ?? 15;    // ← máximo por país
+
+          if (subscrLen < minSubscr){
+              const paisNom = COUNTRY_ES[iso] || iso.toUpperCase();
+              msg = `* Se requiere mínimo ${minSubscr} dígitos para ${paisNom}`;
+              rowHasError = true;
+          } else if (subscrLen > maxSubscr){
+              msg = `* Máx ${maxSubscr} dígitos para ${iso.toUpperCase()}`;
+              rowHasError = true;
+          } else if (!PHONE_RE.test(val)){
+              msg = '* Solo + y dígitos';
+              rowHasError = true;
           }
-        }
       }
+
+      /* ─── coherencia número ↔ descripción ─── */
+      if (!msg && !desc){
+          msg = '* Ingresa número o quita descripción';
+      } else if (!msg && desc){
+          for (let j = 0; j < i; j++) {
+              if (!document.querySelector(`[name="tel${j}"]`).value.trim()) {
+                  msg = `* Completa Teléfono ${j+1} antes`;
+                  break;
+              }
+          }
+      }
+
     } else if (desc) {                          // nº vacío → desc no permitida
       msg = '* Ingresa número o quita descripción';
     }
@@ -452,11 +532,52 @@ function validatePhoneRows () {
   return ok;
 }
 
+/* —— VALIDACIÓN Equipos / Proyectos —— */
+function validateEqRows () {
+  let ok = true;
+
+  document.querySelectorAll('#eq-container .eq-row').forEach(row => {
+
+      /* los dos únicos <select> que hay en la fila: 0 = Equipo, 1 = Rol */
+      const [selEq, selRol] = row.querySelectorAll('select');
+
+      /* caja de error (se crea solo la 1.ª vez) */
+      let err = row.querySelector('.err-msg');
+      if (!err) {
+          err = document.createElement('small');
+          err.className = 'err-msg';
+          row.appendChild(err);
+      }
+
+      let msg = '';
+      if (selEq.value && !selRol.value)          msg = '* Selecciona un rol';
+      if (!selEq.value &&  selRol.value)         msg = '* Falta seleccionar equipo';
+
+      /* feedback visual */
+      if (msg) {
+          err.textContent   = msg;
+          err.style.display = 'block';
+          selEq.classList.add ('invalid');
+          selRol.classList.add('invalid');
+          ok = false;
+      } else {
+          err.textContent   = '';
+          err.style.display = 'none';
+          selEq.classList.remove ('invalid');
+          selRol.classList.remove('invalid');
+      }
+  });
+
+  return ok;
+}
+
 /* +++++++++ VALIDAR Y NORMALIZAR TELÉFONOS +++++++++ */
 async function validateAndNormalizePhones () {
   /* Esperamos a que TODAS las promesas terminen,
      pero sin abortar si alguna se rechaza  */
-  await Promise.allSettled(phoneInitPromises);
+  await Promise.allSettled(
+    phoneInitPromises.map(p => p.catch(() => null))
+  );
 
   if (!validatePhoneRows()) {
     /* localiza el primer campo con error                                */
@@ -879,6 +1000,11 @@ function showRetiroModal (iep, nombre, exEq) {
   $('#form-ret textarea[name="motivo"]').value = '';
   $('#form-ret select[name="difunto"]').value  = '0';
   $('#modal-ret').classList.add('show');
+
+  const motInp = $('#form-ret textarea[name="motivo"]');
+  const difSel = $('#form-ret select[name="difunto"]');
+  motInp.oninput = () => validateMotivoRet(motInp);
+  difSel.onchange = () => validateDifunto(difSel);
 }
 
 $('#ret-close').onclick = ()=> hide($('#modal-ret'));
@@ -886,7 +1012,21 @@ $('#ret-cancel').onclick = ()=> hide($('#modal-ret'));
 
 $('#form-ret').onsubmit = async ev =>{
   ev.preventDefault();
+
+  const motInp = $('#form-ret textarea[name="motivo"]');
+  const difSel = $('#form-ret select[name="difunto"]');
+
+  const motOK = validateMotivoRet(motInp);
+  const difOK = validateDifunto(difSel);
+
+  if (!motOK || !difOK){
+      (motOK ? difSel : motInp).focus();
+      return;                         // -- aborta envío
+  }
+
+  /* >>> CREA EL OBJETO FormData CON TODOS LOS CAMPOS DEL FORMULARIO */
   const fd = new FormData(ev.target);
+
   fd.append('accion','eliminar');
 
   try{
@@ -1164,14 +1304,32 @@ function fillEditForm (u) {
 
   ['ed-razon-ret','ed-exeq-ret','ed-difunto-ret'].forEach(id=>{
     const el = document.getElementById(id);
-    if (isRet) el.removeAttribute('disabled');
-    else       el.setAttribute('disabled','disabled');
+
+    if (isRet){
+        el.removeAttribute('disabled');
+        el.setAttribute   ('required','required');
+    }else{
+        el.setAttribute   ('disabled','disabled');
+        el.removeAttribute('required');
+    }
   });
 
   if (isRet){
     $('#ed-razon-ret'  ).value = u.ret.razon      || '';
     $('#ed-exeq-ret'   ).value = u.ret.ex_equipo  || '';
     $('#ed-difunto-ret').value = u.ret.es_difunto || '0';
+  }
+
+  if (isRet){
+    const razInp  = $('#ed-razon-ret');
+    const exeqInp = $('#ed-exeq-ret');
+
+    razInp.oninput  = () => validateNameField(razInp);
+    exeqInp.oninput = () => validateNameField(exeqInp);
+
+    /* primera pasada */
+    validateNameField(razInp);
+    validateNameField(exeqInp);
   }
 
   /* —— listeners de validación en vivo —— */
@@ -1335,8 +1493,48 @@ async function populatePhoneDescs () {
 
 /* ocupaciones ---------------------------------------------------------- */
 async function populateOcupaciones () {
-  const j = await (await fetch(`${API}?accion=ocupaciones`)).json();
-  return j.ocupaciones;   // [{id,nom}, …]
+  const j   = await (await fetch(`${API}?accion=ocupaciones`)).json();
+  const list = j.ocupaciones.slice();                // copia editable
+
+  /* ── fuerza que “Sin ocupación actual” quede al final ── */
+  const idxNone = list.findIndex(o => /^Sin ocupación/i.test(o.nom));
+  if (idxNone !== -1) {
+      const [none] = list.splice(idxNone, 1);        // lo quitamos
+      list.push(none);                               // …y lo añadimos al final
+  }
+
+  /* — id real de “Sin ocupación actual” — */
+  if (window.NONE_OCUP_ID === undefined) {
+      const none = list.find(o => /^Sin ocupación/i.test(o.nom));
+      /*  Si aún no existe la fila creamos el chip sin id; el back-end
+          la insertará automáticamente al guardar.                      */
+      window.NONE_OCUP_ID = none ? none.id : null;      // ← sin “plan B” local
+  }
+
+  /* este bloque se ejecutará **una sola vez** */
+  const cont = $('#ocup-container');
+  if (!cont._listenerAdded) {
+      cont.addEventListener('change', e => {
+          const chk = e.target;
+          if (chk.type !== 'checkbox') return;
+
+          const noneInp = cont.querySelector(
+                           `input[name="ocup_${window.NONE_OCUP_ID}"]`);
+
+          if (!noneInp) return;
+
+          if (chk === noneInp && chk.checked) {          // se marcó “Sin ocupación”
+              cont.querySelectorAll('input[type="checkbox"]').forEach(c => {
+                  if (c !== noneInp) c.checked = false;
+              });
+          } else if (chk !== noneInp && chk.checked) {   // se marcó otra cualquiera
+              noneInp.checked = false;
+          }
+      });
+      cont._listenerAdded = true;
+  }
+
+  return list;               //  ← ¡IMPORTANTE!
 }
 
 async function addEqRow () {
@@ -1376,6 +1574,18 @@ async function addEqRow () {
 
   // selector de rol
   const selRol = document.createElement('select');
+
+  // error placeholder (necesario para inline)
+  const err = document.createElement('small');
+  err.className = 'err-msg';
+  row.appendChild(err);
+
+  /* listeners que re-validan de inmediato */
+  selEq.addEventListener ('change', () => {
+      loadRolesInto(selRol, selEq.value);
+      validateEqRows();                 // ← NUEVO
+  });
+  selRol.addEventListener('change', validateEqRows);   // ← NUEVO
 
   selEq.onchange = async () => {
       if (!selEq.value) { selRol.innerHTML=''; return; }
@@ -1505,8 +1715,16 @@ async function submitEdit (ev) {
   /* normaliza (números+K) antes de empaquetar */
   $('#ed-rut').value = $('#ed-rut').value.toUpperCase().replace(/[.\-]/g, '');
 
-  if (IS_RET && !$('#ed-razon-ret').value.trim()){
-    alert('La razón de retiro no puede quedar vacía'); return;
+  if (IS_RET){
+      const razonOK = validateNameField($('#ed-razon-ret'));  // 255 máx
+      const exeqOK  = validateNameField($('#ed-exeq-ret'));   // 50 máx
+
+      if (!razonOK || !exeqOK){
+          const bad = $('#fs-retirados .invalid');
+          bad?.scrollIntoView({behavior:'smooth',block:'center'});
+          bad?.focus({preventScroll:true});
+          return;                        // aborta el submit
+      }
   }
 
   const paisOK   = validateLocSelect($('#ed-pais'));
@@ -1541,13 +1759,36 @@ async function submitEdit (ev) {
       .forEach(k => fd.delete(k));
   }
 
+  /* —— Equipos / Proyectos: al menos equipo + rol en cada fila —— */
+  if (!validateEqRows()) {
+      const firstBad = $('#eq-container .invalid');
+      if (firstBad) {
+          firstBad.scrollIntoView({behavior:'smooth', block:'center'});
+          firstBad.focus({preventScroll:true});
+      }
+      return;                              // ← cancela el submit
+  }
+
   /* empaquetar equipos nuevos */
   const arr = [...$$('.eq-row')].map(r => {
-      const e  = r.querySelector('select:nth-child(1)').value;
-      const rl = r.querySelector('select:nth-child(2)').value;
-      return e && rl ? { eq: e, rol: rl } : null;
+    const [selEq, selRol] = r.querySelectorAll('select');   // 0 = Equipo, 1 = Rol
+    const e  = selEq ? selEq.value : '';
+    const rl = selRol ? selRol.value : '';
+    return e && rl ? { eq: e, rol: rl } : null;
   }).filter(Boolean);
+
+  /* ─── NUEVO: envía el array al back-end ─── */
   fd.append('equip', JSON.stringify(arr));
+
+  /* empaquetar ocupaciones */
+  const ocIds = [...$$('#ocup-container input[type="checkbox"]')]
+                    .filter(c => c.checked)
+                    .map   (c => Number(c.name.replace('ocup_','')));
+  fd.append('ocup', JSON.stringify(ocIds));
+
+  // en submitEdit(), justo antes del fetch:
+  if (ocIds.length === 0)
+    toast('No se seleccionó ocupación: se asignará “Sin ocupación actual”.');
 
   try{
       const j = await fetchJSON(API,{method:'POST',body:fd});
