@@ -33,6 +33,97 @@ const hide = el =>{
 
 const DEFAULT_PHOTO = 'uploads/fotos/default.png';
 
+let SEARCH = '';                       // texto actual del buscador
+const DEBOUNCE = 300;                  // ms
+
+/* ————————————————————————————————
+   Sanitiza la búsqueda  (máx 100 caracteres)
+   — solo letras (cualquier idioma), números,
+     espacio y . , # ¿ ¡ ! ? ( ) / - @ + _ %
+————————————————————————————————*/
+const ALLOWED_RE = /[^\p{L}\p{N} .,#¿¡!?()\/\-@+_%\n\r]+/gu;
+function limpiaBusqueda(raw){
+  return raw
+          .replace(ALLOWED_RE, '')   // quita lo no permitido
+          .replace(/\s+/g, ' ')      // colapsa espacios
+          .trim()
+          .slice(0, 100);            // límite duro
+}
+
+let tSearch;                           // id del timer
+
+const searchBox = $('#search-box');
+
+/* ——— mensaje de error inline para el buscador ——— */
+const searchErr = document.createElement('small');
+searchErr.id          = 'search-err';
+searchErr.className   = 'err-msg';
+searchErr.style.marginLeft = '1rem';
+searchErr.style.display    = 'none';
+searchBox.after(searchErr);
+
+searchBox.addEventListener('input', () => {
+  clearTimeout(tSearch);
+
+  /* ── TOPE DURO ────────────────────────────────────────────────
+      Si el usuario pega o escribe más de 100 caracteres
+      recortamos inmediatamente el exceso y avisamos.             */
+  if (searchBox.value.length > 100) {
+      searchBox.value = searchBox.value.slice(0, 100);      // corta al límite
+
+      /* muestra la alerta y marca el campo                                       */
+      searchErr.textContent =
+        'Máx 100 caracteres. Solo letras, números, espacio y . , # ¿ ¡ ! ? ( ) / - @ + _ %';
+      searchErr.style.display = 'block';
+      searchBox.classList.add('invalid');
+
+      /* cancela cualquier búsqueda que estuviera activa                          */
+      SEARCH = '';
+      PAGE   = 1;
+      refreshTable();
+      buildPager();
+
+      return;                                // ← no ejecuta nada más
+  }
+
+  const raw = searchBox.value;               // ya ≤100 caracteres
+
+  ALLOWED_RE.lastIndex = 0;
+
+  /* ► chequeo instantáneo */
+  const tieneProhibido  = ALLOWED_RE.test(raw);
+  const sobreLongitud   = false;                 /* siempre false: límite físico */
+
+  if (tieneProhibido || sobreLongitud) {
+      searchErr.textContent =
+        'Máx 100 caracteres. Solo letras, números, espacio y . , # ¿ ¡ ! ? ( ) / - @ + _ %';
+      searchErr.style.display = 'block';
+      searchBox.classList.add('invalid');
+
+      /* ── NUEVO: cancela por completo la búsqueda anterior ── */
+      SEARCH = '';                // vacía el término activo
+      PAGE   = 1;                 // resetea paginación
+      refreshTable();             // solo se mantiene el filtro del sidebar
+      buildPager();
+
+      return;                     // nada se envía al back-end
+  }
+
+  /* todo OK → oculta el mensaje y continúa */
+  searchErr.textContent   = '';
+  searchErr.style.display = 'none';
+  searchBox.classList.remove('invalid');
+
+  const val = limpiaBusqueda(raw);   // ya sanitizado
+
+  tSearch = setTimeout(() => {
+    SEARCH = normaliza(val.trim());
+    PAGE   = 1;
+    refreshTable();
+    buildPager();
+  }, DEBOUNCE);
+});
+
 /* ========= TOAST ligero (sin librerías externas) ========= */
 function toast (msg, ms = 3000){
   const box = document.createElement('div');
@@ -717,6 +808,27 @@ async function selectTeam (id, li, page = 1) {
   }
 }
 
+/* quita tildes, baja a minúsculas, elimina signos */
+const normaliza = txt => (txt||'')
+  .toLowerCase()
+  .normalize("NFD").replace(/[\u0300-\u036f]/g,'')  // tildes
+  .replace(/[^\w\s@.+-]/g,' ')                      // limpia rarezas
+  .trim();
+
+function coincideFila(row){
+  if(!SEARCH) return true;              // sin buscador: todo pasa
+  const base = [
+    row.nombre, row.rut_dni_fmt, row.correo,
+    row.telefonos, row.ubicacion, row.direccion,
+    row.profesion_oficio_estudio, row.iglesia_ministerio,
+    row.ingreso, row.ultima_act,
+    row.fecha_retiro, row.ex_equipo
+  ].join(' ').toLowerCase();
+
+  const txt = normaliza(base);
+  return SEARCH.split(/\s+/).every(p => txt.includes(p));
+}
+
 function refreshTable () {
   const cols  = visibleCols();
   const thead = $('#tbl-integrantes thead');
@@ -750,7 +862,9 @@ function refreshTable () {
   });
 
   /* filas */
-  tbody.innerHTML = DATA.map(r => {
+  const rows = DATA.filter(coincideFila);
+
+  tbody.innerHTML = rows.map(r => {
     const tdCols = cols.map(k => `<td>${r[k] ?? ''}</td>`).join('');
 
     /*  per3 / est3 es el MÁS ANTIGUO  */

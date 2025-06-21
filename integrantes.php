@@ -634,6 +634,22 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
     border-color:#d93025 !important;
     box-shadow:0 0 0 2px rgba(217,48,37,.25) !important;
   }
+
+  /* buscador – pegado al botón Columnas */
+  #search-box{
+    margin-left:1rem;           /* separa del engranaje */
+    padding:.45rem .9rem;
+    border:1px solid #d6d9e2;
+    border-radius:20px;
+    font:400 .9rem/1 "Poppins",sans-serif;
+    width:260px;                /* según tu layout  */
+    transition:border-color .2s;
+  }
+  #search-box:focus{
+    outline:none;
+    border-color:var(--primary);
+    box-shadow:0 0 0 2px #dfe2ff;
+  }
   </style>
 
   <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
@@ -699,6 +715,10 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
         <i></i>Columnas
         <div id="cols-menu" class="cols-menu"></div>
       </button>
+
+      <input id="search-box" type="search" placeholder="🔍 Buscar…"
+            autocomplete="off" spellcheck="false" maxlength="100">
+      <small id="search-err" class="err-msg" style="margin-left:1rem;display:none;"></small>
 
       <section id="section-table">
           <table id="tbl-integrantes">

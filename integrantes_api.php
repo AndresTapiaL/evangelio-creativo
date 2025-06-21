@@ -97,6 +97,44 @@ try {
       $sort = $_GET['sort'] ?? 'nombre';              // alias pedido desde el front
       $dir  = (strtoupper($_GET['dir']??'ASC')==='DESC') ? 'DESC' : 'ASC';
 
+      /* ————————————————————————————————
+      Buscador seguro
+      ————————————————————————————————*/
+      $rawSearch = $_GET['search'] ?? '';
+
+      /* 1) limpiamos cualquier carácter no permitido */
+      $sanitized = preg_replace(
+                      '/[^\p{L}\p{N} .,#¿¡!?()\/\-@+_%\r\n]+/u',
+                      '',
+                      $rawSearch
+                  );
+
+      /* 2) máximo 100 caracteres                          */
+      $sanitized = mb_substr($sanitized, 0, 100);
+
+      /* 3) SI la limpieza alteró el texto original,
+          desechamos la búsqueda por completo            */
+      if ($sanitized !== $rawSearch) {
+          $search = '';            // ← solo filtra por el sidebar
+      } else {
+          $search = trim($sanitized);
+      }
+
+      $extraWhere = '';
+      $params     = [ ':hoy' => $hoy ];
+
+      if ($search !== '') {
+          /* elimina tildes para un LIKE “insensible” */
+          $map = [
+              'Á'=>'A','É'=>'E','Í'=>'I','Ó'=>'O','Ú'=>'U','Ü'=>'U','Ñ'=>'N',
+              'á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n'
+          ];
+          $norm = strtr($search, $map);        // «José» → «Jose»
+
+          $extraWhere           = " AND nombre_norm LIKE :q ";
+          $params[':q'] = '%'.$norm.'%';
+      }
+
       /*  mapa alias ⇒ expresión SQL real  */
       $orderMap = [
       'nombre'                     => 'nombre',
@@ -281,14 +319,19 @@ try {
       $tot->bindValue(':hoy',$hoy); $tot->execute();
       $totalRows = (int)$tot->fetchColumn();
 
+      $sql .= $extraWhere;
+
       $sql .= " GROUP BY u.id_usuario
               ORDER BY $orderBy $dir
               LIMIT :off,:per";
 
       $st=$pdo->prepare($sql);
-      $st->bindValue(':hoy',$hoy);
-      $st->bindValue(':off',($page-1)*$per,PDO::PARAM_INT);
-      $st->bindValue(':per',$per,PDO::PARAM_INT);
+      $st->bindValue(':hoy', $hoy);
+      if ($search !== '')            $st->bindValue(':q', $params[':q']);
+      if ($team != 0 && $team !== 'ret')
+          $st->bindValue(':team', $team, PDO::PARAM_INT);
+      $st->bindValue(':off', ($page - 1) * $per, PDO::PARAM_INT);
+      $st->bindValue(':per', $per, PDO::PARAM_INT);
       if($team!=0 && $team!=='ret') $st->bindValue(':team',$team,PDO::PARAM_INT);
       $st->execute();
       $rows=$st->fetchAll(PDO::FETCH_ASSOC);
