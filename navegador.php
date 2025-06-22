@@ -60,7 +60,16 @@ nav{
 }
 
 /* navegación izquierda */
-nav .menu{display:flex; gap:1.6rem;}
+nav .menu{
+  display:flex;
+  align-items:center;   /* ⬅️ fuerza la alineación vertical */
+  gap:1.6rem;
+}
+/* enlaces dentro del menú en línea con el logo */
+nav .menu a{
+  display:inline-flex;
+  align-items:center;
+}
 nav .menu a{
   text-decoration:none; color:var(--nav-text);
   font-weight:500; position:relative;
@@ -98,12 +107,33 @@ nav .menu a:focus::after{width:100%;}
   color:#ef4444;        /* rojo 400 */
   transform:rotate(6deg);
 }
+
+/* ───── Logo animado ───── */
+nav .logo{
+  display:flex;
+  align-items:center;
+  margin-right:.8rem;            /* separación con el primer enlace */
+}
+
+nav .logo img{
+  height:36px;                   /* alto del logo */
+  transition:transform .45s ease, filter .45s ease;
+  transform-origin:center;
+}
+
+nav .logo:hover img{
+  transform:rotateY(360deg) scale(1.07);
+  filter:drop-shadow(0 0 6px rgba(118, 78, 233, .45));
+}
 </style>
 
 <!-- ░░░░ NAV ░░░░ -->
 <nav>
   <!-- -------- enlaces principales -------- -->
   <div class="menu">
+    <a class="logo" href="home.php">
+      <img src="images/LogoEC.png" alt="Logo Evangelio Creativo">
+    </a>
     <a href="home.php">Inicio</a>
     <a href="eventos.php">Eventos</a>
     <a href="integrantes.php">Integrantes</a>

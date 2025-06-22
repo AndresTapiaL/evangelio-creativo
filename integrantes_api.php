@@ -8,6 +8,25 @@ require 'conexion.php';
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 
+define('UPLOADS_FOTOS_DIR', realpath(__DIR__.'/uploads/fotos'));
+
+/* Privilegios solicitante ───────────────────── */
+$uid = $_SESSION['id_usuario'] ?? 0;      // puede ser 0 si la sesión caducó
+$acl = $pdo->prepare("
+      SELECT id_equipo_proyecto, id_rol, habilitado
+        FROM integrantes_equipos_proyectos
+       WHERE id_usuario = :u AND habilitado = 1");
+$acl->execute([':u'=>$uid]);
+$aclRows  = $acl->fetchAll(PDO::FETCH_ASSOC);
+
+$reqSuper = false;
+$reqTeams = [];           // equipos que puede ver
+foreach ($aclRows as $r){
+    if ($r['id_equipo_proyecto'] == 1)      $reqSuper = true;
+    if (in_array($r['id_rol'], [4,6], true))
+        $reqTeams[] = $r['id_equipo_proyecto'];
+}
+
 $accion = $_GET['accion']    ?? $_POST['accion'] ?? 'lista';   // default »lista«
 $metodo = $_SERVER['REQUEST_METHOD'];          // GET | POST
 $hoy    = date('Y-m-d');
@@ -91,6 +110,14 @@ try {
   /* ════════════════ 1) LISTA INTEGRANTES ════════════════ */
   case 'GET:lista': {
       $team   = $_GET['team'] ?? '0';
+      /*  ACL  acceso a la sección solicitada */
+      if ($team === '0' || $team === 'ret'){
+          if (!$reqSuper){ http_response_code(403); exit; }
+      }else{
+          if (!$reqSuper && !in_array((int)$team,$reqTeams,true)){
+              http_response_code(403); exit;
+          }
+      }
       $page   = max(1,(int)($_GET['page']??1));
       $per    = max(1,min(200,(int)($_GET['per']??50)));   // 50 por defecto
 
@@ -366,14 +393,31 @@ try {
 
   /* ════════════════ 2) LISTA EQUIPOS ════════════════ */
   case 'GET:equipos': {
-      $items=[ ['id'=>0,'nombre'=>'General','es_equipo'=>null] ];
-      $items=array_merge($items,
-        $pdo->query("SELECT id_equipo_proyecto AS id,nombre_equipo_proyecto AS nombre,es_equipo
-                       FROM equipos_proyectos
-                   ORDER BY es_equipo DESC,nombre_equipo_proyecto")->fetchAll(PDO::FETCH_ASSOC));
-      $items[]=['id'=>'ret','nombre'=>'Retirados','es_equipo'=>null];
-      echo json_encode(['ok'=>true,'equipos'=>$items]);
-      break;
+    if ($reqSuper){                // ve todo
+        $items = [['id'=>0,'nombre'=>'General','es_equipo'=>null]];
+        $items = array_merge($items,
+            $pdo->query("SELECT id_equipo_proyecto AS id,
+                                nombre_equipo_proyecto AS nombre,
+                                es_equipo
+                           FROM equipos_proyectos
+                       ORDER BY es_equipo DESC,nombre_equipo_proyecto")
+                 ->fetchAll(PDO::FETCH_ASSOC));
+        $items[] = ['id'=>'ret','nombre'=>'Retirados','es_equipo'=>null];
+    }else{
+        if (!$reqTeams){ echo json_encode(['ok'=>true,'equipos'=>[]]); break; }
+        $place = implode(',', array_fill(0,count($reqTeams),'?'));
+        $st = $pdo->prepare("
+              SELECT id_equipo_proyecto AS id,
+                     nombre_equipo_proyecto AS nombre,
+                     es_equipo
+                FROM equipos_proyectos
+               WHERE id_equipo_proyecto IN ($place)
+            ORDER BY es_equipo DESC,nombre_equipo_proyecto");
+        $st->execute($reqTeams);
+        $items = $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+    echo json_encode(['ok'=>true,'equipos'=>$items]);
+    break;
   }
 
   /* ════════════════ 3) ROLES POR EQUIPO ════════════════ */
@@ -786,27 +830,35 @@ try {
       $region = $region === '' ? null : $region;
       $ciudad = $ciudad === '' ? null : $ciudad;
 
-      /* ——  VALIDACIÓN Retirados  (obligatorios) —— */
+      /* ¿Está actualmente en la tabla Retirados?  */
+      $esRetirado = (bool)$pdo
+          ->query("SELECT 1 FROM retirados WHERE id_usuario = $id")
+          ->fetchColumn();
+
+      /* ——  VALIDACIÓN Retirados  — solo si el usuario YA está retirado —— */
       $razonRet    = trim($_POST['razon_ret']       ?? '');
       $exeqRet     = trim($_POST['ex_equipo_ret']   ?? '');
       $difuntoRet  = $_POST['es_difunto_ret']       ?? '0';
 
-      if ($razonRet === ''){
-          echo json_encode(['ok'=>false,'error'=>'La razón de retiro es obligatoria']); exit;
-      }
-      if (mb_strlen($razonRet) > 255 || !preg_match($reGeneral,$razonRet)){
-          echo json_encode(['ok'=>false,'error'=>'Razón de retiro inválida']); exit;
-      }
+      if ($esRetirado) {
 
-      if ($exeqRet === ''){
-          echo json_encode(['ok'=>false,'error'=>'El ex-equipo es obligatorio']); exit;
-      }
-      if (mb_strlen($exeqRet) > 50 || !preg_match($reGeneral,$exeqRet)){
-          echo json_encode(['ok'=>false,'error'=>'Ex-equipo inválido']); exit;
-      }
+        if ($razonRet === ''){
+            echo json_encode(['ok'=>false,'error'=>'La razón de retiro es obligatoria']); exit;
+        }
+        if (mb_strlen($razonRet) > 255 || !preg_match($reGeneral,$razonRet)){
+            echo json_encode(['ok'=>false,'error'=>'Razón de retiro inválida']); exit;
+        }
 
-      if (!in_array($difuntoRet,['0','1'],true)){
-          echo json_encode(['ok'=>false,'error'=>'Valor de “Fallecido” no válido']); exit;
+        if ($exeqRet === ''){
+            echo json_encode(['ok'=>false,'error'=>'El ex-equipo es obligatorio']); exit;
+        }
+        if (mb_strlen($exeqRet) > 50 || !preg_match($reGeneral,$exeqRet)){
+            echo json_encode(['ok'=>false,'error'=>'Ex-equipo inválido']); exit;
+        }
+
+        if (!in_array($difuntoRet,['0','1'],true)){
+            echo json_encode(['ok'=>false,'error'=>'Valor de “Fallecido” no válido']); exit;
+        }
       }
 
       $pdo->beginTransaction();
@@ -862,6 +914,15 @@ try {
                                 WHERE id_usuario = :id");
             $old->execute([':id'=>$id]);
             $path = $old->fetchColumn();
+
+            $baseDir = realpath(__DIR__.'UPLOADS_FOTOS_DIR');   // carpeta segura
+            if ($path) {
+                $real = realpath($path);
+                /*  Abortamos si el archivo está fuera de /uploads/fotos  */
+                if ($real === false || !str_starts_with($real, $baseDir)) {
+                    throw new Exception('Ruta de foto no permitida');
+                }
+            }
 
             // ② borra el archivo físico (si existe y está dentro de /uploads/fotos/)
             if ($path && file_exists($path) && str_starts_with($path,'uploads/fotos/')) {
@@ -967,6 +1028,16 @@ try {
                     ':pri' => $i === 0 ? 1 : 0,
                     ':des' => $_POST["tel_desc$i"] ?: null
                 ]);
+        }
+
+        /* Solo Super puede tocar el bloque “equip” */
+        if (!$reqSuper &&
+            isset($_POST['equip']) &&
+            trim($_POST['equip']) !== '' &&
+            trim($_POST['equip']) !== '[]') {
+
+            echo json_encode(['ok'=>false,'error'=>'Sin permiso para modificar equipos']);
+            exit;
         }
 
         /* 4) Equipos / proyectos */

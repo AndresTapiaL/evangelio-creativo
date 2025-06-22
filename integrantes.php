@@ -3,10 +3,30 @@ date_default_timezone_set('UTC');
 require 'conexion.php';
 session_start();
 if (empty($_SESSION['id_usuario'])) {
+    session_destroy();
     header('Location: login.html');
     exit;
 }
 $id = $_SESSION['id_usuario'];
+
+$st = $pdo->prepare("
+     SELECT id_equipo_proyecto     AS eq,
+            id_rol,
+            habilitado
+       FROM integrantes_equipos_proyectos
+      WHERE id_usuario = :id
+        AND habilitado = 1");
+$st->execute([':id'=>$id]);
+$rowsPriv = $st->fetchAll(PDO::FETCH_ASSOC);
+
+$isSuper = false;          //  pertenece al equipo 1 habilitado
+$canSee  = [];             //  id de equipos que puede ver
+
+foreach ($rowsPriv as $r){
+    if ($r['eq'] == 1)               $isSuper = true;
+    if (in_array($r['id_rol'], [4,6], true))
+        $canSee[] = $r['eq'];
+}
 
 // — Trae nombre y foto para el menú —
 $stmt = $pdo->prepare("
@@ -19,48 +39,71 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 /* ---------- precarga servidor ---------- */
 $teamDefault = 0;                    // “General”
-/* equipos para el sidebar */
-$equiposInit = [['id'=>0,'nombre'=>'General','es_equipo'=>null]];
-$equiposInit = array_merge(
+/* Equipos visibles en sidebar ---------------- */
+$equiposInit = [];
+
+if ($isSuper){                      // ve todo
+    $equiposInit[] = ['id'=>0,'nombre'=>'General','es_equipo'=>null];
+    $equiposInit = array_merge(
         $equiposInit,
         $pdo->query("SELECT id_equipo_proyecto AS id,
                             nombre_equipo_proyecto AS nombre,
                             es_equipo
                        FROM equipos_proyectos
                    ORDER BY es_equipo DESC,nombre_equipo_proyecto")
-            ->fetchAll(PDO::FETCH_ASSOC));
-$equiposInit[] = ['id'=>'ret','nombre'=>'Retirados','es_equipo'=>null];
+             ->fetchAll(PDO::FETCH_ASSOC));
+    $equiposInit[] = ['id'=>'ret','nombre'=>'Retirados','es_equipo'=>null];
+}else{                              // solo los que dirige
+    if ($canSee){
+        $place = implode(',', array_fill(0,count($canSee),'?'));
+        $equiposInit = $pdo->prepare("
+              SELECT id_equipo_proyecto AS id,
+                     nombre_equipo_proyecto AS nombre,
+                     es_equipo
+                FROM equipos_proyectos
+               WHERE id_equipo_proyecto IN ($place)
+            ORDER BY es_equipo DESC,nombre_equipo_proyecto");
+        $equiposInit->execute($canSee);
+        $equiposInit = $equiposInit->fetchAll(PDO::FETCH_ASSOC);
+    }
+}
 
-/* integrantes del equipo por defecto (misma query que usa la API) */
-$st = $pdo->prepare("
-   SELECT u.id_usuario,
-          CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS nombre,
-          DATE_FORMAT(u.fecha_nacimiento,'%d-%m')        AS dia_mes,
-          TIMESTAMPDIFF(YEAR,u.fecha_nacimiento,CURDATE()) AS edad,
-          (SELECT correo_electronico FROM correos_electronicos
-              WHERE id_usuario=u.id_usuario LIMIT 1)     AS correo,
-          CONCAT_WS(' / ',cc.nombre_ciudad_comuna,re.nombre_region_estado,p.nombre_pais) AS ubicacion,
-          DATE_FORMAT(u.fecha_registro,'%d-%m-%Y')       AS ingreso,
-          DATE_FORMAT(u.ultima_actualizacion,'%d-%m-%Y') AS ultima_act,
-          iep.id_integrante_equipo_proyecto,
-          NULL AS est1,NULL AS est2,NULL AS est3,
-          NULL AS per1_id,NULL AS per2_id,NULL AS per3_id
-     FROM usuarios u
-     LEFT JOIN ciudad_comuna  cc ON cc.id_ciudad_comuna=u.id_ciudad_comuna
-     LEFT JOIN region_estado  re ON re.id_region_estado=u.id_region_estado
-     LEFT JOIN paises         p  ON p.id_pais=u.id_pais
-     LEFT JOIN integrantes_equipos_proyectos iep
-             ON iep.id_usuario = u.id_usuario
-           AND iep.habilitado = 1          /* ← solo vínculos vigentes */
-    WHERE u.id_usuario NOT IN (SELECT id_usuario FROM retirados)
-      AND EXISTS (SELECT 1                        /* ← asegura al menos uno */
-                    FROM integrantes_equipos_proyectos ie2
-                  WHERE ie2.id_usuario = u.id_usuario
-                    AND ie2.habilitado = 1)
-    GROUP BY u.id_usuario
-    ORDER BY nombre");
-$st->execute();
-$integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
+/* integrantes del equipo por defecto (misma query que usa la API)
+    ACL  — solo para quienes realmente pueden ver «General» ───────── */
+if ($isSuper){                               // puede ver sección 0
+    $st = $pdo->prepare("
+       SELECT u.id_usuario,
+              CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS nombre,
+              DATE_FORMAT(u.fecha_nacimiento,'%d-%m')        AS dia_mes,
+              TIMESTAMPDIFF(YEAR,u.fecha_nacimiento,CURDATE()) AS edad,
+              (SELECT correo_electronico FROM correos_electronicos
+                 WHERE id_usuario=u.id_usuario LIMIT 1)        AS correo,
+              CONCAT_WS(' / ',cc.nombre_ciudad_comuna,re.nombre_region_estado,p.nombre_pais) AS ubicacion,
+              DATE_FORMAT(u.fecha_registro,'%d-%m-%Y')         AS ingreso,
+              DATE_FORMAT(u.ultima_actualizacion,'%d-%m-%Y')   AS ultima_act,
+              iep.id_integrante_equipo_proyecto,
+              NULL AS est1,NULL AS est2,NULL AS est3,
+              NULL AS per1_id,NULL AS per2_id,NULL AS per3_id
+         FROM usuarios u
+         LEFT JOIN ciudad_comuna  cc ON cc.id_ciudad_comuna=u.id_ciudad_comuna
+         LEFT JOIN region_estado  re ON re.id_region_estado=u.id_region_estado
+         LEFT JOIN paises         p  ON p.id_pais=u.id_pais
+         LEFT JOIN integrantes_equipos_proyectos iep
+                ON iep.id_usuario = u.id_usuario
+               AND iep.habilitado = 1
+        WHERE u.id_usuario NOT IN (SELECT id_usuario FROM retirados)
+          AND EXISTS (SELECT 1
+                        FROM integrantes_equipos_proyectos ie2
+                      WHERE ie2.id_usuario = u.id_usuario
+                        AND ie2.habilitado = 1)
+      GROUP BY u.id_usuario
+      ORDER BY nombre");
+    $st->execute();
+    $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
+}else{
+    /* no hay datos pre-cargados si no tiene acceso a «General» */
+    $integrantesInit = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -138,33 +181,74 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
   
   /* ───────────  VARIABLES Y RESET BÁSICO  ─────────── */
   :root{
-    --bg-main:#f1f4f9;
-    --bg-card:#ffffff;
-    --bg-sidebar:#21263a;
-    --bg-modal:#ffffff;
-    --text-main:#242424;
-    --text-muted:#6d7280;
-    --primary:#5562ff;
-    --primary-dark:#3841d8;
+    /* ◇ Paleta base */
+    --negro:    #2e292c;
+    --naranjo:  #ff3600;
+    --amarillo: #fee920;
+    --rojo:     #d60000;
+    --blanco:   #e1e5ea;
+
+    /* ◇ Semánticas (la app referencia solo éstas) */
+    --bg-main:     var(--blanco);      /* fondo general */
+    --bg-card:     #ffffff;            /* tarjetas / tablas */
+    --bg-sidebar:  var(--negro);       /* lateral */
+    --bg-modal:    #ffffff;            /* diálogos */
+    --text-main:   var(--negro);
+    --text-muted:  #6d7280;            /* gris que ya usabas funciona bien */
+    --primary:     var(--naranjo);     /* botones, enlaces activos, etc. */
+    --primary-dark:#c13600;            /* naranjo más oscuro para :hover */
+    --warning:     var(--amarillo);    /* fondos de alerta */
+    --danger:      var(--rojo);        /* textos/íconos de error */
     --radius:12px;
     --shadow:0 6px 24px rgba(0,0,0,.08);
     --transition:.2s ease;
+    --nav-h:72px;
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
   html{scroll-behavior:smooth;}
+  /* 1️⃣  Declaración normal del body */
+  /* 1.  Declaración normal ─ sin background */
   body{
     font:400 16px/1.5 "Poppins",sans-serif;
-    background:var(--bg-main);
+    position:relative;          /* ancla (::before se posiciona respecto a body) */
     color:var(--text-main);
+    margin:0;
+    min-height:100vh;
+  }
+
+  /* 2.  Pseudo-elemento con el fondo rotado */
+  body::before{
+    content:"";
+    position:fixed;             /* cubre SIEMPRE todo el viewport */
+    inset:0;                    /* top:0 right:0 bottom:0 left:0 */
+    z-index:-1;
+
+    background:url("images/Fondo-blanco.jpeg") center/cover no-repeat;
+
+    /* 90 ° sentido horario + traslación para que encaje */
+    transform:
+        rotate(90deg)          /* primero lo giramos … */
+        translateY(-100%);     /* … y luego lo bajamos una “altura” entera */
+    /*               ↑
+      order-of-operations: el translate se aplica **después** del rotate    */
+
+    transform-origin:top left;  /* el pivote de la rotación */
+
+    /* ancho ↔ alto intercambiados para seguir cubriendo el viewport */
+    width:100vh;
+    height:100vw;
   }
 
   /* ───────────  NAV  ─────────── */
   nav{
+    position:sticky;           /* o fixed si prefieres que NO empuje el contenido */
+    top:0;
+    height:var(--nav-h);       /* altura controlada por la variable */
+    padding:0 1.5rem;          /* quita el padding vertical          */
+    display:flex;
+    align-items:center;        /* centra el texto verticalmente      */
     background:#fff;
     box-shadow:var(--shadow);
-    padding:.85rem 1.5rem;
-    display:flex;align-items:center;justify-content:space-between;
-    position:sticky;top:0;z-index:500;
   }
   nav .menu{display:flex;gap:1.4rem;}
   nav a{
@@ -179,16 +263,14 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
   /* sidebar absoluto contra el borde izquierdo */
   .sidebar{
     position:fixed;
-    top:72px;              /* = altura real del <nav>  */
+    top:var(--nav-h);          /* siempre pegado justo debajo del nav */
     left:0;
     bottom:0;
     width:240px;
-    color:#fff;
-
+    color: #fff;
     background:var(--bg-sidebar);
     padding:1rem .5rem 2rem;          /* 2 rem extra → no se corta último item */
     overflow-y:auto;
-
     border-radius:0 var(--radius) var(--radius) 0;
   }
 
@@ -221,8 +303,9 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
 
   /* ← 3.4 Botón Columnas renovado */
   #btn-cols{
+    margin-top:.8rem;
     margin-bottom:.8rem;      /* deja un pequeño aire antes de la tabla */
-    background:#1b2033;
+    background:var(--negro);
     border-radius:20px;
     display:flex;align-items:center;gap:.4rem;
     font-size:.85rem;
@@ -401,9 +484,13 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
 
   /* botón – cambia copy & color */
   #btn-cols{
-    background:var(--bg-sidebar);
-    display:flex;align-items:center;gap:.4rem;
+      background:var(--bg-sidebar);
+      display:inline-flex;        /*  ←  cambia flex ➜ inline-flex            */
+      align-items:center;
+      gap:.4rem;
+      vertical-align:top;      /*  mantiene la línea base con el input     */
   }
+
   #btn-cols::before{content:"⚙︎";}
 
   /* menú flotante */
@@ -637,6 +724,7 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
 
   /* buscador – pegado al botón Columnas */
   #search-box{
+    margin-top:.8rem;
     margin-left:1rem;           /* separa del engranaje */
     padding:.45rem .9rem;
     border:1px solid #d6d9e2;
@@ -692,6 +780,7 @@ $integrantesInit = $st->fetchAll(PDO::FETCH_ASSOC);
     /* primera carga sin round-trip AJAX */
     const PRE_EQUIPOS     = <?= json_encode($equiposInit ,JSON_UNESCAPED_UNICODE) ?>;
     const PRE_INTEGRANTES = <?= json_encode($integrantesInit,JSON_UNESCAPED_UNICODE) ?>;
+    const IS_SUPER = <?= $isSuper ? 'true' : 'false' ?>;
   </script>
 </head>
 

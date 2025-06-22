@@ -135,7 +135,7 @@ function toast (msg, ms = 3000){
       position   :'fixed',
       right      :'20px',
       zIndex     : 2000,
-      background :'#5562ff',
+      background :'var(--primary)',
       color      :'#fff',
       padding    :'10px 14px',
       borderRadius:'8px',
@@ -815,17 +815,36 @@ const normaliza = txt => (txt||'')
   .replace(/[^\w\s@.+-]/g,' ')                      // limpia rarezas
   .trim();
 
-function coincideFila(row){
-  if(!SEARCH) return true;              // sin buscador: todo pasa
+/* ——— decide si la fila pasa el filtro del buscador ——— */
+function coincideFila (row) {
+  if (!SEARCH) return true;          // sin texto → todo coincide
+
+  /* 1. Estados de actividad (id → nombre legible) */
+  const estadosTxt = [row.est1, row.est2, row.est3]      // ids
+                       .map(estadoNom)                   // «Nuevo», «Activo», …
+                       .join(' ');
+
+  /* 2. Campos extra que ahora también deben buscarse */
+  const extras = [
+      row.dia_mes || '',          // «DD-MM»
+      String(row.edad ?? ''),     // número a texto
+      row.razon   || ''           // solo existe en Retirados
+  ].join(' ');
+
+  /* 3. Texto base + lo nuevo */
   const base = [
     row.nombre, row.rut_dni_fmt, row.correo,
     row.telefonos, row.ubicacion, row.direccion,
     row.profesion_oficio_estudio, row.iglesia_ministerio,
     row.ingreso, row.ultima_act,
-    row.fecha_retiro, row.ex_equipo
+    row.fecha_retiro, row.ex_equipo,
+    estadosTxt,                   // ← NUEVO
+    extras                        // ← NUEVO
   ].join(' ').toLowerCase();
 
-  const txt = normaliza(base);
+  const txt = normaliza(base);     // quita tildes y signos raros
+
+  /* todas las palabras del buscador deben aparecer */
   return SEARCH.split(/\s+/).every(p => txt.includes(p));
 }
 
@@ -865,7 +884,11 @@ function refreshTable () {
   const rows = DATA.filter(coincideFila);
 
   tbody.innerHTML = rows.map(r => {
-    const tdCols = cols.map(k => `<td>${r[k] ?? ''}</td>`).join('');
+    const tdCols = cols.map(k => {
+        const cell = document.createElement('td');
+        cell.textContent = (r[k] ?? '');
+        return cell.outerHTML;
+    }).join('');
 
     /*  per3 / est3 es el MÁS ANTIGUO  */
     const idPer = [r.per3_id, r.per2_id, r.per1_id];
@@ -1183,13 +1206,23 @@ async function openDetalle (e) {
   md.querySelector('#det-correo').textContent  = u.correo_electronico;
   md.querySelector('#det-edad').textContent = u.edad + ' años';
   // array con objetos {num,desc,prim}
-  const telHTML = (u.telefonos_arr||[])
-        .map(t=>`<div>${t.num}
-                    <small style="color:var(--text-muted)">
-                      ${t.desc ? ' · '+descNom(t.desc) : ''}
-                      ${t.prim==1 ? ' · <b>Principal</b>' : ''}
-                    </small>
-                  </div>`).join('');
+  // ─── helper para escapar HTML ───
+  const esc = s => String(s)
+    .replace(/&/g,  '&amp;')
+    .replace(/</g,  '&lt;')
+    .replace(/>/g,  '&gt;')
+    .replace(/"/g,  '&quot;')
+    .replace(/'/g,  '&#39;');
+
+  // array con objetos {num, desc, prim}
+  const telHTML = (u.telefonos_arr || [])
+    .map(t => `<div>${esc(t.num)}
+                <small style="color:var(--text-muted)">
+                  ${t.desc ? ' · ' + descNom(t.desc) : ''}
+                  ${t.prim == 1 ? ' · <b>Principal</b>' : ''}
+                </small>
+              </div>`).join('');
+
   md.querySelector('#det-tels').innerHTML = telHTML || '-';
   md.querySelector('#det-ocup').textContent = u.ocupaciones || '-';
 
@@ -1411,10 +1444,12 @@ function fillEditForm (u) {
   });
 
   /* ——— sección Retirados ——— */
-  const isRet = !!u.ret;              // viene solo si está retirado
+  const isRet = !!u.ret;
   IS_RET = isRet;
   $('#fs-retirados').style.display = isRet ? 'block' : 'none';
-  $('#fs-equipos'  ).style.display = isRet ? 'none'  : 'block';
+  $('#fs-equipos').style.display   =
+        (isRet || !IS_SUPER) ? 'none' : 'block';
+  $('#btn-add-eq').style.display   = IS_SUPER ? '' : 'none';
 
   ['ed-razon-ret','ed-exeq-ret','ed-difunto-ret'].forEach(id=>{
     const el = document.getElementById(id);
@@ -1652,6 +1687,7 @@ async function populateOcupaciones () {
 }
 
 async function addEqRow () {
+  if (!IS_SUPER) return;
 
   /* 1)  calcula los equipos que ya están en filas creadas
          (puede haber varias llamadas a addEqRow)          */
@@ -1874,7 +1910,7 @@ async function submitEdit (ev) {
   }
 
   /* —— Equipos / Proyectos: al menos equipo + rol en cada fila —— */
-  if (!validateEqRows()) {
+  if (IS_SUPER && !validateEqRows()) {
       const firstBad = $('#eq-container .invalid');
       if (firstBad) {
           firstBad.scrollIntoView({behavior:'smooth', block:'center'});
@@ -1883,16 +1919,19 @@ async function submitEdit (ev) {
       return;                              // ← cancela el submit
   }
 
-  /* empaquetar equipos nuevos */
-  const arr = [...$$('.eq-row')].map(r => {
-    const [selEq, selRol] = r.querySelectorAll('select');   // 0 = Equipo, 1 = Rol
-    const e  = selEq ? selEq.value : '';
-    const rl = selRol ? selRol.value : '';
-    return e && rl ? { eq: e, rol: rl } : null;
-  }).filter(Boolean);
+  /* empaquetar equipos nuevos (solo para super) */
+  let arr = [];
+  if (IS_SUPER) {
+    arr = [...$$('.eq-row')].map(r => {
+        const [selEq, selRol] = r.querySelectorAll('select');
+        const e  = selEq ? selEq.value : '';
+        const rl = selRol ? selRol.value : '';
+        return e && rl ? { eq: e, rol: rl } : null;
+    }).filter(Boolean);
 
-  /* ─── NUEVO: envía el array al back-end ─── */
-  fd.append('equip', JSON.stringify(arr));
+    /* solo los super envían cambios de equipo */
+    fd.append('equip', JSON.stringify(arr));
+  }
 
   /* empaquetar ocupaciones */
   const ocIds = [...$$('#ocup-container input[type="checkbox"]')]
@@ -1946,6 +1985,11 @@ function updateColsMenu () {
       label.style.display = 'none';
     }
   });
+
+  if (!IS_SUPER){
+    document.querySelector('[data-id="0"]')?.remove();   // General
+    document.querySelector('[data-id="ret"]')?.remove(); // Retirados
+  }
 }
 
 /* ------------------------------------------------ init */
@@ -1954,15 +1998,23 @@ document.addEventListener('DOMContentLoaded', () => {
   updateColsMenu();
 
   loadSidebar().then(() => {
-    // primera carga → General
-    selectTeam('0', document.querySelector('#equipos-list li[data-id="0"]'), 1);
+      /*  ACL  — elige la primera opción realmente visible al usuario */
+      const firstLi = document.querySelector('#equipos-list li');
+      if (!firstLi) return;                   // no hay secciones
+      const firstId = firstLi.dataset.id;     // «0», «ret», «5», …
+      selectTeam(firstId, firstLi, 1);
+
+      /* solo usamos la precarga si esa primera sección es “0 = General” */
+      if (firstId === '0' && typeof PRE_INTEGRANTES !== 'undefined'){
+          DATA = PRE_INTEGRANTES;
+          refreshTable();
+      }
   });
 
   if (typeof PRE_INTEGRANTES !== 'undefined'){
       DATA = PRE_INTEGRANTES;
       refreshTable();          // pinta de inmediato
   }
-  loadSidebar();
   syncPaisDoc();
   /* ——— selector de columnas ——— */
   btnCols.onclick = e => {
