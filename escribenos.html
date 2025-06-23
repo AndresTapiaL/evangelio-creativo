@@ -6,6 +6,201 @@
     <title>Escríbenos - Evangelio Creativo</title>
     <link rel="stylesheet" href="styles/main.css">
     <link rel="icon" href="images/logo-1.png">
+    <style>
+        /* ───────── paleta base ───────── */
+        :root{
+        /* ◇ Paleta base */
+        --negro:    #2e292c;
+        --naranjo:  #ff3600;
+        --amarillo: #fee920;
+        --rojo:     #d60000;
+        --blanco:   #e1e5ea;
+
+        --primary  : #005ad4;
+        --primary-t: var(--naranjo);
+        --border   : #d0d7e2;
+        --bg-card  : var(--card-bg);
+        --bg-page  : #f7f9fc;
+        --text-600 : #1d2939;
+        --text-500 : #475467;
+        --card-bg  : var(--naranjo);   /* fondo de las tarjetas */
+        --card-fg  : var(--blanco);    /* texto encima del naranjo */
+        --legend-bg: var(--rojo);      /* tira detrás de cada <legend> */
+        --ph-light : #000000;   /* gris medio: contraste sobre blanco      */
+        --ph-dark  : #cbd5e1;   /* gris claro: contraste sobre azul oscuro */
+        --shadow   : 0 2px 6px rgba(16,24,40,.08);
+        --radius   : 12px;
+        --gap      : 1rem;
+        --gap-s    : .6rem;
+        }
+
+        /* -------- layout ------------ */
+        body{
+        background:#ffffff url('images/Fondo-blanco.jpeg') center/cover no-repeat;
+        color:var(--text-600);          /* ← NUEVO: texto base legible en ambos temas */
+        }
+
+        .container{max-width:960px;margin-inline:auto;padding:1.5rem;}
+        .page-title{
+            position:relative;
+            display:inline-block;
+
+            /* —— tipografía —— */
+            font:800 clamp(2.5rem,5vw,4.2rem)/1 var(--font-head,Poppins);
+            letter-spacing:.6px;
+
+            /* —— degradado intenso —— */
+            background:linear-gradient(90deg,#ff5100 0%,#ff9800 45%,#ffcf5c 100%);
+            -webkit-background-clip:text;
+                    background-clip:text;
+            color:transparent;
+
+            /* —— contorno + sombra —— */
+            -webkit-text-stroke:1px rgba(0,0,0,.25);   /* filo sutil */
+            text-shadow:
+                0 2px 6px rgba(0,0,0,.3),              /* sombra suave */
+                0 6px 18px rgba(0,0,0,.15);             /* halo amplio */
+        }
+        .page-title::after{
+            content:'';
+            position:absolute;
+            left:50%; transform:translateX(-50%);
+            bottom:-14px;          /* espacio bajo el texto */
+            width:88%; height:8px;
+            background:linear-gradient(90deg,#ffcf5c 0%,#ff8d00 50%,#ff4d00 100%);
+            border-radius:4px;
+            box-shadow:0 2px 6px rgba(0,0,0,.25) inset; /* “relieve” */
+        }
+        .card{
+        background:var(--card-bg);          /* ← antes var(--bg-card) */
+        border:1px solid var(--legend-bg);  /* ↑ contraste del borde   */
+        color:var(--card-fg);               /* ↑ texto legible         */
+        border-radius:var(--radius);padding:1.5rem;margin-block:1.5rem;
+        box-shadow:var(--shadow);
+        }
+
+        /* contraste para los títulos de cada fieldset */
+        .card legend{
+            background:var(--legend-bg);
+            color:var(--blanco);
+            padding:.25rem .8rem;
+            border-radius:6px;
+            margin-left:1rem;          /* no pisa el borde redondeado */
+        }
+
+        legend{font-weight:600;padding-inline:.4rem}
+
+        .form-grid{
+        display:grid;gap:var(--gap);
+        grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+        }
+        /* texto de leyendas, etiquetas y subtítulos */
+        legend,
+        h4,
+        .field>span,
+        .tos-field span{
+        color:var(--card-fg);
+        }
+        .phone-grid{display:flex;flex-direction:column;gap:.5rem}
+        .chips label{display:inline-block;padding:.2rem .6rem;margin:.2rem;
+        border:1px solid var(--border);border-radius:99px;cursor:pointer;font-size:.9rem;color:var(--text-600);}
+        .chips input:checked+span,
+        .chips input:checked ~ span{background:var(--primary-t);border-color:var(--primary)}
+        .field{display:flex;flex-direction:column}
+        .field.short select{max-width:160px}
+        .field.wide{grid-column:1/-1}
+        .tos-field{display:flex;align-items:center;gap:.5rem;margin-top:.5rem}
+        .phone-row{display:grid;grid-template-columns:1fr 180px;gap:var(--gap-s)}
+
+        input,select,textarea{
+        font:400 1rem/1.3 inherit;padding:.55rem .7rem;border:1px solid var(--border);
+        border-radius:6px;background:#fff;color:#000;transition:.15s;
+        }
+        /* color de placeholders */
+        input::placeholder,
+        textarea::placeholder{
+        color:var(--ph-light);
+        opacity:1;                      /* asegura visibilidad en Safari */
+        }
+
+        /* ───── 1A)  <input type="date">  (“Fecha de nacimiento”) ───── */
+        /*  Chrome / Edge */
+        input[type="date"]::-webkit-datetime-edit-text,
+        input[type="date"]::-webkit-datetime-edit-year-field,
+        input[type="date"]::-webkit-datetime-edit-month-field,
+        input[type="date"]::-webkit-datetime-edit-day-field{
+            color:var(--ph-light);
+        }
+        /*  Firefox */
+        input[type="date"]::placeholder{
+            color:var(--ph-light);
+            opacity:1;
+        }
+
+        /* ───── 1B)  <select> que NO son required (región, ciudad, teléfonos…) ───── */
+        select{
+            /* mientras el option seleccionado tenga value="" se verá negro */
+            color:var(--ph-light);
+        }
+        select option[value=""]{        /* la opción “— región —” … “— descripción —” */
+            color:var(--ph-light);
+        }
+        select option:not([value=""]){  /* opciones reales dentro del desplegable */
+            color:#000;
+        }
+
+        /* ─── NUEVO: placeholder negro para <select> ─── */
+        select:required:invalid {
+            color: var(--ph-light);      /* mientras sea “— país —”, “— región —”, etc. */
+        }
+        select option[value=""] {
+            color: var(--ph-light);      /* fuerza la 1ª opción como placeholder */
+        }
+        /* cuando el usuario elija un valor válido, vuelve al color normal */
+        select:valid {
+            color:#000;
+        }
+
+        input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)}
+        .invalid{border-color:#e03131;background:#fff5f5}
+        .err-msg{color:#e03131;font-size:.8rem;margin-top:.2rem}
+
+        .btn-bar{text-align:center;margin-top:2rem}
+        .btn-prim{
+        background:var(--primary);color:#fff;border:0;border-radius:8px;
+        padding:.7rem 2.2rem;font:500 1rem/1 var(--font-head,Poppins);cursor:pointer;
+        transition:.2s;
+        }
+        .btn-prim:hover{background:#004bb3;transform:translateY(-1px)}
+        .btn-prim:active{transform:none}
+
+        @media (prefers-color-scheme:dark){
+        :root{
+            --card-bg  : #19223b;
+            --legend-bg: #005ad4;
+            --card-fg  : #e1e5ea;
+            --bg-card:var(--naranjo);
+            --bg-page:#111727;
+            --border:#26304f;
+            --text-600:#e6e9f0;
+            --text-500:#aeb6cf;
+            --ph-light : #505050;      /* placeholder siempre negro */
+            --ph-dark  : #cbd5e1;   /* gris claro: contraste sobre azul oscuro */
+        }
+        .btn-prim:hover{background:#3878ff}
+        }
+
+        #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+        background:rgba(250,252,255,.65);backdrop-filter:blur(3px);z-index:1000}
+        #overlay.hidden{display:none}
+        .spinner{
+        width:60px;height:60px;border:6px solid #cbd5e1;border-top-color:var(--primary);
+        border-radius:50%;animation:spin 1s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+
+        /*  desplazamientos suaves en todo el documento  */
+        html{scroll-behavior:smooth;}
+    </style>
 </head>
 <body>
     <header>
@@ -29,12 +224,200 @@
         </div>
     </header>
     <main>
-        <section id="escribenos">
-            <iframe src="https://docs.google.com/forms/d/e/1FAIpQLSffCHmX04xE56S7Kxece6s28HJDzEfrpHGUXrKMN7PsknNQPQ/viewform?embedded=true" width="640" height="1645" frameborder="0" marginheight="0" marginwidth="0">Cargando…</iframe>
+        <!-- ========= FORMULARIO DE ADMISIÓN ========= -->
+        <section id="admision" class="container">
+        <h1 class="page-title">Solicitud de admisión</h1>
+
+        <form id="form-admision" autocomplete="off" novalidate>
+
+            <!-- 1 · Datos personales -->
+            <fieldset class="card">
+            <legend>Datos personales</legend>
+            <div class="form-grid">
+
+                <label class="field">
+                <span>Nombres *</span>
+                <input name="nombres" required maxlength="60">
+                <small class="err-msg"></small>
+                </label>
+
+                <label class="field">
+                <span>Apellido paterno *</span>
+                <input name="apellido_paterno" required maxlength="30">
+                <small class="err-msg"></small>
+                </label>
+
+                <label class="field">
+                <span>Apellido materno</span>
+                <input name="apellido_materno" maxlength="30">
+                <small class="err-msg"></small>
+                </label>
+
+                <label class="field">
+                <span>Fecha de nacimiento *</span>
+                <input type="date" name="fecha_nacimiento" required pattern="\d{4}-\d{2}-\d{2}">
+                <small class="err-msg"></small>
+                </label>
+
+                <label class="field short">
+                <span>Tipo documento</span>
+                <select id="ed-doc-type">
+                    <option value="CL">RUT (Chile)</option>
+                    <option value="INT">Internacional</option>
+                </select>
+                </label>
+
+                <label class="field">
+                <span>Nº documento *</span>
+                <input id="rut" name="rut_dni" maxlength="13" required>
+                <small class="err-msg"></small>
+                </label>
+
+            </div>
+            </fieldset>
+
+            <!-- 2 · Ubicación -->
+            <fieldset class="card">
+            <legend>Ubicación</legend>
+            <div class="form-grid">
+                <label class="field">
+                <span>País *</span>
+                <select id="ed-pais" name="id_pais" required>
+                    <option value="">— país —</option>
+                </select>
+                <small class="err-msg"></small>
+                </label>
+
+                <label class="field">
+                <span>Región / Estado</span>
+                <select id="ed-region" name="id_region_estado">
+                    <option value="">— región —</option>
+                </select>
+                <small class="err-msg"></small>
+                </label>
+
+                <label class="field">
+                <span>Ciudad / Comuna</span>
+                <select id="ed-ciudad" name="id_ciudad_comuna">
+                    <option value="">— ciudad —</option>
+                </select>
+                <small class="err-msg"></small>
+                </label>
+            </div>
+            </fieldset>
+
+            <!-- 3 · Información adicional -->
+            <fieldset class="card">
+            <legend>Información adicional</legend>
+            <div class="form-grid">
+                <label class="field wide">
+                <span>Dirección *</span>
+                <input name="direccion" maxlength="255" required>
+                <small class="err-msg"></small>
+                </label>
+
+                <label class="field">
+                <span>Iglesia / Ministerio *</span>
+                <input name="iglesia_ministerio" maxlength="255" required>
+                <small class="err-msg"></small>
+                </label>
+
+                <label class="field">
+                <span>Profesión / Oficio / Estudio *</span>
+                <input name="profesion_oficio_estudio" maxlength="255" required>
+                <small class="err-msg"></small>
+                </label>
+            </div>
+            </fieldset>
+
+            <!-- 4 · Contacto -->
+            <fieldset class="card">
+            <legend>Contacto</legend>
+
+            <div class="form-grid">
+                <label class="field wide">
+                <span>Correo electrónico *</span>
+                <input name="correo" type="email" maxlength="320" required>
+                <small class="err-msg"></small>
+                </label>
+
+                <label class="tos-field">
+                <input type="checkbox" name="boletin" value="1" checked>
+                <span>Quiero recibir boletines informativos</span>
+                </label>
+            </div>
+
+            <h4>Teléfonos</h4>
+            <div id="phone-container" class="phone-grid">
+                <div class="phone-row">
+                <input  type="tel" class="tel" name="tel0" maxlength="16" placeholder="+56…">
+                <select name="tel_desc0"></select>
+                </div>
+
+                <div class="phone-row">
+                <input  type="tel" class="tel" name="tel1" maxlength="16" placeholder="+56…">
+                <select name="tel_desc1"></select>
+                </div>
+
+                <div class="phone-row">
+                <input  type="tel" class="tel" name="tel2" maxlength="16" placeholder="+56…">
+                <select name="tel_desc2"></select>
+                </div>
+            </div>
+            </fieldset>
+
+            <!-- 5 · Ocupaciones -->
+            <fieldset class="card">
+            <legend>Ocupaciones</legend>
+            <div id="ocup-container" class="chips"></div>
+            </fieldset>
+
+            <!-- 6 · Cuestionario -->
+            <fieldset class="card">
+            <legend>Cuestionario de admisión</legend>
+                <label class="field wide">
+                <span>Liderazgo (opcional)</span>
+                <textarea name="liderazgo" rows="3" maxlength="255"></textarea>
+                </label>
+
+                <label class="field wide">
+                <span>¿Cómo nos conoces?</span>
+                <textarea name="nos_conoces" rows="3" maxlength="255"></textarea>
+                </label>
+
+                <label class="field wide">
+                <span>Propósito – ¿Por qué quieres unirte?</span>
+                <textarea name="proposito" rows="3" maxlength="255"></textarea>
+                </label>
+
+                <label class="field wide">
+                <span>Motivación personal</span>
+                <textarea name="motivacion" rows="3" maxlength="10"></textarea>
+                </label>
+            </fieldset>
+
+            <div class="btn-bar">
+            <button class="btn-prim">Enviar</button>
+            </div>
+        </form>
         </section>
     </main>
     <footer>
         <p>&copy; 2024 Evangelio Creativo. Todos los derechos reservados.</p>
     </footer>
+
+    <!-- overlay global de carga -->
+    <div id="overlay" class="hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Teléfonos internacionales -->
+    <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">
+    <script defer
+            src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
+
+    <!--  ↓↓↓  copia/pega tal cual el bloque utilidades de integrantes.js ↓↓↓  -->
+    <script src="admision.js"></script>
 </body>
 </html>
