@@ -7,6 +7,20 @@
 require 'conexion.php';
 session_start();
 header('Content-Type: application/json; charset=utf-8');
+/* ——— endurece las cabeceras ——— */
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: SAMEORIGIN');
+header('Referrer-Policy: no-referrer');
+
+ob_start();                  // NUEVO: todas las salidas se bufferizan
+ini_set('display_errors',0); // evita que PHP envíe warnings al cliente
+
+/* —— helper de respuesta JSON SEGURA —— */
+function reply(array $a): void{
+    ob_clean();                  // descarta cualquier byte previo
+    echo json_encode($a);        // imprime JSON puro
+    exit;                        // corta la ejecución
+}
 
 define('UPLOADS_FOTOS_DIR', realpath(__DIR__.'/uploads/fotos'));
 
@@ -38,6 +52,22 @@ try {
   case 'POST:nuevo': {
       $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;   // 0 = nuevo
 
+      /* ———  Rate-limit: máx 5 formularios por IP y día ——— */
+      $ipAddr = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+      if (!filter_var($ipAddr, FILTER_VALIDATE_IP)) $ipAddr = '0.0.0.0';
+
+      $limStmt = $pdo->prepare("
+          SELECT COUNT(*)                            AS n
+          FROM admision_envios
+          WHERE ip    = :ip
+          AND fecha = CURDATE()
+      ");
+      $limStmt->execute([':ip'=>$ipAddr]);
+      if ($limStmt->fetchColumn() >= 5){
+          reply(['ok'=>false,
+              'error'=>'Límite diario de 5 formularios alcanzado desde esta IP; inténtalo mañana.']);
+      }
+
       /* ── 1. VALIDACIÓN de nombres / apellidos ─────────────────────── */
       $nombres          = trim($_POST['nombres']          ?? '');
       $apellido_paterno = trim($_POST['apellido_paterno'] ?? '');
@@ -56,7 +86,7 @@ try {
           if ($c['val'] === '') continue;              // materno puede venir vacío
           if (mb_strlen($c['val']) > $c['max'] ||
               !preg_match($reNombre, $c['val'])) {
-              echo json_encode([
+              reply([
                   'ok'    => false,
                   'error' => 'Formato de nombre/apellido no válido'
               ]);
@@ -68,6 +98,26 @@ try {
       $dir = trim($_POST['direccion']                ?? '');
       $ig  = trim($_POST['iglesia_ministerio']       ?? '');
       $pro = trim($_POST['profesion_oficio_estudio'] ?? '');
+      /* —— CUESTIONARIO (obligatorio) —— */
+      $liderazgo   = trim($_POST['liderazgo']   ?? '');
+      $nosConoces  = trim($_POST['nos_conoces'] ?? '');
+      $proposito   = trim($_POST['proposito']   ?? '');
+      $motivacion  = trim($_POST['motivacion']  ?? '');
+
+      foreach([
+          ['v'=>$liderazgo , 'et'=>'Liderazgo'],
+          ['v'=>$nosConoces, 'et'=>'¿Cómo nos conoces?'],
+          ['v'=>$proposito , 'et'=>'Propósito'],
+          ['v'=>$motivacion, 'et'=>'Motivación']
+      ] as $f){
+          if($f['v']===''){
+              reply(['ok'=>false,'error'=>$f['et'].' es obligatorio']); exit;
+          }
+      }
+
+      if(!preg_match('/^[1-5]$/',$motivacion)){
+          reply(['ok'=>false,'error'=>'Motivación debe ser un número entre 1 y 5']); exit;
+      }
 
       $reGeneral = '/^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$/u';
 
@@ -79,11 +129,11 @@ try {
 
           /* ⬇︎  ahora son obligatorios */
           if ($f['v'] === ''){
-              echo json_encode(['ok'=>false,
+              reply(['ok'=>false,
                   'error'=>"{$f['et']} es obligatoria"]); exit;
           }
           if (mb_strlen($f['v']) > 255 || !preg_match($reGeneral,$f['v'])){
-              echo json_encode(['ok'=>false,
+              reply(['ok'=>false,
                   'error'=>"{$f['et']} no válida (formato o longitud)"]); exit;
           }
       }
@@ -92,22 +142,22 @@ try {
       $fnac = trim($_POST['fecha_nacimiento'] ?? '');
 
       if ($fnac === '') {
-          echo json_encode(['ok'=>false,'error'=>'La fecha de nacimiento es obligatoria']); exit;
+          reply(['ok'=>false,'error'=>'La fecha de nacimiento es obligatoria']); exit;
       }
       if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fnac)) {
-          echo json_encode(['ok'=>false,'error'=>'Formato de fecha AAAA-MM-DD no válido']); exit;
+          reply(['ok'=>false,'error'=>'Formato de fecha AAAA-MM-DD no válido']); exit;
       }
       $dtFnac = DateTime::createFromFormat('Y-m-d', $fnac);
       if (!$dtFnac) {
-          echo json_encode(['ok'=>false,'error'=>'Fecha de nacimiento inválida']); exit;
+          reply(['ok'=>false,'error'=>'Fecha de nacimiento inválida']); exit;
       }
       $today = new DateTime('today');
       $edad  = $dtFnac->diff($today)->y;
       if ($edad < 12) {
-          echo json_encode(['ok'=>false,'error'=>'El integrante debe tener al menos 12 años']); exit;
+          reply(['ok'=>false,'error'=>'El integrante debe tener al menos 12 años']); exit;
       }
       if ($edad > 200) {
-          echo json_encode(['ok'=>false,'error'=>'La edad no puede superar los 200 años']); exit;
+          reply(['ok'=>false,'error'=>'La edad no puede superar los 200 años']); exit;
       }
 
       /* -- comparar contra fecha_registro -- */
@@ -116,7 +166,7 @@ try {
       $fechaReg = $regStmt->fetchColumn();
       if ($fechaReg && $fnac > $fechaReg){
           $regFmt = DateTime::createFromFormat('Y-m-d', $fechaReg)->format('d-m-Y');
-          echo json_encode(['ok'=>false,
+          reply(['ok'=>false,
               'error'=>"La fecha de nacimiento no puede ser posterior a la fecha de registro ($regFmt)"]);
           exit;
       }
@@ -124,22 +174,22 @@ try {
       /* —— VALIDACIÓN N° documento —— */
       $rutRaw = trim($_POST['rut_dni'] ?? '');
       if ($rutRaw === '') {
-          echo json_encode(['ok'=>false,'error'=>'El N° documento es obligatorio']); exit;
+          reply(['ok'=>false,'error'=>'El N° documento es obligatorio']); exit;
       } {
 
           if (mb_strlen($rutRaw) > 13) {
-              echo json_encode(['ok'=>false,'error'=>'N° documento excede 13 caracteres']); exit;
+              reply(['ok'=>false,'error'=>'N° documento excede 13 caracteres']); exit;
           }
 
           $rutSan = strtoupper(preg_replace('/[^0-9K]/i', '', $rutRaw));
 
           if (strpos($rutSan,'K') !== false && substr($rutSan,-1) !== 'K'){
-              echo json_encode(['ok'=>false,'error'=>'La K solo puede ir al final']); exit;
+              reply(['ok'=>false,'error'=>'La K solo puede ir al final']); exit;
           }
 
           if (!empty($_POST['id_pais']) && $_POST['id_pais'] == 1){   // Chile
               if (!preg_match('/^\d{7,8}[0-9K]$/', $rutSan)){
-                  echo json_encode(['ok'=>false,'error'=>'Formato RUT chileno inválido']); exit;
+                  reply(['ok'=>false,'error'=>'Formato RUT chileno inválido']); exit;
               }
               $num = substr($rutSan, 0, -1);
               $dv  = substr($rutSan, -1);
@@ -151,34 +201,78 @@ try {
               $rest   = 11 - ($sum % 11);
               $dvCalc = $rest == 11 ? '0' : ($rest == 10 ? 'K' : strval($rest));
               if ($dvCalc !== $dv){
-                  echo json_encode(['ok'=>false,'error'=>'RUT chileno inválido']); exit;
+                  reply(['ok'=>false,'error'=>'RUT chileno inválido']); exit;
               }
           } elseif (!preg_match('/^\d{1,13}$/', $rutSan)){
-              echo json_encode(['ok'=>false,'error'=>'Documento: solo dígitos']); exit;
+              reply(['ok'=>false,'error'=>'Documento: solo dígitos']); exit;
           }
       }
 
       /* —— VALIDACIÓN Correo electrónico —— */
       $email = trim($_POST['correo'] ?? '');
       if ($email === '') {
-          echo json_encode(['ok'=>false,'error'=>'El correo electrónico es obligatorio']); exit;
+          reply(['ok'=>false,'error'=>'El correo electrónico es obligatorio']); exit;
       }
       if (mb_strlen($email) > 320) {
-          echo json_encode(['ok'=>false,'error'=>'Correo excede 320 caracteres']); exit;
+          reply(['ok'=>false,'error'=>'Correo excede 320 caracteres']); exit;
       }
       if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-          echo json_encode(['ok'=>false,'error'=>'Correo electrónico no válido']); exit;
+          reply(['ok'=>false,'error'=>'Correo electrónico no válido']); exit;
+      }
+
+      /* ---------- ubicación preliminar (se necesita para el chequeo de duplicados) ---------- */
+      $pais   = trim($_POST['id_pais']          ?? '');
+      $region = trim($_POST['id_region_estado'] ?? '');
+      $ciudad = trim($_POST['id_ciudad_comuna'] ?? '');
+
+      /* ───── Duplicados por rut_dni + id_pais ───── */
+      $isUpdate = false;                                       // por defecto => INSERT
+      $dupStmt  = $pdo->prepare("
+          SELECT id_usuario
+          FROM usuarios
+          WHERE rut_dni = :rut
+          AND id_pais <=> :pais           /* <=> permite NULL = NULL */
+          LIMIT 1");
+      $dupStmt->execute([
+          ':rut'  => $rutSan,
+          ':pais' => ($pais === '' ? null : $pais)
+      ]);
+      $dupId = (int)$dupStmt->fetchColumn();
+
+      if ($dupId){                                             // hay un homónimo
+          /* ¿tiene ALGUNA fila habilitada en integrantes_equipos_proyectos ? */
+          $act = $pdo->prepare("
+              SELECT 1
+              FROM integrantes_equipos_proyectos
+              WHERE id_usuario = :u
+              AND habilitado = 1
+              LIMIT 1");
+          $act->execute([':u'=>$dupId]);
+
+          if ($act->fetchColumn()){                            // ≥1 fila activa
+              reply([
+                  'ok'   => false,
+                  'error'=> 'El usuario ya está registrado'
+              ]);                                              // reply() hace exit()
+          }
+
+          /* Ninguna fila activa  →  re-usamos ese id y sobre-escribimos */
+          $id       = $dupId;
+          $isUpdate = true;                                    // UPDATE en vez de INSERT
       }
 
       /* ─── Ubicación ─── */
-      $pais   = trim($_POST['id_pais']           ?? '');
-      $region = trim($_POST['id_region_estado']  ?? '');
-      $ciudad = trim($_POST['id_ciudad_comuna']  ?? '');
+
+      /* —— 1)  PAÍS OBLIGATORIO —— */
+      if ($pais === '') {
+          reply(['ok'=>false, 'error'=>'El país es obligatorio']);
+          exit;
+      }
 
       /* A) País */
       if ($pais !== '') {
           $ok = (bool)$pdo->query("SELECT 1 FROM paises WHERE id_pais = $pais")->fetchColumn();
-          if (!$ok) { echo json_encode(['ok'=>false,'error'=>'País inválido']); exit; }
+          if (!$ok) { reply(['ok'=>false,'error'=>'País inválido']); exit; }
       }
 
       /* B) Región → debe existir y pertenecer al país (si se indicó país) */
@@ -186,9 +280,9 @@ try {
           $st = $pdo->prepare("SELECT id_pais FROM region_estado WHERE id_region_estado = ?");
           $st->execute([$region]);
           $row = $st->fetch(PDO::FETCH_ASSOC);
-          if (!$row)                 { echo json_encode(['ok'=>false,'error'=>'Región/Estado inválido']); exit; }
+          if (!$row)                 { reply(['ok'=>false,'error'=>'Región/Estado inválido']); exit; }
           if ($pais && $row['id_pais'] != $pais){
-              echo json_encode(['ok'=>false,'error'=>'Región no pertenece al país']); exit;
+              reply(['ok'=>false,'error'=>'Región no pertenece al país']); exit;
           }
       }
 
@@ -197,9 +291,9 @@ try {
           $st = $pdo->prepare("SELECT id_region_estado FROM ciudad_comuna WHERE id_ciudad_comuna = ?");
           $st->execute([$ciudad]);
           $row = $st->fetch(PDO::FETCH_ASSOC);
-          if (!$row) { echo json_encode(['ok'=>false,'error'=>'Ciudad/Comuna inválida']); exit; }
+          if (!$row) { reply(['ok'=>false,'error'=>'Ciudad/Comuna inválida']); exit; }
           if ($region && $row['id_region_estado'] != $region){
-              echo json_encode(['ok'=>false,'error'=>'Ciudad no pertenece a la región']); exit;
+              reply(['ok'=>false,'error'=>'Ciudad no pertenece a la región']); exit;
           }
       }
 
@@ -214,30 +308,39 @@ try {
           ->fetchColumn();
 
       /* ——  VALIDACIÓN Retirados  — solo si el usuario YA está retirado —— */
-      $razonRet    = trim($_POST['razon_ret']       ?? '');
-      $exeqRet     = trim($_POST['ex_equipo_ret']   ?? '');
-      $difuntoRet  = $_POST['es_difunto_ret']       ?? '0';
+      $razonRet   = array_key_exists('razon_ret',     $_POST)
+                  ? trim($_POST['razon_ret'])     : null;
+      $exeqRet    = array_key_exists('ex_equipo_ret', $_POST)
+                  ? trim($_POST['ex_equipo_ret']) : null;
+      $difuntoRet = array_key_exists('es_difunto_ret',$_POST)
+                  ? $_POST['es_difunto_ret']      : null;
 
-      if ($esRetirado) {
+      /* ¿se pretende modificar datos de retiro? */
+      $tocaRetiro = $razonRet !== null || $exeqRet !== null || $difuntoRet !== null;
 
-        if ($razonRet === ''){
-            echo json_encode(['ok'=>false,'error'=>'La razón de retiro es obligatoria']); exit;
+      /* ─── validación solo si se van a tocar esos datos ─── */
+      if ($esRetirado && $tocaRetiro) {
+
+        if ($razonRet === '') {
+            reply(['ok'=>false,'error'=>'La razón de retiro es obligatoria']); exit;
         }
         if (mb_strlen($razonRet) > 255 || !preg_match($reGeneral,$razonRet)){
-            echo json_encode(['ok'=>false,'error'=>'Razón de retiro inválida']); exit;
+            reply(['ok'=>false,'error'=>'Razón de retiro inválida']); exit;
         }
 
-        if ($exeqRet === ''){
-            echo json_encode(['ok'=>false,'error'=>'El ex-equipo es obligatorio']); exit;
+        if ($exeqRet === '') {
+            reply(['ok'=>false,'error'=>'El ex-equipo es obligatorio']); exit;
         }
         if (mb_strlen($exeqRet) > 50 || !preg_match($reGeneral,$exeqRet)){
-            echo json_encode(['ok'=>false,'error'=>'Ex-equipo inválido']); exit;
+            reply(['ok'=>false,'error'=>'Ex-equipo inválido']); exit;
         }
 
         if (!in_array($difuntoRet,['0','1'],true)){
-            echo json_encode(['ok'=>false,'error'=>'Valor de “Fallecido” no válido']); exit;
+            reply(['ok'=>false,'error'=>'Valor de “Fallecido” no válido']); exit;
         }
       }
+      /* Si $tocaRetiro es false, el bloque anterior se salta por completo
+      y los datos de la tabla `retirados` quedan intactos. */
 
       $pdo->beginTransaction();
 
@@ -253,19 +356,42 @@ try {
               ->execute([':iep'=>$iepId,':per'=>$per]);
       }
 
-        $pdo->prepare("
-            INSERT INTO usuarios
-            (nombres,apellido_paterno,apellido_materno,fecha_nacimiento,
-            rut_dni,id_pais,id_region_estado,id_ciudad_comuna,direccion,
-            iglesia_ministerio,profesion_oficio_estudio,fecha_registro,ultima_actualizacion)
-            VALUES
-            (:nom,:ap,:am,:fnac,:rut,:pais,:reg,:ciu,:dir,:ig,:pro,CURDATE(),NOW())
-        ")->execute([
-            ':nom'=>$nombres,':ap'=>$apellido_paterno,':am'=>$apellido_materno,
-            ':fnac'=>$fnac,':rut'=>$rutSan,':pais'=>$pais,':reg'=>$region,':ciu'=>$ciudad,
-            ':dir'=>$dir,':ig'=>$ig,':pro'=>$pro
-        ]);
-        $id = (int)$pdo->lastInsertId();   // ← nuevo usuario
+        if ($isUpdate) {
+            /* actualización mínima */
+            $pdo->prepare("
+                UPDATE usuarios SET
+                    nombres                  = :nom,
+                    apellido_paterno         = :ap,
+                    apellido_materno         = :am,
+                    fecha_nacimiento         = :fnac,
+                    id_region_estado         = :reg,
+                    id_ciudad_comuna         = :ciu,
+                    direccion                = :dir,
+                    iglesia_ministerio       = :ig,
+                    profesion_oficio_estudio = :pro,
+                    ultima_actualizacion     = NOW()
+                WHERE id_usuario = :id
+            ")->execute([
+                ':nom'=>$nombres, ':ap'=>$apellido_paterno, ':am'=>$apellido_materno,
+                ':fnac'=>$fnac,   ':reg'=>$region, ':ciu'=>$ciudad,
+                ':dir'=>$dir,     ':ig'=>$ig,      ':pro'=>$pro, ':id'=>$id
+            ]);
+        } else {
+            $pdo->prepare("
+                INSERT INTO usuarios
+                    (nombres,apellido_paterno,apellido_materno,fecha_nacimiento,
+                    rut_dni,id_pais,id_region_estado,id_ciudad_comuna,direccion,
+                    iglesia_ministerio,profesion_oficio_estudio,
+                    fecha_registro,ultima_actualizacion)
+                VALUES
+                    (:nom,:ap,:am,:fnac,:rut,:pais,:reg,:ciu,:dir,:ig,:pro,CURDATE(),NOW())
+            ")->execute([
+                ':nom'=>$nombres, ':ap'=>$apellido_paterno, ':am'=>$apellido_materno,
+                ':fnac'=>$fnac,   ':rut'=>$rutSan, ':pais'=>$pais, ':reg'=>$region, ':ciu'=>$ciudad,
+                ':dir'=>$dir,     ':ig'=>$ig,      ':pro'=>$pro
+            ]);
+            $id = (int)$pdo->lastInsertId();          // nuevo usuario
+        }
 
         /* 1-bis) ¿quitar foto de perfil? */
         if (!empty($_POST['del_foto']) && $_POST['del_foto']==='1') {
@@ -296,6 +422,20 @@ try {
                             SET foto_perfil = NULL
                         WHERE id_usuario = :id")
                 ->execute([':id'=>$id]);
+        }
+
+        /* ───── Correo duplicado ───── */
+        $dupMail = $pdo->prepare("
+            SELECT id_usuario
+            FROM correos_electronicos
+            WHERE correo_electronico = :c
+            LIMIT 1");
+        $dupMail->execute([':c'=>$email]);
+        $mailOwner = (int)$dupMail->fetchColumn();
+
+        if ($mailOwner && $mailOwner !== $id) {
+            reply(['ok'=>false,'error'=>'Ese correo electrónico ya está en uso']);
+            exit;
         }
 
         /* 2) Correo electrónico ------------------------------------------------
@@ -334,7 +474,7 @@ try {
         /* A) exige contigüidad: no puede haber huecos */
         for ($i = 0; $i < 2; $i++) {
         if ($phones[$i]['num'] === '' && $phones[$i+1]['num'] !== '') {
-            echo json_encode(['ok'=>false,
+            reply(['ok'=>false,
                 'error'=>"Completa Teléfono ".($i+1)." antes de Teléfono ".($i+2)]); exit;
         }
         }
@@ -342,11 +482,11 @@ try {
         /* B) nº ⇒ descripción obligatoria y viceversa */
         foreach ($phones as $idx => $ph) {
         if ($ph['num'] !== '' && $ph['desc'] === '') {
-            echo json_encode(['ok'=>false,
+            reply(['ok'=>false,
                 'error'=>"Selecciona descripción para Teléfono ".($idx+1)]); exit;
         }
         if ($ph['num'] === '' && $ph['desc'] !== '') {
-            echo json_encode(['ok'=>false,
+            reply(['ok'=>false,
                 'error'=>"Elimina la descripción o ingresa número en Teléfono ".($idx+1)]); exit;
         }
         }
@@ -414,7 +554,7 @@ try {
             trim($_POST['equip']) !== '' &&
             trim($_POST['equip']) !== '[]') {
 
-            echo json_encode(['ok'=>false,'error'=>'Sin permiso para modificar equipos']);
+            reply(['ok'=>false,'error'=>'Sin permiso para modificar equipos']);
             exit;
         }
 
@@ -484,7 +624,7 @@ try {
 
         $ocupArr = json_decode($rawOcup, true);
         if (!is_array($ocupArr)) {
-            echo json_encode(['ok'=>false,'error'=>'Ocupaciones: formato inválido']); exit;
+            reply(['ok'=>false,'error'=>'Ocupaciones: formato inválido']); exit;
         }
 
         /* 1. si no marcaron nada ⇒ forzamos “Sin ocupación actual” */
@@ -502,7 +642,7 @@ try {
         $chk   = $pdo->prepare("SELECT COUNT(*) FROM ocupaciones WHERE id_ocupacion IN ($place)");
         $chk->execute($ocupArr);
         if ($chk->fetchColumn() != count($ocupArr)){
-            echo json_encode(['ok'=>false,'error'=>'Ocupación no válida']); exit;
+            reply(['ok'=>false,'error'=>'Ocupación no válida']); exit;
         }
 
         /* 4. actualiza vínculo usuario ↔ ocupación */
@@ -540,22 +680,31 @@ try {
         /* tabla admision  (estado por defecto = 1 → “Pendiente”) */
         $pdo->prepare("
             INSERT INTO admision
-                (id_usuario, id_estado_admision,
-                liderazgo,  nos_conoces,       proposito, motivacion)
+                (id_usuario,id_estado_admision,liderazgo,nos_conoces,proposito,motivacion)
             VALUES
-                (:u, :est,
-                :lid,       :nos,             :propo,     :mot)
+                (:u,4,:lid,:nos,:propo,:mot)
+            ON DUPLICATE KEY UPDATE
+                id_estado_admision = VALUES(id_estado_admision),
+                liderazgo          = VALUES(liderazgo),
+                nos_conoces        = VALUES(nos_conoces),
+                proposito          = VALUES(proposito),
+                motivacion         = VALUES(motivacion)
         ")->execute([
             ':u'   => $id,
-            ':est' => 4,                                   // 1 ≡ “Pendiente”
             ':lid' => trim($_POST['liderazgo']   ?? ''),
             ':nos' => trim($_POST['nos_conoces'] ?? ''),
             ':propo'=>trim($_POST['proposito']   ?? ''),
             ':mot' => trim($_POST['motivacion']  ?? '')
         ]);
 
+        /* registra el envío exitoso (para el rate-limit) */
+        $pdo->prepare("
+            INSERT INTO admision_envios (ip, fecha)
+            VALUES (:ip, CURDATE())
+        ")->execute([':ip'=>$ipAddr]);
+
       $pdo->commit();
-      echo json_encode(['ok'=>true]);
+      reply(['ok'=>true]);
       break;
   }
   /* ══════ (cualquier otra combinación) ══════ */
@@ -563,6 +712,15 @@ try {
   }
 
 } catch(Throwable $e){
-  http_response_code(400);
-  echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
+    /* ► clave duplicada: rut_dni */
+    if ($e instanceof PDOException &&
+        $e->getCode() == 23000 &&
+        str_contains($e->getMessage(), 'rut_dni')
+    ){
+        http_response_code(200);                      // deja que JS lo procese sin error 500
+        reply(['ok'=>false,'error'=>'El usuario ya está registrado']);
+    }
+
+    http_response_code(400);
+    reply(['ok'=>false,'error'=>$e->getMessage()]);
 }

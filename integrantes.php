@@ -923,7 +923,7 @@ if ($isSuper){                               // puede ver sección 0
                 <option value="INT">Internacional</option>
               </select>
             </label>
-            <label>N° documento
+            <label>RUT / DNI
               <input id="ed-rut"
                     name="rut_dni"
                     maxlength="13"

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escríbenos - Evangelio Creativo</title>
+    <title>Admisión - Evangelio Creativo</title>
     <link rel="stylesheet" href="styles/main.css">
     <link rel="icon" href="images/logo-1.png">
     <style>
@@ -88,6 +88,78 @@
             margin-left:1rem;          /* no pisa el borde redondeado */
         }
 
+        /* ——— banner arriba del formulario ——— */
+        .banner-admision{
+            display:block;
+            width:100%;
+            max-width:100%;
+            border-radius:8px;
+            object-fit:cover;
+            margin:0 0 1.5rem 0;   /* separación inferior */
+        }
+
+        /*════════════════  Intro Proceso de Admisión  ════════════════*/
+        .intro-admision{
+            background:rgba(255,255,255,.97);
+            backdrop-filter:blur(4px);
+            border:1px solid rgba(0,0,0,.06);
+            border-radius:14px;
+            padding:2rem 2.4rem;
+            box-shadow:0 6px 20px rgba(0,0,0,.08);
+            text-align:center;
+            margin-bottom:2rem;
+        }
+        .intro-admision .intro-title{
+            font:800 clamp(2.3rem,4.5vw,3.2rem)/1.15 var(--font-head,Poppins);
+
+            /* degradado más oscuro – se lee sobre fondo claro/gris   */
+            background:linear-gradient(90deg,
+                        #b44800 0%,   /* ámbar oscuro           */
+                        #ff7d00 45%,  /* naranjo medio          */
+                        #ffc448 100%  /* dorado claro           */
+                    );
+            background-clip:text;
+            -webkit-background-clip:text;
+            color:transparent;
+
+            /* filo + ligera sombra que lo “separa” del fondo */
+            -webkit-text-stroke:1px rgba(0,0,0,.25);
+            text-shadow:0 3px 6px rgba(0,0,0,.15);
+
+            margin:0 0 1.25rem;
+        }
+        /* texto introductorio */
+        .intro-admision .lead{
+            font-size:1.125rem;
+            color:#374151;           /* gris 700 – legible */
+            font-weight:500;
+            margin-bottom:1.2rem;
+        }
+
+        .intro-admision p{           /* párrafos regulares  */
+            max-width:60ch;
+            margin:.9rem auto;
+            line-height:1.6;
+            color:#4B5563;           /* gris 600            */
+        }
+
+        .intro-admision .highlight{  /* “IMPORTANTE” */
+            margin-top:1.6rem;
+            font-weight:700;
+            color:#D62828;           /* rojo corporativo    */
+            letter-spacing:.4px;
+        }
+
+        .intro-admision .thanks{
+            margin-top:1.6rem;
+            font-weight:600;
+            color:#005ad4;           /* azul primario       */
+        }
+        .only-lg{display:none;}
+        @media (min-width:768px){
+            .only-lg{display:inline;}
+        }
+
         legend{font-weight:600;padding-inline:.4rem}
 
         .form-grid{
@@ -106,11 +178,52 @@
         border:1px solid var(--border);border-radius:99px;cursor:pointer;font-size:.9rem;color:var(--text-600);}
         .chips input:checked+span,
         .chips input:checked ~ span{background:var(--primary-t);border-color:var(--primary)}
+
+        /* ——— ocupaciones en columna ——— */
+        #ocup-container{
+            display:flex;
+            flex-direction:column;
+            gap:.4rem;
+            align-items:flex-start;          /* ← NUEVO: todo pegado a la izquierda */
+        }
+
+        #ocup-container label{
+            display:flex;
+            align-items:center;
+            gap:.45rem;
+            margin:0;
+            width:auto;                      /* ← NUEVO: etiqueta solo lo necesario */
+            align-self:flex-start;           /* ← NUEVO: evita que se estire a 100 % */
+        }
+
         .field{display:flex;flex-direction:column}
         .field.short select{max-width:160px}
         .field.wide{grid-column:1/-1}
         .tos-field{display:flex;align-items:center;gap:.5rem;margin-top:.5rem}
-        .phone-row{display:grid;grid-template-columns:1fr 180px;gap:var(--gap-s)}
+
+        /* ——— filas compactas para teléfonos ——— */
+        .phone-row{
+            display:grid;
+            grid-template-columns:1fr 170px;      /* nº completo – descripción  */
+            column-gap:var(--gap-s);
+            row-gap:.25rem;                       /* espacio con el <small>     */
+            max-width:520px;
+            margin:.4rem auto;
+        }
+
+        .phone-row .iti{width:100%;}              /* plugin ocupa la col. 1     */
+        .phone-row .iti input{width:100%;}
+
+        .phone-row select{width:100%;}            /* descripción = 170px        */
+
+        /* —— mensaje de error bajo la fila —— */
+        .phone-row .err-msg{
+            grid-column:1 / -1;                   /* ocupa ambas columnas       */
+            margin:0;                             /* sin margen lateral         */
+            padding-left:calc(2.4rem + .2rem);    /* alinea bajo el número      */
+            color:#e03131;
+            display:block;
+        }
 
         input,select,textarea{
         font:400 1rem/1.3 inherit;padding:.55rem .7rem;border:1px solid var(--border);
@@ -162,7 +275,13 @@
         }
 
         input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)}
-        .invalid{border-color:#e03131;background:#fff5f5}
+        /* solo resaltamos el **campo** que falló */
+        input.invalid,
+        select.invalid,
+        textarea.invalid{
+            border-color:#e03131;
+            background:#fff5f5;
+        }
         .err-msg{color:#e03131;font-size:.8rem;margin-top:.2rem}
 
         .btn-bar{text-align:center;margin-top:2rem}
@@ -173,6 +292,46 @@
         }
         .btn-prim:hover{background:#004bb3;transform:translateY(-1px)}
         .btn-prim:active{transform:none}
+
+        /* ═════════════════  MOBILE FIRST  ═════════════════
+        Estas reglas solo anulan lo estrictamente necesario
+        para pantallas ≤ 600 px.  NO tocan estilos desktop. */
+        @media (max-width:600px){
+
+            /* (a) contenedor y tipografía */
+            .container{max-width:100%;padding:1rem .75rem;}
+            body{font-size:0.9375rem;}                 /* 15 px base */
+            h2, .intro-title{font-size:clamp(1.8rem,7vw,2.4rem);}
+
+            /* (b) banner y bloques */
+            .banner-admision{border-radius:6px;margin-bottom:1rem;}
+            .intro-admision{padding:1.25rem 1rem;margin-bottom:1.5rem;}
+
+            /* (c) rejillas a 1 columna */
+            .form-grid{grid-template-columns:1fr;}
+            .phone-row{grid-template-columns:1fr;max-width:100%;}
+            .phone-row select{margin-top:.4rem;}       /* queda bajo el número */
+
+            /* (d) chips de ocupaciones apiladas */
+            #ocup-container label{margin-right:0;}
+
+            /* (e) botones full-width + separación menor */
+            .btn-bar{margin-top:1.25rem}
+            .btn-prim{width:100%;padding:.75rem 1rem;}
+
+            /* (f) header simple: items en dos filas si no caben */
+            .header-content nav ul{
+                flex-wrap:wrap;gap:.5rem;
+                justify-content:center;padding-left:0;
+            }
+            .header-content nav a{font-size:.85rem;padding:.35rem .6rem;}
+        }
+
+        @media (max-width:360px){
+            .intro-admision p{max-width:90%;}
+            input,select,textarea{font-size:0.875rem;}     /* 14 px */
+            .choices.horizontal{flex-wrap:wrap;gap:.5rem;}
+        }
 
         @media (prefers-color-scheme:dark){
         :root{
@@ -200,6 +359,34 @@
 
         /*  desplazamientos suaves en todo el documento  */
         html{scroll-behavior:smooth;}
+
+        /* ——— cuestionario ——— */
+        .q-field{margin:1rem 0;border:0;padding:0}
+        .q-field legend{background:none;color:var(--card-fg);font-weight:600;
+                        margin-bottom:.6rem;padding:0}
+        .choices.vertical label,
+        .choices.horizontal label{display:flex;align-items:center;gap:.45rem;margin:.25rem 0}
+        .choices.horizontal{display:flex;justify-content:space-between;max-width:420px;margin:auto}
+        /* ② listas verticales (“¿Cómo supiste…?”, “Propósito…”) alineadas a la izquierda */
+        .choices.vertical{
+            display:flex;
+            flex-direction:column;
+            align-items:flex-start;   /* fuerza alineación izquierda */
+            margin:0;                 /* asegura que no haya centrado heredado */
+        }
+        /* ③ evita que las líneas que se parten queden centradas ─ siempre alineadas a la izquierda */
+        .choices.vertical label span{
+            text-align:left;          /* fuerza el texto de cada opción a iniciar a la izquierda   */
+            display:inline-block;     /* asegura que el segundo renglón quede bajo el primero      */
+        }
+        .choices.horizontal label{flex-direction:column;font-size:.9rem;font-weight:500}
+        .choices .other input[type="text"]{flex:1;min-width:200px;padding:.4rem .6rem;
+                                        border:1px solid var(--border);border-radius:6px}
+
+        /* errores de todo el cuestionario siempre en bloque y debajo  */
+        .q-field .err-msg{display:block;margin:.35rem 0 0 0}
+
+        /* (por si alguno ya existía con display:inline)              */
     </style>
 </head>
 <body>
@@ -217,7 +404,7 @@
                     <li><a href="proyectos.html">Proyectos</a></li>
                     <li><a href="sobrenosotros.html">Sobre Nosotros</a></li>
                     <li><a href="https://linktr.ee/evangeliocreativo?utm_source=linktree_profile_share&ltsid=21208a88-c72b-49a9-921e-484b0cd20042" target="_blank">Contacto</a></li>
-                    <li><a href="escribenos.html" class="active">Escríbenos</a></li>
+                    <li><a href="admision.html" class="active">Admisión</a></li>
                     <li><a href="ofrendar.html" class="donar-link">Ofrendar</a></li>
                 </ul>
             </nav>
@@ -226,7 +413,30 @@
     <main>
         <!-- ========= FORMULARIO DE ADMISIÓN ========= -->
         <section id="admision" class="container">
-        <h1 class="page-title">Solicitud de admisión</h1>
+            <!-- banner superior -->
+            <img src="images/Únete.jpeg"
+                alt="¿Quieres participar en Evangelio Creativo?"
+                class="banner-admision">
+
+            <!-- texto introductorio -->
+            <div class="intro-admision">
+                <h2 class="intro-title">
+                    Proceso de Admisión<br class="only-lg">
+                    Evangelio&nbsp;Creativo
+                </h2>
+
+                <p class="lead">
+                    El presente formulario tiene como objetivo conocer tu interés en ser parte de Evangelio&nbsp;Creativo.
+                </p>
+
+                <p>Para ello hemos preparado un proceso de admisión que consta de algunos pasos para conocerte, compartir experiencias y recopilar datos básicos para contactarte.</p>
+
+                <p class="highlight">IMPORTANTE</p>
+
+                <p>Te contactaremos para ser parte de nuestra reunión inicial de nuevos integrantes, donde te daremos a conocer nuestra visión, misión y lineamientos de nuestro ministerio. Esta reunión se realiza una vez al mes y de esta depende que puedas integrar alguno de nuestros equipos.</p>
+
+                <p class="thanks"><strong>¡Gracias por querer sumarte a nosotros!</strong></p>
+            </div>
 
         <form id="form-admision" autocomplete="off" novalidate>
 
@@ -259,7 +469,7 @@
                 <small class="err-msg"></small>
                 </label>
 
-                <label class="field short">
+                <label class="field">
                 <span>Tipo documento</span>
                 <select id="ed-doc-type">
                     <option value="CL">RUT (Chile)</option>
@@ -268,7 +478,7 @@
                 </label>
 
                 <label class="field">
-                <span>Nº documento *</span>
+                <span>RUT / DNI *</span>
                 <input id="rut" name="rut_dni" maxlength="13" required>
                 <small class="err-msg"></small>
                 </label>
@@ -316,13 +526,13 @@
                 <small class="err-msg"></small>
                 </label>
 
-                <label class="field">
+                <label class="field wide">
                 <span>Iglesia / Ministerio *</span>
                 <input name="iglesia_ministerio" maxlength="255" required>
                 <small class="err-msg"></small>
                 </label>
 
-                <label class="field">
+                <label class="field wide">
                 <span>Profesión / Oficio / Estudio *</span>
                 <input name="profesion_oficio_estudio" maxlength="255" required>
                 <small class="err-msg"></small>
@@ -350,17 +560,17 @@
             <h4>Teléfonos</h4>
             <div id="phone-container" class="phone-grid">
                 <div class="phone-row">
-                <input  type="tel" class="tel" name="tel0" maxlength="16" placeholder="+56…">
+                <input  type="tel" class="tel" name="tel0" maxlength="16" placeholder="Teléfono 1 (Principal)">
                 <select name="tel_desc0"></select>
                 </div>
 
                 <div class="phone-row">
-                <input  type="tel" class="tel" name="tel1" maxlength="16" placeholder="+56…">
+                <input  type="tel" class="tel" name="tel1" maxlength="16" placeholder="Teléfono 2">
                 <select name="tel_desc1"></select>
                 </div>
 
                 <div class="phone-row">
-                <input  type="tel" class="tel" name="tel2" maxlength="16" placeholder="+56…">
+                <input  type="tel" class="tel" name="tel2" maxlength="16" placeholder="Teléfono 3">
                 <select name="tel_desc2"></select>
                 </div>
             </div>
@@ -375,25 +585,76 @@
             <!-- 6 · Cuestionario -->
             <fieldset class="card">
             <legend>Cuestionario de admisión</legend>
-                <label class="field wide">
-                <span>Liderazgo (opcional)</span>
-                <textarea name="liderazgo" rows="3" maxlength="255"></textarea>
-                </label>
 
-                <label class="field wide">
-                <span>¿Cómo nos conoces?</span>
-                <textarea name="nos_conoces" rows="3" maxlength="255"></textarea>
-                </label>
+            <!-- ① Liderazgo (texto) -->
+            <label class="field wide">
+                <span>¿Ha ejercido alguna labor de liderazgo anteriormente?
+                    (Iglesia local, fundación, etc.) Cuéntanos brevemente. *</span>
+                <textarea name="liderazgo" rows="3" maxlength="255" required></textarea>
+                <small class="err-msg"></small>
+            </label>
 
-                <label class="field wide">
-                <span>Propósito – ¿Por qué quieres unirte?</span>
-                <textarea name="proposito" rows="3" maxlength="255"></textarea>
+            <!-- ② ¿Cómo nos conoces? (radio) -->
+            <fieldset class="q-field">
+                <legend>¿Cómo supiste de Evangelio Creativo? *</legend>
+                <div class="choices vertical" id="q-nos-conoces">
+                <label><input type="radio" name="nos_conoces" value="Amigo/Familiar">
+                        <span>Por un amigo/familiar</span></label>
+                <label><input type="radio" name="nos_conoces" value="Instagram">
+                        <span>A través de Instagram</span></label>
+                <label><input type="radio" name="nos_conoces" value="Tiktok">
+                        <span>A través de TikTok</span></label>
+                <label><input type="radio" name="nos_conoces" value="Facebook">
+                        <span>A través de Facebook</span></label>
+                <label class="other">
+                    <input type="radio" name="nos_conoces" value="Otros">
+                    <span>Otros:</span>
+                    <input type="text" id="nos_conoces_otro" maxlength="60"
+                        placeholder="Especifica…" disabled>
+                    <small class="err-msg"></small>
                 </label>
+                </div>
+                <small class="err-msg"></small>
+            </fieldset>
 
-                <label class="field wide">
-                <span>Motivación personal</span>
-                <textarea name="motivacion" rows="3" maxlength="10"></textarea>
+            <!-- ③ Propósito (checkbox múltiple) -->
+            <fieldset class="q-field">
+                <legend>¿Con qué propósito deseas sumarte a Evangelio Creativo? *</legend>
+                <div class="choices vertical" id="q-proposito">
+                <label><input type="checkbox" value="Aprender de evangelismo">
+                        <span>Aprender de evangelismo</span></label>
+                <label><input type="checkbox" value="Crecer espiritualmente">
+                        <span>Crecer espiritualmente</span></label>
+                <label><input type="checkbox" value="Comparto la Visión">
+                        <span>Comparto la Visión de Evangelio Creativo</span></label>
+                <label><input type="checkbox" value="Aportar con dones">
+                        <span>Para ser un aporte con mis dones y talentos</span></label>
+                <label><input type="checkbox" value="Redes con mi iglesia">
+                        <span>Para generar redes de evangelismo con mi iglesia local</span></label>
+                <label class="other">
+                    <input type="checkbox" id="propo_otro_chk" value="Otros">
+                    <span>Otros:</span>
+                    <input type="text" id="propo_otro" maxlength="60"
+                        placeholder="Especifica…" disabled>
+                    <small class="err-msg"></small>
                 </label>
+                </div>
+                <small class="err-msg"></small>
+            </fieldset>
+
+            <!-- ④ Motivación (escala 1-5) -->
+            <fieldset class="q-field">
+                <legend>En una escala del 1 al 5, ¿qué tan motivado te sientes con
+                        trabajar en evangelismo? *</legend>
+                <div class="choices horizontal" id="q-mot">
+                <label><span>1</span><input type="radio" name="motivacion" value="1"></label>
+                <label><span>2</span><input type="radio" name="motivacion" value="2"></label>
+                <label><span>3</span><input type="radio" name="motivacion" value="3"></label>
+                <label><span>4</span><input type="radio" name="motivacion" value="4"></label>
+                <label><span>5</span><input type="radio" name="motivacion" value="5"></label>
+                </div>
+                <small class="err-msg"></small>
+            </fieldset>
             </fieldset>
 
             <div class="btn-bar">

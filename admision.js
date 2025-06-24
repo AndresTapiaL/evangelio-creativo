@@ -29,6 +29,8 @@ const DEFAULT_PHOTO = 'uploads/fotos/default.png';
 
 let SEARCH = '';                       // texto actual del buscador
 const DEBOUNCE = 300;                  // ms
+/* —— “Otros” del cuestionario ———————————————— */
+let otroNos, otroPropo;            // se asignan al cargar el DOM
 
 /* ————————————————————————————————
    Sanitiza la búsqueda  (máx 100 caracteres)
@@ -161,11 +163,12 @@ function toast (msg, ms = 3000){
 }
 
 /* ========= Scroll suave al primer campo con error ========= */
-function scrollToFirstInvalid(){
+function scrollToFirstInvalid () {
   const bad = document.querySelector('.invalid');
-  if(!bad) return;
-  bad.scrollIntoView({behavior:'smooth', block:'center'});
-  setTimeout(()=>bad.focus({preventScroll:true}), 400);   // enfoca sin “saltos”
+  if (!bad) return;
+  /* desplaza en vez de “saltar” */
+  bad.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  /* 👇  se quitó el   bad.focus()   para que el usuario no quede “atrapado” */
 }
 
 /* —— VALIDACIÓN nombres / apellidos —— */
@@ -338,17 +341,21 @@ function validateDocNumber(inp){
 }
 
 function validateLocSelect(sel){
-  /* vacío = permitido */
   const val   = sel.value.trim();
-  const msgBx = sel.parentElement.querySelector('.err-msg');
+  const errBx = sel.parentElement.querySelector('.err-msg');
   let   msg   = '';
 
-  /* ① el valor debe corresponder a una option existente */
-  if (val && ![...sel.options].some(o => o.value === val)){
+  /* ── ① País obligatorio ─────────────────────────── */
+  if (sel.id === 'ed-pais' && val === '') {
+      msg = '* Obligatorio';
+  }
+
+  /* ── ② Opción inexistente ───────────────────────── */
+  if (!msg && val && ![...sel.options].some(o => o.value === val)){
       msg = '* Opción no válida';
   }
 
-  /* ② coherencia jerárquica básica (front-end) */
+  /* ── ③ Jerarquía básica ─────────────────────────── */
   if (!msg && sel.id === 'ed-region' && val && !$('#ed-pais').value){
       msg = '* Primero selecciona País';
   }
@@ -356,17 +363,18 @@ function validateLocSelect(sel){
       msg = '* Primero selecciona Región / Estado';
   }
 
-  /* feedback visual */
+  /* feedback visual + scroll suave ↓↓↓ */
   if (msg){
-      sel.classList.toggle('invalid', !!msg);
-      msgBx.textContent   = msg;
-      msgBx.style.display = 'block';
-  }else{
-      sel.classList.remove('invalid');
-      msgBx.textContent   = '';
-      msgBx.style.display = 'none';
+      errBx.textContent   = msg;
+      errBx.style.display = 'block';
+      sel.classList.add('invalid');
+      scrollToFirstInvalid();            // ya existe en tu código
+      return false;
   }
-  return !msg;
+  errBx.textContent   = '';
+  errBx.style.display = 'none';
+  sel.classList.remove('invalid');
+  return true;
 }
 
 /* —— Motivo de retiro (regex + longitud ≤255) —— */
@@ -391,86 +399,161 @@ function validateDifunto(sel){
   return true;
 }
 
+/* —— VALIDACIÓN Teléfonos (formato + duplicados) —— */
 function validatePhoneRows () {
-  let ok = true;
+  let dupTarget = null;      // recordará la 1ª fila duplicada
+  let ok      = true;
+  const seen  = new Set();                      // detecta números repetidos
+
   for (let i = 0; i < 3; i++) {
-    let  rowHasError = false;
-    const inp  = document.querySelector(`[name="tel${i}"]`);
-    const sel  = document.querySelector(`[name="tel_desc${i}"]`);
-    const val  = inp.value.trim();
-    const desc = sel.value.trim();
-    /*  localiza (o crea) la cajita de error  */
-    let err = inp.parentElement.querySelector('.err-msg');
-    if (!err) {
-        err           = document.createElement('small');
-        err.className = 'err-msg';
-        inp.parentElement.appendChild(err);
+    const row  = document.querySelectorAll('.phone-row')[i];
+    const inp  = row.querySelector('input.tel');
+    const sel  = row.querySelector('select');
+    const val  = inp.value.trim();              // nº digitado
+    const desc = sel.value.trim();              // descripción elegida
+
+    /*  crea (o reutiliza) la cajita de error  */
+    let err = row.querySelector('.err-msg');
+    if (!err){
+      err           = document.createElement('small');
+      err.className = 'err-msg';
+      row.appendChild(err);
     }
-    let   msg  = '';
+    let msg = '';
 
-    if (val) {
-      /* ① formato global */
-      const digits = val.replace(/\D/g, '');   // cuenta solo los dígitos
-      const iti   = inp._iti;                             //  <<< NUEVO
-      const data  = iti ? iti.getSelectedCountryData() : null;   //  <<< NUEVO
-      const iso   = data ? data.iso2 : '';                //  <<< NUEVO
-      const pref  = data ? data.dialCode : '';            //  <<< NUEVO
+    /* ————————————————————————————————————————————————
+       1) Validaciones de formato y coherencia
+       ———————————————————————————————————————————————— */
+    if (val){
+        /* quita todo salvo dígitos para comparar duplicados */
+        const digits = val.replace(/\D/g, '');
 
-      /* ─── prefijo digitado ≠ prefijo de la bandera ─── */
-      if (val && !digits.startsWith(pref)) {
-          msg = '* Selecciona un prefijo real';
-          rowHasError = true;
+        /* A) formato internacional + prefijo coherente */
+        const iti   = inp._iti;
+        const data  = iti ? iti.getSelectedCountryData() : null;
+        const iso   = data ? data.iso2 : '';
+        const pref  = data ? data.dialCode : '';
 
-      } else {
-          const subscrLen = digits.length - pref.length;      //  <<< NUEVO
+        if (!digits.startsWith(pref)){
+            msg = '* Selecciona un prefijo real';
+        } else {
+            const restLen   = digits.length - pref.length;
+            const minSubscr = MOBILE_MIN_ES[iso] ?? 8;
+            const maxSubscr = MOBILE_MAX_ES[iso] ?? 15;
 
-          /* ─── chequeo de largo de suscriptor ─── */
-          const minSubscr = MOBILE_MIN_ES[iso] ?? 8;     // ← mínimo por país (o 8 global)
-          const maxSubscr = MOBILE_MAX_ES[iso] ?? 15;    // ← máximo por país
+            if (restLen < minSubscr){
+                const paisNom = COUNTRY_ES[iso] || iso.toUpperCase();
+                msg = `* Mínimo ${minSubscr} dígitos para ${paisNom}`;
+            } else if (restLen > maxSubscr){
+                msg = `* Máx ${maxSubscr} dígitos para ${iso.toUpperCase()}`;
+            } else if (!PHONE_RE.test(val)){
+                msg = '* Solo “+” y dígitos';
+            }
+        }
 
-          if (subscrLen < minSubscr){
-              const paisNom = COUNTRY_ES[iso] || iso.toUpperCase();
-              msg = `* Se requiere mínimo ${minSubscr} dígitos para ${paisNom}`;
-              rowHasError = true;
-          } else if (subscrLen > maxSubscr){
-              msg = `* Máx ${maxSubscr} dígitos para ${iso.toUpperCase()}`;
-              rowHasError = true;
-          } else if (!PHONE_RE.test(val)){
-              msg = '* Solo + y dígitos';
-              rowHasError = true;
-          }
-      }
+        /* B) duplicados en los tres campos */
+        if (!msg && seen.has(digits)){
+            msg = '* Número duplicado';
+            dupTarget = dupTarget || inp;
+        } else {
+            seen.add(digits);
+        }
 
-      /* ─── coherencia número ↔ descripción ─── */
-      if (!msg && !desc){
-          msg = '* Ingresa número o quita descripción';
-      } else if (!msg && desc){
-          for (let j = 0; j < i; j++) {
-              if (!document.querySelector(`[name="tel${j}"]`).value.trim()) {
-                  msg = `* Completa Teléfono ${j+1} antes`;
-                  break;
-              }
-          }
-      }
+        /* C) contigüidad: Teléfono 2 o 3 no pueden “saltarse” un espacio */
+        if (!msg && val && i > 0) {                    // i = 1 → Teléfono 2…
+            const prevVal = document
+                .querySelectorAll('.phone-row')[i - 1] // fila anterior
+                .querySelector('input.tel').value.trim();
 
-    } else if (desc) {                          // nº vacío → desc no permitida
-      msg = '* Ingresa número o quita descripción';
+            if (!prevVal) {
+                /*  i es 0-based; para el mensaje lo convertimos a 1-based  */
+                const ant = i;       // Teléfono 1, 2…
+                const act = i + 1;   // Teléfono 2, 3…
+                msg = `* Completa Teléfono ${ant} antes de Teléfono ${act}`;
+            }
+        }
+
+        /* D) coherencia con descripción */
+        if (!msg && !desc) msg = '* Falta descripción';
+
+    } else if (desc){
+        /* nº vacío  → descripción no permitida          */
+        msg = '* Ingresa número o quita descripción';
     }
 
-    /* feedback visual */
-    if (msg) {
-      err.textContent   = msg;
-      err.style.display = 'block';
-      inp.classList.add('invalid');
-      sel.classList.add('invalid');
-      ok = false;
-    } else {
-      err.textContent   = '';
-      err.style.display = 'none';
-      inp.classList.remove('invalid');
-      sel.classList.remove('invalid');
+    /* ————————————————————————————————————————————————
+       2) Feedback visual
+       ———————————————————————————————————————————————— */
+    if (msg){
+        err.textContent   = msg;
+        err.style.display = 'block';
+        inp.classList.add('invalid');  sel.classList.add('invalid');
+        ok = false;
+    }else{
+        err.textContent   = '';
+        err.style.display = 'none';
+        inp.classList.remove('invalid'); sel.classList.remove('invalid');
     }
-    if (rowHasError) continue;
+  }
+
+  /* desplaza suavemente al primer error */
+  if (!ok) scrollToFirstInvalid();
+  if (!ok && dupTarget){
+      dupTarget.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+  return ok;
+}
+
+/* —— Cuestionario —— */
+function validateRadioGroup(name){
+  const radios = document.querySelectorAll(`input[name="${name}"]`);
+  if (!radios.length) return true;                   // nada que validar
+
+  /* ── contenedor seguro ───────────────────────────────────────────── */
+  const container =                                   // preferible ⇩
+        radios[radios.length - 1].closest('.q-field,.field')
+     || radios[radios.length - 1].parentElement;      // plan-B seguro
+
+  /* cajita de error — la crea si no existe */
+  let box = container.querySelector('.err-msg');
+  if (!box){
+      box = document.createElement('small');
+      box.className   = 'err-msg';
+      container.appendChild(box);
+  }
+
+  const ok = [...radios].some(r => r.checked);        // ¿hay alguna marcada?
+
+  if (!ok){
+      box.textContent   = '* Selecciona una opción';
+      box.style.display = 'block';
+      radios[0].classList.add('invalid');
+  }else{
+      box.textContent   = '';
+      box.style.display = 'none';
+      radios.forEach(r => r.classList.remove('invalid'));
+  }
+  return ok;
+}
+
+function validateCheckGroup(contId){
+  const cont = document.getElementById(contId);
+  const chk  = cont.querySelectorAll('input[type="checkbox"]');
+
+  /* crea la cajita de error sólo si no existe */
+  let box = cont.parentElement.querySelector('.err-msg');
+  if (!box){
+      box = document.createElement('small');
+      box.className = 'err-msg';
+      cont.parentElement.appendChild(box);
+  }
+  const ok   = [...chk].some(c=>c.checked);
+  if(!ok){
+      box.textContent   = '* Selecciona al menos una opción';
+      box.style.display = 'block';
+  }else{
+      box.textContent   = '';
+      box.style.display = 'none';
   }
   return ok;
 }
@@ -623,22 +706,54 @@ document.getElementById('form-admision').onsubmit = async ev => {
       !validateDocNumber (ev.target.rut_dni)          ||
       !validateEmail     (ev.target.correo)           ||
       !validatePhoneRows()                            ||
-      !validateNameField(ev.target.direccion)          ||
-      !validateNameField(ev.target.iglesia_ministerio) ||
+      !validateNameField(ev.target.direccion)         ||
+      !validateNameField(ev.target.iglesia_ministerio)||
       !validateNameField(ev.target.profesion_oficio_estudio) ||
       !validateLocSelect (ev.target.id_pais)          ||
       !validateLocSelect (ev.target.id_region_estado) ||
-      !validateLocSelect (ev.target.id_ciudad_comuna)
+      !validateLocSelect (ev.target.id_ciudad_comuna) ||
+      !validateNameField(ev.target.liderazgo)         ||
+      !validateRadioGroup('nos_conoces')              ||
+      !validateCheckGroup('q-proposito')              ||
+      !validateRadioGroup('motivacion')               ||
+      !(otroNos.disabled   || validateNameField(otroNos))   ||
+      !(otroPropo.disabled || validateNameField(otroPropo))
   ){
-      scrollToFirstInvalid();   // ← NUEVO
-      return;                   // ↩ hay errores → no se envía
-  }
-
-  // telefónos normalizados (+E.164)
-  if (!(await validateAndNormalizePhones())){
-      scrollToFirstInvalid();   // ← NUEVO
+      scrollToFirstInvalid();
       return;
   }
+
+  // teléfonos normalizados (+E.164)
+  if (!(await validateAndNormalizePhones())){
+      scrollToFirstInvalid();
+      return;
+  }
+
+  /* —— compila respuestas del cuestionario —— */
+  const nosSel = document.querySelector('input[name="nos_conoces"]:checked');
+  let   nosVal = nosSel ? nosSel.value : '';
+  if(nosVal==='Otros') nosVal = (otroNos.value.trim() || 'Otros');
+
+  const propositos = [...document.querySelectorAll('#q-proposito input[type="checkbox"]:checked')]
+                      .map(c=> c.value==='Otros'
+                              ? (otroPropo.value.trim() || 'Otros')
+                              : c.value)
+                      .join('; ');
+
+  const motivVal = document.querySelector('input[name="motivacion"]:checked')?.value || '';
+
+  /* crea/actualiza campos ocultos para enviarlos */
+  [['nos_conoces',nosVal],['proposito',propositos],['motivacion',motivVal]]
+    .forEach(([name,val])=>{
+        let h = ev.target.querySelector(`input[type="hidden"][name="${name}"]`);
+        if(!h){
+            h = document.createElement('input');
+            h.type = 'hidden';
+            h.name = name;
+            ev.target.appendChild(h);
+        }
+        h.value = val;
+    });
 
   const fd = new FormData(ev.target);
   /* ocupaciones marcadas → JSON */
@@ -646,19 +761,107 @@ document.getElementById('form-admision').onsubmit = async ev => {
                   .map(c=>parseInt(c.value,10));
   fd.append('ocup', JSON.stringify(ocupIds));
 
-  fd.append('accion','nuevo');               // ← acción del API
+  fd.append('accion','nuevo');      // ← acción del API
 
   try{
     const res = await fetch('admision_api.php',{method:'POST',body:fd});
-    const j   = await res.json();
-    if(j.ok){
-      toast('¡Gracias! Registro recibido ✓',4000);
-      ev.target.reset();
-    }else{
-      toast(j.error||'Error inesperado');
+
+    /* —── leemos texto bruto —── */
+    const raw = await res.text();
+    let j;
+    try{
+        j = JSON.parse(raw);
+    }catch(parseErr){
+        console.error('Respuesta no-JSON ►', raw);
+        toast('Respuesta del servidor no válida');
+        return;
     }
+
+    /* ────────────────────────────────
+       ► SECCIÓN MODIFICADA ◄
+    ──────────────────────────────── */
+    if (j.ok){
+        toast('¡Gracias! Registro recibido ✓',4000);
+        ev.target.reset();
+
+    } else {
+
+        /* A) error inline “país” (obligatorio / inválido) */
+        if (j.error && j.error.toLowerCase().includes('país')){
+            const selPais = document.getElementById('ed-pais');
+            const errBx   = selPais.parentElement.querySelector('.err-msg');
+
+            errBx.textContent   = j.error;      // «El país es obligatorio», etc.
+            errBx.style.display = 'block';
+            selPais.classList.add('invalid');
+
+            scrollToFirstInvalid();             // desplazamiento suave
+            return;                             // ← SIN toast
+        }
+
+        /* B) error inline “correo ya en uso” */
+        if (j.error &&
+            j.error.toLowerCase().includes('correo') &&
+            j.error.toLowerCase().includes('uso')){
+            const mailInp = document.querySelector('[name="correo"]');
+            const errBx   = mailInp.parentElement.querySelector('.err-msg');
+
+            errBx.textContent   = j.error;   // «Ese correo electrónico ya está en uso»
+            errBx.style.display = 'block';
+            mailInp.classList.add('invalid');
+
+            scrollToFirstInvalid();          // desplazamiento suave
+            return;                          // ← SIN toast
+        }
+
+        /* C) error inline “Teléfono …” (contigüidad o descripción) */
+        if (j.error && /Tel[eé]fono\s+(\d+)/i.test(j.error)){
+            /*  Puede haber dos números en el mensaje (“…Teléfono 1 … Teléfono 2”).
+                Tomamos la ÚLTIMA ocurrencia para apuntar al campo que el usuario
+                estaba editando (normalmente el que disparó el error).             */
+            const mAll = [...j.error.matchAll(/Tel[eé]fono\\s+(\\d+)/gi)];
+            const idx  = mAll.length
+                          ? parseInt(mAll[mAll.length - 1][1], 10) - 1   // 0-based
+                          : 0;
+            const row = document.querySelectorAll('.phone-row')[idx];
+            if (row){
+                const inp = row.querySelector('input.tel');
+                /* cajita de error (crea solo si no existe) */
+                let err = row.querySelector('.err-msg');
+                if (!err){
+                    err = document.createElement('small');
+                    err.className = 'err-msg';
+                    row.appendChild(err);
+                }
+                err.textContent   = j.error;      // mensaje del back-end
+                err.style.display = 'block';
+                inp.classList.add('invalid');
+
+                scrollToFirstInvalid();           // desliza suave al campo
+            }
+            return;                               // ← SIN toast
+        }
+
+        /* D) documento duplicado (se mantiene toast) */
+        if (j.error && j.error.includes('ya está registrado')){
+            const doc = document.getElementById('rut');
+            if (doc){
+                doc.classList.add('invalid');
+                scrollToFirstInvalid();
+            }
+            toast(j.error);
+            return;
+        }
+
+        /* E) cualquier otro error genérico */
+        toast(j.error || 'Error inesperado');
+    }
+    /* ────────────────────────────────
+       ► FIN SECCIÓN MODIFICADA ◄
+    ──────────────────────────────── */
+
   }catch(err){
-    toast('Servidor ocupado. Intenta de nuevo');
+    toast('Error de red: '+err.message);
   }
 };
 
@@ -852,6 +1055,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   populateOcupaciones().then(renderOcupaciones);
   initIntlTelInputs();       // intl-tel-input
 
+  /* ——— refresca la validación cuando el usuario elige la descripción ——— */
+  document.querySelectorAll('#phone-container select')
+          .forEach(sel => sel.addEventListener('change', () => validatePhoneRows()));
+
   /* ─── validación inmediata mientras el usuario escribe ─── */
 
   /* 1. selects de ubicación  */
@@ -862,7 +1069,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   /* 2. campos de texto generales */
   ['nombres','apellido_paterno','apellido_materno',
-   'direccion','iglesia_ministerio','profesion_oficio_estudio']
+   'direccion','iglesia_ministerio','profesion_oficio_estudio','liderazgo']
   .forEach(name=>{
     const inp = document.querySelector(`[name="${name}"]`);
     if (inp)  inp.addEventListener('input', ()=> validateNameField(inp));
@@ -886,6 +1093,44 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('ed-doc-type')
             .addEventListener('change', ()=> validateDocNumber(docInp));
   }
+
+  /* ——— habilita / deshabilita “Otros” dinámicos ——— */
+  otroNos   = document.getElementById('nos_conoces_otro');
+  otroPropo = document.getElementById('propo_otro');
+
+  /* ① valida en vivo los textos “Otros” */        // ← NUEVO
+  [otroNos, otroPropo].forEach(inp =>              // ← NUEVO
+      inp.addEventListener('input', () => validateNameField(inp))); // ← NUEVO
+
+  document.querySelectorAll('input[name="nos_conoces"]').forEach(r=>{
+    r.addEventListener('change',()=>{
+        if(r.value==='Otros'){
+            otroNos.disabled = !r.checked;
+            if(r.checked) otroNos.focus();
+        }else{
+            otroNos.value   = '';
+            otroNos.disabled= true;
+        }
+        validateRadioGroup('nos_conoces');
+    });
+  });
+
+  document.getElementById('propo_otro_chk')
+          .addEventListener('change',e=>{
+              otroPropo.disabled = !e.target.checked;
+              if(!e.target.checked) otroPropo.value = '';
+              validateCheckGroup('q-proposito');
+          });
+
+  /* validación viva */
+  ['motivacion'].forEach(n=>{
+    document.querySelectorAll(`input[name="${n}"]`)
+            .forEach(r=>r.addEventListener('change',
+                      ()=>validateRadioGroup(n)));
+  });
+  document.querySelectorAll('#q-proposito input[type="checkbox"]')
+          .forEach(c=>c.addEventListener('change',
+                    ()=>validateCheckGroup('q-proposito')));
 });
 
 /* —— Color dinámico para <select> sin atributo required —— */

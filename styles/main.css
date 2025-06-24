@@ -503,25 +503,6 @@ footer {
     border-radius: 10px;
 }
 
-#escribenos {
-    text-align: center;
-    padding: 20px;
-    background-image: url('../images/Fondo-amarillo.jpeg');
-}
-
-#escribenos h2 {
-    color: var(--color-titulo);
-    margin-bottom: 20px;
-}
-
-#escribenos iframe {
-    border: none;
-    width: 100%;
-    max-width: 1640px;
-    height: 1845px;
-    margin: 0;
-}
-
 /* Estilos para la sección about-us */
 .section.about-us {
     position: relative;
