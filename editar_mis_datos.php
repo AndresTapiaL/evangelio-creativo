@@ -257,9 +257,9 @@ $defaultVersion = filemtime(__DIR__ . '/uploads/fotos/default.png');
         <small class="error-msg" id="error_fecha"></small>
       </div>
 
-      <!-- 3. Documento de identidad -->
+      <!-- 3. RUT / DNI -->
       <div class="grupo">
-        <label for="rut_dni">Documento de identidad:</label>
+        <label for="rut_dni">RUT / DNI:</label>
         <select id="tipo_doc" name="tipo_doc">
           <option value="rut" <?= $user['id_pais']==1?'selected':'' ?>>RUT (Chile)</option>
           <option value="int" <?= $user['id_pais']!=1?'selected':'' ?>>Internacional</option>

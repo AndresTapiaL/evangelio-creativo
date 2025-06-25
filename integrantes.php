@@ -44,6 +44,10 @@ $equiposInit = [];
 
 if ($isSuper){                      // ve todo
     $equiposInit[] = ['id'=>0,'nombre'=>'General','es_equipo'=>null];
+    
+    /* ─── NUEVA SECCIÓN ─── */
+    $equiposInit[] = ['id'=>'new','nombre'=>'Nuevos integrantes','es_equipo'=>null];
+
     $equiposInit = array_merge(
         $equiposInit,
         $pdo->query("SELECT id_equipo_proyecto AS id,
@@ -835,7 +839,7 @@ if ($isSuper){                               // puede ver sección 0
         <dl>
           <dt>Fecha de nacimiento</dt>  <dd id="det-nac"></dd>
           <dt>Edad</dt>              <dd id="det-edad"></dd>
-          <dt>Documento de identidad</dt>         <dd id="det-rut"></dd>
+          <dt>RUT / DNI</dt>         <dd id="det-rut"></dd>
           <dt>País</dt>              <dd id="det-pais"></dd>
           <dt>Región / Estado</dt>   <dd id="det-region"></dd>
           <dt>Ciudad / Comuna</dt>   <dd id="det-ciudad"></dd>
@@ -1027,6 +1031,30 @@ if ($isSuper){                               // puede ver sección 0
             <legend>Equipos / Proyectos (añadir)</legend>
             <div id="eq-container"></div>
             <button type="button" id="btn-add-eq" class="btn">+ Añadir</button>
+          </fieldset>
+
+          <fieldset id="fs-adm" style="display:none">
+            <legend>Información de Admisión</legend>
+
+            <label>Liderazgo
+              <textarea id="ed-liderazgo" name="adm_liderazgo" rows="3" maxlength="255"></textarea>
+              <small class="err-msg"></small>
+            </label>
+
+            <label>¿Cómo nos conoces?
+              <textarea id="ed-nos" name="adm_nosconoces" rows="3" maxlength="255"></textarea>
+              <small class="err-msg"></small>
+            </label>
+
+            <label>Propósito
+              <textarea id="ed-prop" name="adm_proposito" rows="3" maxlength="255"></textarea>
+              <small class="err-msg"></small>
+            </label>
+
+            <label>Motivación
+              <textarea id="ed-mot" name="adm_motivacion" rows="3" maxlength="255"></textarea>
+              <small class="err-msg"></small>
+            </label>
           </fieldset>
 
           <!-- ——— SOLO PARA USUARIOS RETIRADOS ——— -->

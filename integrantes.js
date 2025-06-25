@@ -197,6 +197,22 @@ let C_ESTADOS = [];
 fetch(`${API}?accion=estados`)
   .then(r => r.json()).then(j => C_ESTADOS = j.estados);
 
+let C_EST_ADM = [];
+fetch(`${API}?accion=estados_admision`)
+  .then(r=>r.json())
+  .then(j=> C_EST_ADM = j.estados);
+
+/* ─── color por id_estado_admision ─── */
+const ADM_COLORS = {
+  1: '#ffff00',   // Contactado
+  2: '#ff9900',   // Agendado
+  3: '#00ff00',   // Ingresado
+  4: '#ff00ff',   // Pendiente
+  5: '#ff0000',   // No llegó
+  6: '#00ffff',   // Reagendar
+  7: '#800000'    // No ingresa
+};
+
 let CURR_YEAR = new Date().getFullYear();
 let YEAR_MIN = null;   // primer año con registros
 let YEAR_MAX = null;   // último año con registros
@@ -248,6 +264,16 @@ const COUNTRY_ES = {
   mx:'México',     ni:'Nicaragua', pa:'Panamá',   py:'Paraguay',
   pe:'Perú',       pr:'Puerto Rico', es:'España', uy:'Uruguay', ve:'Venezuela'
 };
+
+function paintAdmSelect(sel){
+  const col = ADM_COLORS[sel.value] || '#ffffff';
+  sel.style.backgroundColor = col;
+
+  /* texto blanco si el fondo es oscuro */
+  const rgb = parseInt(col.slice(1), 16);
+  const lum = 0.299*((rgb>>16)&255) + 0.587*((rgb>>8)&255) + 0.114*(rgb&255);
+  sel.style.color = lum < 140 ? '#ffffff' : '#000000';
+}
 
 function initIntlTelInputs () {
   phoneInitPromises = [];                       // ← reinicia el array
@@ -428,6 +454,20 @@ function validateEmail (inp){
       err.textContent   = '';
       err.style.display = 'none';
       inp.classList.remove('invalid');
+
+      /* ─── NUEVO: consulta al servidor para garantizar unicidad ─── */
+      const uid = $('#ed-id') ? $('#ed-id').value : '0';   // 0 = alta
+      fetch(`integrantes_api.php?accion=checkcorreo&mail=${encodeURIComponent(txt)}&uid=${uid}`)
+        .then(r => r.json())
+        .then(j => {
+            if (!j.ok) return;                         // error de red ⇒ ignora
+            if (j.exists) {
+                err.textContent   = '* Este correo ya está registrado';
+                err.style.display = 'block';
+                inp.classList.add('invalid');
+            }
+        })
+        .catch(()=>{});                               // silencio en caso de fallo de red
   }
   return !msg;
 }
@@ -491,6 +531,11 @@ function validateLocSelect(sel){
   const msgBx = sel.parentElement.querySelector('.err-msg');
   let   msg   = '';
 
+  /* ❶ — País ahora es OBLIGATORIO */
+  if (sel.id === 'ed-pais' && !val){
+      msg = '* Obligatorio';
+  }
+
   /* ① el valor debe corresponder a una option existente */
   if (val && ![...sel.options].some(o => o.value === val)){
       msg = '* Opción no válida';
@@ -541,12 +586,16 @@ function validateDifunto(sel){
 
 function validatePhoneRows () {
   let ok = true;
+
+  /* ① mapa auxiliar para detectar números repetidos en las 3 filas */
+  const seen = new Map();              // num → <input>
   for (let i = 0; i < 3; i++) {
     let  rowHasError = false;
     const inp  = document.querySelector(`[name="tel${i}"]`);
     const sel  = document.querySelector(`[name="tel_desc${i}"]`);
     const val  = inp.value.trim();
     const desc = sel.value.trim();
+
     /*  localiza (o crea) la cajita de error  */
     let err = inp.parentElement.querySelector('.err-msg');
     if (!err) {
@@ -555,6 +604,26 @@ function validatePhoneRows () {
         inp.parentElement.appendChild(err);
     }
     let   msg  = '';
+
+    /* ─── duplicados en el mismo formulario ─── */
+    if (val) {
+        if (seen.has(val)) {
+            msg        = '* Número duplicado';
+            rowHasError = true;
+
+            /* marca también el primer input que ya tenía ese número */
+            const dupInp = seen.get(val);
+            const dupErr = dupInp.parentElement.querySelector('.err-msg')
+                            || dupInp.parentElement.appendChild(
+                                  Object.assign(document.createElement('small'),
+                                                {className:'err-msg'}));
+            dupErr.textContent   = '* Número duplicado';
+            dupErr.style.display = 'block';
+            dupInp.classList.add('invalid');
+        } else {
+            seen.set(val, inp);   // registra el número como visto
+        }
+    }
 
     if (val) {
       /* ① formato global */
@@ -619,6 +688,23 @@ function validatePhoneRows () {
       sel.classList.remove('invalid');
     }
     if (rowHasError) continue;
+
+    /* NUEVO: resalta el primer teléfono omitido si se detectó un salto */
+    if (msg.startsWith('* Completa Teléfono')) {
+        const faltaIdx = parseInt(msg.match(/\d+/)[0], 10) - 1;   // 0-based
+        const faltaInp = document.querySelector(`[name="tel${faltaIdx}"]`);
+        if (faltaInp) {
+            let err2 = faltaInp.parentElement.querySelector('.err-msg');
+            if (!err2) {
+                err2 = document.createElement('small');
+                err2.className = 'err-msg';
+                faltaInp.parentElement.appendChild(err2);
+            }
+            err2.textContent   = '* Obligatorio';
+            err2.style.display = 'block';
+            faltaInp.classList.add('invalid');
+        }
+    }
   }
   return ok;
 }
@@ -732,6 +818,11 @@ async function loadSidebar () {
   const { equipos } = await fetch(`${API}?accion=equipos`).then(r => r.json());
   ul.innerHTML = '';
 
+  /*  ── inserta “Nuevos integrantes” justo después de General ── */
+  const nuevos = {id:'new', nombre:'Nuevos integrantes'};
+  const posGen = equipos.findIndex(e => String(e.id)==='0');
+  if(posGen!==-1) equipos.splice(posGen+1,0,nuevos);
+
   equipos.forEach(e => {
     const li = document.createElement('li');
     li.textContent = e.nombre;
@@ -761,6 +852,11 @@ function visibleCols () {
   const base = (TEAM === '0' || TEAM === 'ret')
                ? cols.filter(k => !/^est[123]$/.test(k))
                : cols;
+
+  if (TEAM === 'new'){
+      /* no queremos la columna numérica 'estado_adm' */
+      return cols.filter(k => !/^est[123]$/.test(k) && k !== 'estado_adm');
+  }
 
   /* columnas exclusivas de Retirados */
   return (TEAM === 'ret')
@@ -794,6 +890,10 @@ async function selectTeam (id, li, page = 1) {
               `&page=${PAGE}&per=${PER}`         +
               `&sort=${SORT_BY}&dir=${DIR}`;
   const j   = await (await fetch(url)).json();
+  if (!j.ok) {               // ← respuesta con error → aborta
+      toast(j.error || 'Error inesperado');
+      return;
+  }
   TOTAL     = j.total;
   DATA      = j.integrantes;
 
@@ -848,11 +948,17 @@ function coincideFila (row) {
   return SEARCH.split(/\s+/).every(p => txt.includes(p));
 }
 
+function selAdmHTML(val, uid){
+  const opts = C_EST_ADM
+                 .map(e => `<option value="${e.id}" ${e.id==val?'selected':''}>${e.nom}</option>`);
+  return `<select class="sel-estado-adm" data-uid="${uid}">${opts.join('')}</select>`;
+}
+
 function refreshTable () {
   const cols  = visibleCols();
   const thead = $('#tbl-integrantes thead');
   const tbody = $('#tbl-integrantes tbody');
-  const showStates = (TEAM !== '0' && TEAM !== 'ret');
+  const showStates = (TEAM !== '0' && TEAM !== 'ret' && TEAM !== 'new');
 
   /* encabezados */
   let headHTML = cols.map(k=>{
@@ -868,6 +974,11 @@ function refreshTable () {
       const hdrs = [periodLabel(-2), periodLabel(-1), periodLabel(0)];
       headHTML  += hdrs.map(t => `<th>${t}</th>`).join('');
   }
+
+  if (TEAM === 'new') {                 // ⬅︎ nuevo bloque
+      headHTML += '<th>Estado admisión</th>';
+  }
+
   headHTML += '<th class="sticky-right">Acciones</th>';
   thead.innerHTML = `<tr>${headHTML}</tr>`;
 
@@ -912,19 +1023,38 @@ function refreshTable () {
         <button class="btn-delusr" data-id="${r.id_usuario}">🗑️ Borrar</button>`;
     }
 
-    if (TEAM !== '0' && TEAM !== 'ret') {         // solo en equipos/proyectos reales
+    if (TEAM==='new'){
+        acciones+=`
+            <button class="btn-rein" data-id="${r.id_usuario}">🡒 Ingresar</button>
+            <button class="btn-delusr" data-id="${r.id_usuario}">🗑️ Borrar</button>`;
+    }
+
+    /* «Nuevos integrantes» NO lleva este basurero extra */
+    if (TEAM !== '0' && TEAM !== 'ret' && TEAM !== 'new') {
       acciones +=
         `<button class="btn-del-eq"
                 title="Eliminar de este equipo/proyecto"
                 data-iep="${r.id_integrante_equipo_proyecto}"
-                data-uname="${r.nombre}"
-        >🗑️</button>`;
+                data-uname="${r.nombre}">🗑️</button>`;
     }
 
+    if (TEAM === 'new'){
+        fila += `<td>${selAdmHTML(r.estado_adm,r.id_usuario)}</td>`;
+    }
     fila += `<td class="sticky-right">${acciones}</td></tr>`;
 
     return fila;
   }).join('');
+
+  if (TEAM === 'new') {                               // ⬅︎ nuevo
+      $$('.sel-estado-adm').forEach(sel => {
+          paintAdmSelect(sel);                  // color inicial
+          sel.onchange = e => {                 // actualiza color + guarda
+              paintAdmSelect(e.target);
+              updateEstadoAdm(e);
+          };
+      });
+  }
 
   /* listeners */
   $$('.sel-estado').forEach(s => s.onchange = updateEstado);
@@ -995,6 +1125,18 @@ async function updateEstado (e) {
   }catch(err){
       handleError(err);
   }
+}
+
+async function updateEstadoAdm(e){
+  const fd=new FormData();
+  fd.append('accion','estado_adm');
+  fd.append('id_usuario',e.target.dataset.uid);
+  fd.append('id_estado',e.target.value);
+  try{
+    const j=await fetchJSON(API,{method:'POST',body:fd});
+    if(j.ok) toast('Estado guardado ✓');
+    else     toast(j.error||'Error');
+  }catch(err){handleError(err);}
 }
 
 /* ─── Etiquetas legibles de los 3 últimos periodos ─── */
@@ -1206,6 +1348,19 @@ async function openDetalle (e) {
   md.querySelector('#det-correo').textContent  = u.correo_electronico;
   md.querySelector('#det-edad').textContent = u.edad + ' años';
   // array con objetos {num,desc,prim}
+
+  /* ─── campos de admisión ─── */
+  if(TEAM==='new'){
+      const ad = j.adm;     // viene del back (ver consulta)
+      const wrap = document.createElement('dl');
+      wrap.innerHTML = `
+        <dt>Liderazgo</dt><dd>${ad.liderazgo||'-'}</dd>
+        <dt>¿Nos conoces?</dt><dd>${ad.nos_conoces||'-'}</dd>
+        <dt>Propósito</dt><dd>${ad.proposito||'-'}</dd>
+        <dt>Motivación</dt><dd>${ad.motivacion||'-'}</dd>`;
+      md.querySelector('.modal-box').appendChild(wrap);
+  }
+
   // ─── helper para escapar HTML ───
   const esc = s => String(s)
     .replace(/&/g,  '&amp;')
@@ -1344,6 +1499,8 @@ $('#form-edit').onsubmit = submitEdit;
 
 /* ---------- COMPLETA TODOS LOS CAMPOS DEL FORM ---------- */
 function fillEditForm (u) {
+  /* ── determina si estamos en la sección “Nuevos integrantes” ── */
+  const isAdm = (TEAM === 'new');
   $('#del_foto').value = '0';
   $('#btn-del-photo').textContent = '🗑️ Eliminar foto';
   $('#ed-foto').dataset.deleted = '0';
@@ -1447,6 +1604,7 @@ function fillEditForm (u) {
   const isRet = !!u.ret;
   IS_RET = isRet;
   $('#fs-retirados').style.display = isRet ? 'block' : 'none';
+  $('#fs-adm').style.display       = isAdm ? 'block':'none';
   $('#fs-equipos').style.display   =
         (isRet || !IS_SUPER) ? 'none' : 'block';
   $('#btn-add-eq').style.display   = IS_SUPER ? '' : 'none';
@@ -1558,6 +1716,9 @@ function syncPaisDoc () {
     if (selDoc.value === 'CL'  && selPais.value !== '1') selPais.value = '1';
     if (selDoc.value === 'INT' && selPais.value === '1') selPais.value = '';
     populateRegiones(selPais.value);          // mantiene la cascada viva
+
+    /* ❶ — si dejamos “— país —” muestra el error enseguida */
+    validateLocSelect(selPais);
   });
 
   /* País  ⇒ Tipo  +  reseteo de cascada */
@@ -1588,6 +1749,7 @@ async function populateRegiones (idPais) {
   if (!idPais){
       selReg.innerHTML = '<option value=""></option>';
       selCiu.innerHTML = '<option value=""></option>';
+      validateLocSelect($('#ed-pais'));   // ❷ — marca “* Obligatorio”
       return;
   }
 
@@ -1604,6 +1766,8 @@ async function populateRegiones (idPais) {
       j.regiones.map(r => `<option value="${r.id}">${r.nom}</option>`).join('');
   selReg.value = '';
   selCiu.innerHTML = '<option value=""></option>';
+
+  validateLocSelect($('#ed-pais'));   // ❸ — borra el error al corregir
 
   /* handler solo una vez */
   selReg.onchange = e => populateCiudades(e.target.value);
@@ -1632,12 +1796,27 @@ async function populateCiudades (idRegion) {
 
 /* descripción teléfonos ------------------------------------------------ */
 async function populatePhoneDescs () {
+  /* evita volver a cargar si ya están los <option> */
   if ($('[name="tel_desc0"]').options.length) return;
-  const j = await (await fetch(`${API}?accion=desc_telefonos`)).json();
-  const opts = j.descs.map(d => `<option value="${d.id}">${d.nom}</option>`).join('');
-  ['tel_desc0','tel_desc1','tel_desc2']
-    .forEach(n => $(`[name="${n}"]`).innerHTML =
-        '<option value="">— descripción —</option>' + opts);
+
+  const j    = await (await fetch(`${API}?accion=desc_telefonos`)).json();
+  const opts = j.descs
+                 .map(d => `<option value="${d.id}">${d.nom}</option>`)
+                 .join('');
+
+  ['tel_desc0','tel_desc1','tel_desc2'].forEach(n => {
+      const sel = $(`[name="${n}"]`);
+
+      /* lista de opciones */
+      sel.innerHTML =
+          '<option value="">— descripción —</option>' + opts;
+
+      /* ── NUEVO: re-valida la fila al cambiar la descripción ── */
+      sel.onchange = () => validatePhoneRows();
+  });
+
+  /* ── NUEVO: chequeo inmediato por si ya había datos cargados ── */
+  validatePhoneRows();
 }
 
 /* ocupaciones ---------------------------------------------------------- */
@@ -1773,6 +1952,7 @@ async function openReingreso(e){
    $('#rein-eq').dispatchEvent(new Event('change'));
    show($('#modal-rein'));
 }
+
 $('#rein-close').onclick=$('#rein-cancel').onclick=()=>hide($('#modal-rein'));
 
 $('#rein-ok').onclick = async ()=>{
@@ -1782,7 +1962,7 @@ $('#rein-ok').onclick = async ()=>{
    if(!eq||!rol) return alert('Debes escoger equipo y rol');
 
    const fd = new FormData();
-   fd.append('accion','reingresar');
+   fd.append('accion', TEAM==='new' ? 'ingresar' : 'reingresar');
    fd.append('id_usuario',uid);
    fd.append('id_equipo',eq);
    fd.append('id_rol',rol);
@@ -1808,7 +1988,8 @@ $('#del-ok').onclick=async()=>{
    if(j.ok){
      toast('Usuario eliminado');
      hide($('#modal-del'));
-     selectTeam('ret', $('[data-id="ret"]'), 1);
+     /* permanece en la sección donde estabas */
+     selectTeam(TEAM, $(`#equipos-list li[data-id="${TEAM}"]`), PAGE);
    }else toast(j.error||'Error');
 };
 
@@ -1904,6 +2085,13 @@ async function submitEdit (ev) {
   const fd = new FormData(ev.target);      // ahora sí incluye "+56…"
   fd.append('accion', 'editar');
 
+  if (TEAM==='new'){
+      fd.append('adm_liderazgo',   $('#ed-liderazgo').value.trim());
+      fd.append('adm_nosconoces',  $('#ed-nos').value.trim());
+      fd.append('adm_proposito',   $('#ed-prop').value.trim());
+      fd.append('adm_motivacion',  $('#ed-mot').value.trim());
+  }
+
   if (!IS_RET) {
     ['razon_ret', 'ex_equipo_ret', 'es_difunto_ret']
       .forEach(k => fd.delete(k));
@@ -1951,6 +2139,36 @@ async function submitEdit (ev) {
           await loadSidebar();
           selectTeam(TEAM, $(`#equipos-list li[data-id="${TEAM}"]`), 1);
       }else{
+          /* ❷ — ERRORES SQL ÚNICOS → inline */
+          const errTxt = j.error || '';
+
+          /* duplicado rut_dni ─ muestra error en #ed-rut */
+          if (/Duplicate entry .* for key 'rut_dni'/i.test(errTxt)){
+              const inp  = $('#ed-rut');
+              const box  = inp.parentElement.querySelector('.err-msg');
+              box.textContent   = '* RUT / DNI ya registrado';
+              box.style.display = 'block';
+              inp.classList.add('invalid');
+
+              /* scroll & foco suave */
+              inp.scrollIntoView({behavior:'smooth',block:'center'});
+              setTimeout(()=> inp.focus({preventScroll:true}),400);
+              return;                               // ← sin toast genérico
+          }
+
+          /* falta país (id_pais NULL) ─ muestra error en #ed-pais */
+          if (/foreign key constraint fails .*`id_pais`/i.test(errTxt)){
+              const sel  = $('#ed-pais');
+              const box  = sel.parentElement.querySelector('.err-msg');
+              box.textContent   = '* Selecciona un país';
+              box.style.display = 'block';
+              sel.classList.add('invalid');
+
+              sel.scrollIntoView({behavior:'smooth',block:'center'});
+              setTimeout(()=> sel.focus({preventScroll:true}),400);
+              return;                               // ← sin toast genérico
+          }
+
           toast(j.error || 'Error inesperado');
       }
   }catch(err){

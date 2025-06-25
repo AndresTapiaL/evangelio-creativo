@@ -47,6 +47,17 @@ try {
     break;
   }
 
+  /* ═════════ 0-bis-A)   ESTADOS ADMISIÓN  ═════════ */
+  case 'GET:estados_admision': {
+    $rows=$pdo->query("
+        SELECT id_estado_admision AS id,
+               nombre_estado_admision AS nom
+          FROM estados_admision
+      ORDER BY id_estado_admision")->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['ok'=>true,'estados'=>$rows]);
+    break;
+  }
+
   /* ════════════════ 0-bis) CATÁLOGOS GENERALES ════════════════ */
   case 'GET:paises': {
       $rows = $pdo->query("
@@ -107,11 +118,33 @@ try {
       break;
   }
 
+  /* ═════════ 0-ter) VALIDAR CORREO ÚNICO (AJAX) ═════════ */
+  case 'GET:checkcorreo': {
+      $mail = trim($_GET['mail'] ?? '');
+      $uid  = (int)($_GET['uid'] ?? 0);      // id del usuario que edita (0 si alta)
+
+      if ($mail === '') {
+          echo json_encode(['ok'=>false,'error'=>'mail']); break;
+      }
+
+      $st = $pdo->prepare("
+            SELECT 1
+              FROM correos_electronicos
+             WHERE correo_electronico = :c
+               AND id_usuario <> :id      /* excluye al que está editando */
+             LIMIT 1");
+      $st->execute([':c'=>$mail, ':id'=>$uid]);
+      $existe = (bool)$st->fetchColumn();
+
+      echo json_encode(['ok'=>true,'exists'=>$existe]);
+      break;
+  }
+
   /* ════════════════ 1) LISTA INTEGRANTES ════════════════ */
   case 'GET:lista': {
       $team   = $_GET['team'] ?? '0';
       /*  ACL  acceso a la sección solicitada */
-      if ($team === '0' || $team === 'ret'){
+      if ($team === '0' || $team === 'ret' || $team === 'new'){
           if (!$reqSuper){ http_response_code(403); exit; }
       }else{
           if (!$reqSuper && !in_array((int)$team,$reqTeams,true)){
@@ -179,7 +212,8 @@ try {
       'profesion_oficio_estudio'   => 'u.profesion_oficio_estudio',
       'fecha_retiro_fmt'           => 'r.fecha_retiro',
       'ex_equipo'                  => 'r.ex_equipo',
-      'es_difunto'                 => 'r.es_difunto'
+      'es_difunto'                 => 'r.es_difunto',
+      'estado_adm' => 'estado_adm'
       ];
 
       // columnas que solo existen en Retirados
@@ -226,7 +260,26 @@ try {
       $selectEstados = '';
       $joinEstados   = '';
 
-      if ($team !== '0' && $team !== 'ret') {       // Equipos o Proyectos “reales”
+      /* ---------- para lista de ADMISIÓN ---------- */
+      $selectAdm = $joinAdm = '';
+      if ($team === 'new'){
+          $selectAdm = "
+              ea.id_estado_admision                    AS estado_adm,
+              ea.id_estado_admision                    AS est1,   /* reutiliza interfaz */
+              NULL AS est2,NULL AS est3,
+              NULL AS per1_id,NULL AS per2_id,NULL AS per3_id,
+          ";
+          $joinAdm = "
+              JOIN admision a     ON a.id_usuario = u.id_usuario
+              LEFT JOIN estados_admision ea ON ea.id_estado_admision = a.id_estado_admision
+          ";
+          /*  fuerza que los estados «normales» queden vacíos **/
+          $selectEstados = '';
+          $joinEstados   = '';
+      }
+
+      /* ‘new’ NO necesita los JOIN de estados */
+      if ($team !== '0' && $team !== 'ret' && $team !== 'new') {
           $selectEstados = "
               lep1.id_tipo_estado_actividad                         AS est1,
               lep2.id_tipo_estado_actividad                         AS est2,
@@ -264,14 +317,10 @@ try {
                                             WHERE fecha_termino <  :hoy
                                         ORDER BY fecha_termino DESC LIMIT 1 OFFSET 1)
           ";
-      } else {                                    // “General” o “Retirados”
+      }else if ($team === '0' || $team === 'ret'){        // “General” o “Retirados”
           $selectEstados = "
-              NULL AS est1,
-              NULL AS est2,
-              NULL AS est3,
-              NULL AS per1_id,
-              NULL AS per2_id,
-              NULL AS per3_id,
+              NULL AS est1,NULL AS est2,NULL AS est3,
+              NULL AS per1_id,NULL AS per2_id,NULL AS per3_id,
           ";
           /* $joinEstados queda vacío */
       }
@@ -309,10 +358,12 @@ try {
                   TIMESTAMPDIFF(MONTH ,u.ultima_actualizacion,:hoy)              AS meses_desde_update,
                   DATE_FORMAT(u.ultima_actualizacion,'%d-%m-%Y')                 AS ultima_act,
                   {$selectRet}
+                  {$selectAdm}
                   $selectEstados
                   iep.id_integrante_equipo_proyecto
               FROM usuarios u
               {$joinRet}
+              {$joinAdm}
               LEFT JOIN paises p   ON p.id_pais=u.id_pais
               LEFT JOIN ciudad_comuna cc ON cc.id_ciudad_comuna=u.id_ciudad_comuna
               LEFT JOIN region_estado re ON re.id_region_estado=u.id_region_estado
@@ -326,23 +377,36 @@ try {
               $joinEstados
               WHERE 1";
 
-      if($team==='ret'){
-          $sql.=" AND u.id_usuario IN (SELECT id_usuario FROM retirados) ";
-      }elseif($team!=='ret' && $team!='0'){
-          $sql.=" AND iep.id_equipo_proyecto=:team
-                    AND iep.habilitado = 1 ";
-      }else{                 /* General */
-          $sql.=" AND u.id_usuario NOT IN (SELECT id_usuario FROM retirados)
-                  AND EXISTS (SELECT 1
-                                FROM integrantes_equipos_proyectos ie2
-                                WHERE ie2.id_usuario = u.id_usuario
-                                  AND ie2.habilitado = 1)";
-      }
+              if ($team === 'ret') {
+                  $sql .= " AND u.id_usuario IN (SELECT id_usuario FROM retirados) ";
+
+              } elseif ($team === 'new') {        // ← NUEVO
+                  /* solo quienes están en la tabla admision y sin equipos activos */
+                  $sql .= " AND EXISTS (SELECT 1
+                                          FROM admision a2     /* alias distinto para evitar duplicidad */
+                                      WHERE a2.id_usuario = u.id_usuario)
+                          AND NOT EXISTS (SELECT 1
+                                          FROM integrantes_equipos_proyectos ie2
+                                      WHERE ie2.id_usuario = u.id_usuario
+                                          AND ie2.habilitado = 1)";
+
+              } elseif ($team !== '0') {          /* equipos / proyectos reales */
+                  $sql .= " AND iep.id_equipo_proyecto = :team
+                          AND iep.habilitado = 1 ";
+
+              } else {                            /* “General” */
+                  $sql .= " AND u.id_usuario NOT IN (SELECT id_usuario FROM retirados)
+                          AND EXISTS (SELECT 1
+                                      FROM integrantes_equipos_proyectos ie2
+                                      WHERE ie2.id_usuario = u.id_usuario
+                                          AND ie2.habilitado = 1)";
+              }
 
       /* total antes del LIMIT → para paginación */
       $sqlCnt = 'SELECT COUNT(*) FROM ('.$sql.' GROUP BY u.id_usuario) x';
       $tot = $pdo->prepare($sqlCnt);
-      if($team!=0 && $team!=='ret') $tot->bindValue(':team',$team,PDO::PARAM_INT);
+      if ($team != 0 && $team !== 'ret' && $team !== 'new')
+          $tot->bindValue(':team', $team, PDO::PARAM_INT);
       $tot->bindValue(':hoy',$hoy); $tot->execute();
       $totalRows = (int)$tot->fetchColumn();
 
@@ -355,11 +419,12 @@ try {
       $st=$pdo->prepare($sql);
       $st->bindValue(':hoy', $hoy);
       if ($search !== '')            $st->bindValue(':q', $params[':q']);
-      if ($team != 0 && $team !== 'ret')
+      if ($team != 0 && $team !== 'ret' && $team !== 'new')
           $st->bindValue(':team', $team, PDO::PARAM_INT);
       $st->bindValue(':off', ($page - 1) * $per, PDO::PARAM_INT);
       $st->bindValue(':per', $per, PDO::PARAM_INT);
-      if($team!=0 && $team!=='ret') $st->bindValue(':team',$team,PDO::PARAM_INT);
+      if ($team != 0 && $team !== 'ret' && $team !== 'new')
+          $st->bindValue(':team', $team, PDO::PARAM_INT);
       $st->execute();
       $rows=$st->fetchAll(PDO::FETCH_ASSOC);
       foreach ($rows as &$r) {
@@ -592,11 +657,21 @@ try {
     $equipNowStmt->execute([$id]);
     $equip_now = $equipNowStmt->fetchAll(PDO::FETCH_ASSOC);
 
+    /* ► campos específicos de admisión (si existen) */
+    $adm = $pdo->prepare("
+            SELECT liderazgo, nos_conoces, proposito, motivacion
+            FROM admision
+            WHERE id_usuario = :uid
+            LIMIT 1");
+    $adm->execute([':uid'=>$id]);
+    $admRow = $adm->fetch(PDO::FETCH_ASSOC) ?: null;
+
     echo json_encode([
-          'ok'        => true,
-          'user'      => $u,
-          'equipos'   => $equip,     // tabla resumen con estados
-          'equip_now' => $equip_now  // equipos vigentes + rol
+        'ok'        => true,
+        'user'      => $u,
+        'equipos'   => $equip,
+        'equip_now' => $equip_now,
+        'adm'       => $admRow          // <<< NUEVO
     ]);
     break;
   }
@@ -651,6 +726,22 @@ try {
     $pdo->prepare($sql)->execute([
         ':iep'=>$idIEP, ':est'=>$idEst, ':per'=>$idPer, ':fec'=>$fecha
     ]);
+    echo json_encode(['ok'=>true]);
+    break;
+  }
+
+  /* ═══════ 5-bis) UPDATE estado ADMISIÓN ═══════ */
+  case 'POST:estado_adm': {
+    $idU  = (int)($_POST['id_usuario'] ?? 0);
+    $idEsRaw = trim($_POST['id_estado'] ?? '');
+    $idEs    = ($idEsRaw === '') ? null : (int)$idEsRaw;
+    if(!$idU) throw new Exception('uid');
+
+    $pdo->prepare("
+            UPDATE admision
+            SET id_estado_admision = :e
+            WHERE id_usuario = :u")
+        ->execute([':e'=>$idEs, ':u'=>$idU]);
     echo json_encode(['ok'=>true]);
     break;
   }
@@ -790,6 +881,18 @@ try {
       }
       if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
           echo json_encode(['ok'=>false,'error'=>'Correo electrónico no válido']); exit;
+      }
+
+      /* —— correo duplicado —— */
+      $dup = $pdo->prepare("
+            SELECT 1
+                FROM correos_electronicos
+            WHERE correo_electronico = :c
+                AND id_usuario <> :id
+            LIMIT 1");
+      $dup->execute([':c'=>$email, ':id'=>$id]);
+      if ($dup->fetchColumn()){
+          echo json_encode(['ok'=>false,'error'=>'El correo ya está registrado']); exit;
       }
 
       /* ─── Ubicación ─── */
@@ -1372,10 +1475,59 @@ try {
     break;
   }
 
+  /* ═══════  POST:ingresar  (nuevo) ═══════ */
+  case 'POST:ingresar': {
+    $uid = (int)($_POST['id_usuario']??0);
+    $eq  = (int)($_POST['id_equipo']??0);
+    $rol = (int)($_POST['id_rol']   ??0);
+    if(!$uid||!$eq||!$rol) throw new Exception('params');
+
+    $pdo->beginTransaction();
+    /* 1. borra de admisión y (si existe) de retirados */
+    $pdo->prepare("DELETE FROM admision  WHERE id_usuario=?")->execute([$uid]);
+    $pdo->prepare("DELETE FROM retirados WHERE id_usuario=?")->execute([$uid]);
+
+    /* 2. crea vínculo activo */
+    $pdo->prepare("INSERT INTO integrantes_equipos_proyectos
+          (id_usuario,id_equipo_proyecto,id_rol,habilitado)
+          VALUES (?,?,?,1)")
+        ->execute([$uid,$eq,$rol]);
+    $iep = $pdo->lastInsertId();
+
+    /* 3. historial estado «5 = Nuevo» */
+    $per=$pdo->query("SELECT get_period_id(CURDATE())")->fetchColumn();
+    $pdo->prepare("INSERT INTO historial_estados_actividad
+            (id_integrante_equipo_proyecto,id_tipo_estado_actividad,id_periodo,fecha_estado_actividad)
+            VALUES (?,?,?,CURDATE())")
+        ->execute([$iep,5,$per]);
+
+    /* 4. fecha_registro = hoy */
+    $pdo->prepare("UPDATE usuarios SET fecha_registro = CURDATE()
+                    WHERE id_usuario=?")->execute([$uid]);
+
+    $pdo->commit();
+    echo json_encode(['ok'=>true]);
+    break;
+  }
+
   case 'POST:delete_user': {
-    $id=(int)($_POST['id_usuario']??0);
+    $id = (int)($_POST['id_usuario'] ?? 0);
     if(!$id) throw new Exception('id');
-    $pdo->prepare("DELETE FROM usuarios WHERE id_usuario=?")->execute([$id]);
+
+    /* 1) eliminamos primero las filas hijas que bloquean la FK */
+    $pdo->beginTransaction();
+    $pdo->prepare("DELETE FROM admision
+                   WHERE id_usuario = ?")
+        ->execute([$id]);
+
+    /*  (agrega aquí otros DELETE si existen más tablas hijas) */
+
+    /* 2) ahora sí podemos borrar al usuario */
+    $pdo->prepare("DELETE FROM usuarios
+                   WHERE id_usuario = ?")
+        ->execute([$id]);
+    $pdo->commit();
+
     echo json_encode(['ok'=>true]);
     break;
   }
