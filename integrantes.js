@@ -584,6 +584,57 @@ function validateDifunto(sel){
   return true;
 }
 
+/* —— Cuestionario: radios y checkboxes —— */
+function validateRadioGroup(name){
+  const radios = document.querySelectorAll(`input[name="${name}"]`);
+  if (!radios.length) return true;
+
+  const container =
+        radios[radios.length - 1].closest('.q-field,.field')
+     || radios[radios.length - 1].parentElement;
+
+  let box = container.querySelector('.err-msg');
+  if (!box){
+      box = document.createElement('small');
+      box.className   = 'err-msg';
+      container.appendChild(box);
+  }
+
+  const ok = [...radios].some(r => r.checked);
+
+  if (!ok){
+      box.textContent   = '* Selecciona una opción';
+      box.style.display = 'block';
+      radios[0].classList.add('invalid');
+  }else{
+      box.textContent   = '';
+      box.style.display = 'none';
+      radios.forEach(r => r.classList.remove('invalid'));
+  }
+  return ok;
+}
+
+function validateCheckGroup(contId){
+  const cont = document.getElementById(contId);
+  const chk  = cont ? cont.querySelectorAll('input[type="checkbox"]') : [];
+
+  let box = cont?.parentElement.querySelector('.err-msg');
+  if (cont && !box){
+      box = document.createElement('small');
+      box.className = 'err-msg';
+      cont.parentElement.appendChild(box);
+  }
+  const ok = [...chk].some(c=>c.checked);
+  if(!ok){
+      box.textContent   = '* Selecciona al menos una opción';
+      box.style.display = 'block';
+  }else{
+      box.textContent   = '';
+      box.style.display = 'none';
+  }
+  return ok;
+}
+
 function validatePhoneRows () {
   let ok = true;
 
@@ -1190,9 +1241,13 @@ function buildColMenu () {
 /* ------------------------------------------------ modal: detalles */
 
 async function loadEstadosYear(idUsuario, anio) {
-
-  const j = await fetch(`${API}?accion=estados_anio&id=${idUsuario}&anio=${anio}`)
-                   .then(r => r.json());
+  // ⇢ solo “Nuevos integrantes” pide también los vínculos deshabilitados
+  const onlyEnabled = (TEAM === 'new') ? 0 : 1;
+  const j = await fetch(
+          `${API}?accion=estados_anio`+
+          `&id=${idUsuario}&anio=${anio}`+
+          `&onlyEnabled=${onlyEnabled}`)
+        .then(r => r.json());
   if (!j.ok) { alert(j.error || 'Error'); return false; }
 
   /* --- cabecera con el año y las flechas (SIEMPRE) ------------------ */
@@ -1324,7 +1379,8 @@ $('#form-ret').onsubmit = async ev =>{
 
 async function openDetalle (e) {
   const id = e.currentTarget.dataset.id;
-  const j  = await (await fetch(`${API}?accion=detalles&id=` + id)).json();
+  const only = (TEAM === 'new') ? '&onlyEnabled=0' : '';
+  const j  = await (await fetch(`${API}?accion=detalles&id=${id}${only}`)).json();
   if (!j.ok) { alert(j.error); return; }
 
   const u  = j.user;
@@ -1350,15 +1406,18 @@ async function openDetalle (e) {
   // array con objetos {num,desc,prim}
 
   /* ─── campos de admisión ─── */
-  if(TEAM==='new'){
-      const ad = j.adm;     // viene del back (ver consulta)
-      const wrap = document.createElement('dl');
-      wrap.innerHTML = `
-        <dt>Liderazgo</dt><dd>${ad.liderazgo||'-'}</dd>
-        <dt>¿Nos conoces?</dt><dd>${ad.nos_conoces||'-'}</dd>
-        <dt>Propósito</dt><dd>${ad.proposito||'-'}</dd>
-        <dt>Motivación</dt><dd>${ad.motivacion||'-'}</dd>`;
-      md.querySelector('.modal-box').appendChild(wrap);
+  const admBox = md.querySelector('#adm-extra');
+  const dl = admBox.querySelector('#det-adm');
+  if (TEAM === 'new' && j.adm) {
+      dl.innerHTML =
+        `<dt>Experiencia liderazgo</dt><dd>${j.adm.liderazgo || '-'}</dd>
+         <dt>¿Cómo nos conoció?</dt><dd>${j.adm.nos_conoces || '-'}</dd>
+         <dt>Propósito</dt><dd>${j.adm.proposito || '-'}</dd>
+         <dt>Motivación (1 a 5)</dt><dd>${j.adm.motivacion || '-'}</dd>`;
+      admBox.style.display = 'block';
+  } else {
+      admBox.style.display = 'none';
+      dl.innerHTML = '';
   }
 
   // ─── helper para escapar HTML ───
@@ -1387,19 +1446,17 @@ async function openDetalle (e) {
           .then(j=>C_ESTADOS = j.estados);
   }
 
-  if (TEAM==='ret'){
-    $('#estados-wrap').style.display='none';
+  if (TEAM==='ret' || (TEAM==='new' && j.ret)){
+      const ret = j.ret;            // el bloque original no cambia
+      $('#det-razon').textContent     = ret.razon     || '-';
+      $('#det-fallecido').textContent = ret.es_difunto ? 'Sí' : 'No';
+      $('#det-exeq').textContent      = ret.ex_equipo || '-';
+      const [y,m,d] = ret.fecha_retiro.split('-');
+      $('#det-fretiro').textContent   = `${d}-${m}-${y}`;
 
-    const ret = j.ret;
-    $('#det-razon').textContent      = ret.razon || '-';
-    $('#det-fallecido').textContent  = ret.es_difunto ? 'Sí' : 'No';
-    $('#det-exeq').textContent       = ret.ex_equipo || '-';
-    const [y,m,d] = ret.fecha_retiro.split('-');
-    $('#det-fretiro').textContent = `${d}-${m}-${y}`;
-
-    $('#retired-extra').style.display='block';
+      $('#retired-extra').style.display='block';
   }else{
-    $('#retired-extra').style.display='none';
+      $('#retired-extra').style.display='none';
   }
 
   /* ── Tabla de estados (tres últimos periodos) ── */
@@ -1418,7 +1475,8 @@ async function openDetalle (e) {
   } else {
       tb.innerHTML =
           '<tr><td colspan="4" style="padding:.5rem">Sin registros</td></tr>';
-      $('#estados-wrap').style.display = 'none';
+      /*  ► En “Nuevos integrantes” mantenemos visible el contenedor      */
+      $('#estados-wrap').style.display = (TEAM === 'new') ? 'block' : 'none';
   }
 
   CURR_YEAR = new Date().getFullYear();          // resetea el valor global
@@ -1479,7 +1537,41 @@ async function openEdit (e) {
       CURR_USER   = j;
       EQUIP_TAKEN = new Set((j.user.equip_now || []).map(r => String(r.eq)));
 
-      fillEditForm(j.user);                         // carga los campos
+      fillEditForm(j.user, j.adm);   // ← pasa también los datos de admisión
+
+      /* ── botones 🗑️ para borrar UNA respuesta ── */
+      document.querySelectorAll('.btn-del-adm').forEach(btn => {
+        btn.onclick = async () => {
+          if (!confirm('¿Eliminar esta respuesta?')) return;
+
+          const campo = btn.dataset.field;              // liderazgo | nos_conoces | …
+          const uid   = document.getElementById('ed-id').value;
+
+          const fd = new FormData();
+          fd.append('accion',    'del_adm_campo');
+          fd.append('id_usuario', uid);
+          fd.append('campo',      campo);
+
+          try{
+              const j = await fetchJSON(API,{method:'POST',body:fd});
+              if (j.ok){
+                  toast('Respuesta eliminada ✓');
+                  // ids de los <span> en el <dl>
+                  const spanIds = {
+                    liderazgo   : 'adm-liderazgo',
+                    nos_conoces : 'adm-nosconoces',
+                    proposito   : 'adm-proposito',
+                    motivacion  : 'adm-motivacion'
+                  };
+
+                  document.getElementById(spanIds[campo]).textContent = '-';
+              }else{
+                  toast(j.error || 'Error');
+              }
+          }catch(err){ handleError(err); }
+        };
+      });
+
       show($('#modal-edit'));                       // ← abre el modal
   } catch (err) {
       handleError(err);                             // toast genérico
@@ -1498,9 +1590,8 @@ $('#btn-add-eq').onclick = addEqRow;
 $('#form-edit').onsubmit = submitEdit;
 
 /* ---------- COMPLETA TODOS LOS CAMPOS DEL FORM ---------- */
-function fillEditForm (u) {
+function fillEditForm (u, adm = null) {
   /* ── determina si estamos en la sección “Nuevos integrantes” ── */
-  const isAdm = (TEAM === 'new');
   $('#del_foto').value = '0';
   $('#btn-del-photo').textContent = '🗑️ Eliminar foto';
   $('#ed-foto').dataset.deleted = '0';
@@ -1603,11 +1694,36 @@ function fillEditForm (u) {
   /* ——— sección Retirados ——— */
   const isRet = !!u.ret;
   IS_RET = isRet;
+  const isAdm = (TEAM === 'new');
   $('#fs-retirados').style.display = isRet ? 'block' : 'none';
-  $('#fs-adm').style.display       = isAdm ? 'block':'none';
-  $('#fs-equipos').style.display   =
-        (isRet || !IS_SUPER) ? 'none' : 'block';
-  $('#btn-add-eq').style.display   = IS_SUPER ? '' : 'none';
+  const fsAdm = $('#fs-adm-show');
+  if (fsAdm) fsAdm.style.display   = isAdm ? 'block' : 'none';
+  /* ─── precarga Información de admisión ─── */
+  if (isAdm) {
+    const setAdm = (idSpan, val) => {
+      let txt = '-';
+
+      if (Array.isArray(val)) {                    // listas: Propósito
+          txt = val.length ? val.join('; ') : '-';
+      } else if (typeof val === 'string') {        // cadenas normales
+          txt = val.trim() ? val : '-';
+      } else if (typeof val === 'number') {        // ← NUEVO: admite números
+          txt = val.toString();
+      }
+
+      document.getElementById(idSpan).textContent = txt;
+    };
+
+
+    setAdm('adm-liderazgo',   adm && adm.liderazgo    );
+    setAdm('adm-nosconoces',  adm && adm.nos_conoces  );
+    setAdm('adm-proposito',   adm && adm.proposito    );
+    setAdm('adm-motivacion',  adm && adm.motivacion   );
+  }
+
+  const showEq = IS_SUPER && !isRet && !isAdm;            // MOD ADM
+  $('#fs-equipos').style.display = showEq ? 'block' : 'none';
+  $('#btn-add-eq').style.display  = showEq ? '' : 'none';
 
   ['ed-razon-ret','ed-exeq-ret','ed-difunto-ret'].forEach(id=>{
     const el = document.getElementById(id);
@@ -1939,6 +2055,17 @@ async function openReingreso(e){
    const uid = e.currentTarget.dataset.id;
    $('#modal-rein').dataset.uid = uid;
 
+   /* ─── NUEVO: título y mensaje según la sección de origen ─── */
+   const fromNew = (TEAM === 'new');             // true = “Nuevos integrantes”
+   $('#modal-rein h2').textContent = fromNew
+       ? 'Ingresar usuario'
+       : 'Reingresar usuario';
+
+   $('#modal-rein p').textContent = fromNew
+       ? '¿Seguro que quieres ingresar a este usuario?'
+       : '¿Seguro que quieres reingresar a este usuario?';
+   /* ────────────────────────────────────────────────────────── */
+
    /* carga combos */
    const d  = await fetchJSON(API+'?accion=equipos');
    /*  solo equipos reales  (es_equipo = 1)  */
@@ -1967,11 +2094,23 @@ $('#rein-ok').onclick = async ()=>{
    fd.append('id_equipo',eq);
    fd.append('id_rol',rol);
    const j = await fetchJSON(API,{method:'POST',body:fd});
-   if(j.ok){
-       toast('Usuario reingresado ✓');
-       hide($('#modal-rein'));
-       selectTeam('ret', $('[data-id="ret"]'), 1); // refresca Retirados
-   }else toast(j.error||'Error');
+   if (j.ok) {
+      /* ¿desde qué sección se disparó la acción? ----------------------- */
+      const wasNew = (TEAM === 'new');   // true → “Nuevos”, false → “Retirados”
+
+      toast(wasNew ? 'Usuario ingresado ✓' : 'Usuario reingresado ✓');
+      hide($('#modal-rein'));
+
+      /* refresca el panel lateral (contadores + posibles cambios) ------ */
+      await loadSidebar();
+
+      /* vuelve a la misma sección en la que estabas -------------------- */
+      const targetId = wasNew ? 'new' : 'ret';
+      const liTarget = document.querySelector(`#equipos-list li[data-id="${targetId}"]`);
+      if (liTarget) selectTeam(targetId, liTarget, 1);  // recarga tabla (pág. 1)
+   } else {
+      toast(j.error || 'Error');
+   }
 };
 
 let DEL_UID=0;
@@ -2084,13 +2223,6 @@ async function submitEdit (ev) {
 
   const fd = new FormData(ev.target);      // ahora sí incluye "+56…"
   fd.append('accion', 'editar');
-
-  if (TEAM==='new'){
-      fd.append('adm_liderazgo',   $('#ed-liderazgo').value.trim());
-      fd.append('adm_nosconoces',  $('#ed-nos').value.trim());
-      fd.append('adm_proposito',   $('#ed-prop').value.trim());
-      fd.append('adm_motivacion',  $('#ed-mot').value.trim());
-  }
 
   if (!IS_RET) {
     ['razon_ret', 'ex_equipo_ret', 'es_difunto_ret']
@@ -2234,6 +2366,13 @@ document.addEventListener('DOMContentLoaded', () => {
       refreshTable();          // pinta de inmediato
   }
   syncPaisDoc();
+  /* —— habilita / deshabilita “Otros” dinámicos —— */
+  otroNos   = document.getElementById('ed-nos-otro');
+  otroPropo = document.getElementById('ed-prop-otro');
+
+  [otroNos, otroPropo].forEach(inp =>
+      inp?.addEventListener('input', () => validateNameField(inp)));
+
   /* ——— selector de columnas ——— */
   btnCols.onclick = e => {
     /* 1) calcula la posición del botón en la ventana */

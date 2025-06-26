@@ -742,6 +742,35 @@ if ($isSuper){                               // puede ver sección 0
     border-color:var(--primary);
     box-shadow:0 0 0 2px #dfe2ff;
   }
+
+  /* MOD ADM – espaciado igual que Retirados */
+  #adm-extra dl{margin-top:.5rem;}
+
+  /* ─── Botón basurero (Información de admisión) ─── */
+  .btn-del-adm{
+    background:none;
+    border:0;
+    cursor:pointer;
+    font-size:1rem;          /* mismo alto que el texto */
+    padding:0 4px;
+    color:#c4c4c4;           /* gris suave por defecto  */
+    vertical-align:middle;
+    transition:color .2s;
+  }
+  .btn-del-adm:hover{
+    color:var(--danger);     /* rojo corporativo al pasar el ratón */
+  }
+  .btn-del-adm:focus-visible{
+    outline:2px solid var(--primary);
+    outline-offset:2px;
+  }
+
+  /* asegura que texto + icono queden alineados */
+  #adm-show-dl dd{
+    display:flex;
+    align-items:center;
+    gap:.4rem;
+  }
   </style>
 
   <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
@@ -859,6 +888,10 @@ if ($isSuper){                               // puede ver sección 0
             <dt>Ex-equipo</dt><dd id="det-exeq"></dd>
             <dt>Fecha de retiro</dt><dd id="det-fretiro"></dd>
           </dl>
+        </div>
+
+        <div id="adm-extra" style="display:none">
+          <dl id="det-adm"></dl>
         </div>
 
         <!-- Tabla estado periodos -->
@@ -1033,28 +1066,60 @@ if ($isSuper){                               // puede ver sección 0
             <button type="button" id="btn-add-eq" class="btn">+ Añadir</button>
           </fieldset>
 
-          <fieldset id="fs-adm" style="display:none">
-            <legend>Información de Admisión</legend>
+          <!-- ─── Información de admisión ‧ solo-lectura ─── -->
+          <fieldset id="fs-adm-show" style="display:none"><!-- visible solo en “Nuevos integrantes” -->
+            <legend>Información de admisión</legend>
 
-            <label>Liderazgo
-              <textarea id="ed-liderazgo" name="adm_liderazgo" rows="3" maxlength="255"></textarea>
-              <small class="err-msg"></small>
-            </label>
+            <dl id="adm-show-dl"
+                style="display:grid;
+                      grid-template-columns:200px 1fr;
+                      row-gap:.45rem;
+                      column-gap:1.2rem;
+                      font-size:.9rem">
+              <dt>
+                Experiencia liderazgo
+                <button type="button"
+                        class="btn-del-adm"
+                        data-field="liderazgo"
+                        title="Eliminar solo esta respuesta">🗑️</button>
+              </dt>
+              <dd>
+                <span id="adm-liderazgo">-</span>
+              </dd>
 
-            <label>¿Cómo nos conoces?
-              <textarea id="ed-nos" name="adm_nosconoces" rows="3" maxlength="255"></textarea>
-              <small class="err-msg"></small>
-            </label>
+              <dt>
+                ¿cómo nos conoció?
+                <button type="button"
+                        class="btn-del-adm"
+                        data-field="nos_conoces"
+                        title="Eliminar solo esta respuesta">🗑️</button>
+              </dt>
+              <dd>
+                <span id="adm-nosconoces">-</span>
+              </dd>
 
-            <label>Propósito
-              <textarea id="ed-prop" name="adm_proposito" rows="3" maxlength="255"></textarea>
-              <small class="err-msg"></small>
-            </label>
+              <dt>
+                Propósito
+                <button type="button"
+                        class="btn-del-adm"
+                        data-field="proposito"
+                        title="Eliminar solo esta respuesta">🗑️</button>
+              </dt>
+              <dd>
+                <span id="adm-proposito">-</span>
+              </dd>
 
-            <label>Motivación
-              <textarea id="ed-mot" name="adm_motivacion" rows="3" maxlength="255"></textarea>
-              <small class="err-msg"></small>
-            </label>
+              <dt>
+                Motivación (1 a 5)
+                <button type="button"
+                        class="btn-del-adm"
+                        data-field="motivacion"
+                        title="Eliminar solo esta respuesta">🗑️</button>
+              </dt>
+              <dd>
+                <span id="adm-motivacion">-</span>
+              </dd>
+            </dl>
           </fieldset>
 
           <!-- ——— SOLO PARA USUARIOS RETIRADOS ——— -->
@@ -1154,8 +1219,8 @@ if ($isSuper){                               // puede ver sección 0
     <div id="modal-rein" class="modal hidden">
       <div class="modal-box" style="max-width:420px">
         <button class="close" id="rein-close">✖</button>
-        <h2>Reingresar usuario</h2>
-        <p>¿Seguro que quieres reingresar a este usuario?</p>
+        <h2></h2>
+        <p></p>
 
         <label>Equipo / Proyecto
           <select id="rein-eq" required></select>

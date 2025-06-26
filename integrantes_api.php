@@ -250,6 +250,15 @@ try {
           }
       }
 
+      /* ────── regla especial SOLO la 1.ª vez que se carga “Nuevos integrantes” ────── */
+      if ($team === 'new' && $sort === 'nombre') {          // el front siempre envía
+          /*  0 ⇒ Pendiente (id_estado_admision = 4) va primero, luego los demás
+              y dentro de cada grupo ordena por la fecha de registro más reciente      */
+          $orderBy = "CASE WHEN a.id_estado_admision = 4 THEN 0 ELSE 1 END,
+                  u.fecha_registro DESC";
+          $dir = '';                                        // ya incluido arriba
+      }
+
       /* util para RUT chileno                                                */
       $fmt_rut = function($rut){
          if(!preg_match('/^\d{7,9}$/',$rut)) return $rut;
@@ -576,6 +585,12 @@ try {
     $u['ocupaciones']   = $u['ocupaciones_txt'] ?? '';
     unset($u['ocupaciones_txt']);
 
+    // '1', 'true', 1  → true  |  '0', 'false', 0, ''  → false
+    $onlyEnabled = isset($_GET['onlyEnabled'])
+                    ? ($_GET['onlyEnabled'] === '1' ||
+                    strtolower($_GET['onlyEnabled']) === 'true')
+                    : true;
+
     /* ► equipos + roles + estados (3 últimos periodos) ------------------ */
     $sqlEquip = "
         SELECT ep.nombre_equipo_proyecto,
@@ -623,29 +638,11 @@ try {
               )
           LEFT JOIN periodos p3  ON p3.id_periodo = le3.id_periodo
          WHERE iep.id_usuario = :id
-           AND iep.habilitado = 1";
+           ".($onlyEnabled ? 'AND iep.habilitado = 1' : '')."";
 
     $stmt = $pdo->prepare($sqlEquip);
     $stmt->execute([':id' => $id]);
     $equip = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $esRetirado = $pdo->query("SELECT 1 FROM retirados WHERE id_usuario=$id")->fetchColumn();
-    if ($esRetirado){
-        $ret = $pdo->query("
-            SELECT razon, es_difunto, ex_equipo, fecha_retiro
-            FROM retirados
-            WHERE id_usuario = $id
-        ")->fetch(PDO::FETCH_ASSOC);
-
-        $u['ret'] = $ret;            // ya lo tenías
-        echo json_encode([
-            'ok'      => true,
-            'user'    => $u,          // incluye ret anidado
-            'ret'     => $ret,        // ← añadimos de nuevo para el JS viejo
-            'equipos' => []
-        ]);
-        return;
-    }
 
     /* ---- equipos actuales (para edición) ---- */
     $equipNowStmt = $pdo->prepare("
@@ -656,6 +653,19 @@ try {
         AND habilitado = 1");
     $equipNowStmt->execute([$id]);
     $equip_now = $equipNowStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    /*  ─── Información RETIRADOS (si corresponde) ─── */
+    $esRetirado = (bool)$pdo->query("
+                    SELECT 1 FROM retirados WHERE id_usuario = $id")->fetchColumn();
+
+    $ret = null;
+    if ($esRetirado){
+        $ret = $pdo->query("
+                SELECT razon, es_difunto, ex_equipo, fecha_retiro
+                FROM retirados
+                WHERE id_usuario = $id")->fetch(PDO::FETCH_ASSOC);
+        $u['ret'] = $ret;                   // Anida dentro de “user”
+    }
 
     /* ► campos específicos de admisión (si existen) */
     $adm = $pdo->prepare("
@@ -669,9 +679,10 @@ try {
     echo json_encode([
         'ok'        => true,
         'user'      => $u,
-        'equipos'   => $equip,
+        'equipos'   => $equip,        // siempre viaja, incluso si está retirado
         'equip_now' => $equip_now,
-        'adm'       => $admRow          // <<< NUEVO
+        'adm'       => $admRow,
+        'ret'       => $ret           // null si no está en “retirados”
     ]);
     break;
   }
@@ -681,6 +692,12 @@ try {
    $id  = (int)($_GET['id'] ?? 0);          // id_usuario
    $yr  = (int)($_GET['anio'] ?? date('Y'));
    if(!$id) throw new Exception('id');
+
+   // '1', 'true', 1  → true  |  '0', 'false', 0, ''  → false
+   $onlyEnabled = isset($_GET['onlyEnabled'])
+                  ? ($_GET['onlyEnabled'] === '1' ||
+                     strtolower($_GET['onlyEnabled']) === 'true')
+                  : true;
 
    /* trae los tres periodos de ese año (T1,T2,T3)          */
    $sql = "
@@ -696,7 +713,7 @@ try {
        JOIN periodos p        ON p.id_periodo = le.id_periodo
       WHERE iep.id_usuario = :id
         AND p.nombre_periodo RLIKE CONCAT('^', :yr, '-T[123]$')
-        AND iep.habilitado = 1
+        ".($onlyEnabled ? 'AND iep.habilitado = 1' : '')."
       ORDER BY ep.nombre_equipo_proyecto, p.nombre_periodo";
    $st=$pdo->prepare($sql);
    $st->execute([':id'=>$id,':yr'=>$yr]);
@@ -1262,6 +1279,25 @@ try {
             ]);
         }
 
+        if (isset($_POST['adm_liderazgo'])) {
+            $pdo->prepare("
+                INSERT INTO admision
+                    (id_usuario,liderazgo,nos_conoces,proposito,motivacion)
+                VALUES (:id,:lid,:nos,:propo,:mot)
+                ON DUPLICATE KEY UPDATE
+                  liderazgo = VALUES(liderazgo),
+                  nos_conoces = VALUES(nos_conoces),
+                  proposito = VALUES(proposito),
+                  motivacion = VALUES(motivacion)
+            ")->execute([
+                ':id'   => $id,
+                ':lid'  => trim($_POST['adm_liderazgo']),
+                ':nos'  => trim($_POST['adm_nosconoces']),
+                ':propo'=> trim($_POST['adm_proposito']),
+                ':mot'  => trim($_POST['adm_motivacion'])
+            ]);
+        }
+
       $pdo->commit();
       echo json_encode(['ok'=>true]);
       break;
@@ -1529,6 +1565,25 @@ try {
     $pdo->commit();
 
     echo json_encode(['ok'=>true]);
+    break;
+  }
+
+  /* ════════ eliminar SOLO un campo de admisión ════════ */
+  case 'POST:del_adm_campo': {
+    $uid   = (int)($_POST['id_usuario'] ?? 0);
+    $campo = $_POST['campo']           ?? '';
+    $allowed = ['liderazgo','nos_conoces','proposito','motivacion'];
+
+    if (!$uid || !in_array($campo, $allowed, true)){
+        throw new Exception('params');
+    }
+
+    $pdo->prepare("UPDATE admision
+                    SET $campo = NULL
+                    WHERE id_usuario = :u")
+        ->execute([':u' => $uid]);
+
+    echo json_encode(['ok' => true]);
     break;
   }
 
