@@ -1071,13 +1071,13 @@ function refreshTable () {
     if (TEAM==='ret'){
       acciones += `
         <button class="btn-rein" data-id="${r.id_usuario}">🡒 Reingresar</button>
-        <button class="btn-delusr" data-id="${r.id_usuario}">🗑️ Borrar</button>`;
+        <button class="btn-delusr" data-id="${r.id_usuario}">🗑️</button>`;
     }
 
     if (TEAM==='new'){
         acciones+=`
             <button class="btn-rein" data-id="${r.id_usuario}">🡒 Ingresar</button>
-            <button class="btn-delusr" data-id="${r.id_usuario}">🗑️ Borrar</button>`;
+            <button class="btn-delusr" data-id="${r.id_usuario}">🗑️</button>`;
     }
 
     /* «Nuevos integrantes» NO lleva este basurero extra */

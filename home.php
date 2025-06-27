@@ -524,14 +524,6 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     data-can-see-observacion="<?= $ev['show_observacion'] ? '1':'0' ?>"
                     data-final="<?= $final ?>"
                   ><i class="fas fa-eye"></i></button>
-
-                  <!-- Notificar -->
-                  <button 
-                    class="action-btn notify-btn" 
-                    title="Notificar"
-                    data-id="<?= $ev['id_evento'] ?>">
-                    <i class="fas fa-bell"></i>
-                  </button>
                 </td>
               </tr>
               <?php endforeach; ?>
