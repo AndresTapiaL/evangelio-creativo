@@ -1,5 +1,4 @@
 <?php
-// cerrar_sesion.php
 session_start();
 
 // 1) Vaciar $_SESSION

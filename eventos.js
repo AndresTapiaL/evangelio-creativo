@@ -1020,6 +1020,86 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  /* ═════════════════  ASISTENCIA  ═════════════════ */
+  const modalAs  = document.getElementById('modal-asist');
+  const bodyAs   = document.getElementById('asist-body');
+  let   curEvtID = 0, curEsPrevio = false;
+
+  /* abre modal + carga */
+  document.querySelectorAll('.assist-btn').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      curEvtID = b.dataset.id;
+      bodyAs.innerHTML = '<p>Cargando…</p>';
+      modalAs.style.display='flex';
+
+      try{
+        const r   = await fetch(`asistencia_api.php?action=list&id_evento=${curEvtID}`);
+        const dat = await r.json();
+        if(!dat.ok) throw new Error(dat.error||'Error');
+        curEsPrevio = dat.esPrevio;
+        renderAsist(dat.equipos);
+      }catch(e){
+        bodyAs.innerHTML = `<p style="color:#c00">${e.message}</p>`;
+      }
+    });
+  });
+
+  /* cierra modal */
+  modalAs.querySelector('.modal-close').onclick = ()=> modalAs.style.display='none';
+  modalAs.onclick = e=>{ if(e.target===modalAs) modalAs.style.display='none'; };
+
+  /* dibuja lista */
+  function renderAsist(equipos){
+    bodyAs.innerHTML = '';
+    const opts = curEsPrevio ? EST_PREV_AS : EST_DEF_AS;
+
+    equipos.forEach(eq=>{
+      const sec = document.createElement('section');
+      sec.style.marginBottom='1rem';
+      sec.innerHTML = `<h3 style="margin:0 0 .5rem;font-size:1.05rem">${eq.nom}</h3>`;
+      const ul = document.createElement('ul'); ul.style.listStyle='none'; ul.style.padding='0';
+      eq.ints.forEach(p=>{
+        const li  = document.createElement('li'); li.style.marginBottom='.4rem';
+        const sel = document.createElement('select');
+        sel.dataset.user = p.id; sel.className='asist-select';
+        opts.forEach(o=>{
+          const op = document.createElement('option');
+          op.value = o.id; op.textContent = o.nom;
+          sel.appendChild(op);
+        });
+        sel.value = curEsPrevio ? p.prev : p.def;
+        li.textContent = p.nom + ' ';
+        li.appendChild(sel);
+        ul.appendChild(li);
+      });
+      sec.appendChild(ul);
+      bodyAs.appendChild(sec);
+    });
+  }
+
+  /* envío instantáneo + vincular selects duplicados */
+  bodyAs.addEventListener('change', async e=>{
+    if(!e.target.classList.contains('asist-select')) return;
+    const user = e.target.dataset.user;
+    const val  = e.target.value;
+
+    /* sincroniza duplicados (usuario en varios equipos) */
+    bodyAs.querySelectorAll(`select.asist-select[data-user="${user}"]`)
+          .forEach(s=>{ if(s!==e.target) s.value = val; });
+
+    /* update backend */
+    const fd = new FormData();
+    fd.append('action','update');
+    fd.append('id_evento',curEvtID);
+    fd.append('id_usuario',user);
+    fd.append('valor',val);
+    fd.append('esPrevio',curEsPrevio ? 1 : 0);
+
+    try{ await fetch('asistencia_api.php',{method:'POST',body:fd}); }
+    catch(_){ alert('Error al guardar'); }
+  });
+  /* ════════════════════════════════════════════════ */
+
   // ——— Botón Eliminar ———
   document.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', () => {

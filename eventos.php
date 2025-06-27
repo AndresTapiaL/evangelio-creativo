@@ -928,7 +928,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     .btn-warning.active{
-      background:#e69500; 
+      background:#e69500;
     }
   </style>
 
@@ -1238,10 +1238,14 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
                       <i class="fas fa-eye"></i>
                     </button>
 
-                    <!-- Notificar: siempre -->
-                    <button title="Notificar" class="action-btn notify-btn"
-                            data-id="<?= $e['id_evento'] ?>">
-                      <i class="fas fa-bell"></i>
+                    <!-- Asistencia -->
+                    <button
+                      title="Asistencia"
+                      class="action-btn assist-btn"
+                      data-id="<?= $e['id_evento'] ?>"
+                      data-start="<?= $e['fecha_hora_inicio'] ?>"
+                    >
+                      <i class="fas fa-user-check"></i>
                     </button>
 
                     <?php if ($canManage): ?>
@@ -1396,6 +1400,20 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
   // Tus propios equipos/proyectos (puedes usar $userTeams si quieres limitar)
   $allEq   = $pdo->query("SELECT id_equipo_proyecto, nombre_equipo_proyecto FROM equipos_proyectos")->fetchAll();
   ?>
+
+  <?php
+    $prevAsist = $pdo->query("
+        SELECT id_estado_previo_asistencia id, nombre_estado_previo_asistencia nom
+          FROM estados_previos_asistencia")->fetchAll(PDO::FETCH_ASSOC);
+    $estAsist  = $pdo->query("
+        SELECT id_estado_asistencia id, nombre_estado_asistencia nom
+          FROM estados_asistencia")->fetchAll(PDO::FETCH_ASSOC);
+  ?>
+  <script>
+    const EST_PREV_AS = <?= json_encode($prevAsist) ?>;
+    const EST_DEF_AS  = <?= json_encode($estAsist) ?>;
+  </script>
+
   <div id="modal-edit" class="modal-overlay" style="display:none">
     <div class="modal-content card">
       <header class="card-header">
@@ -1919,6 +1937,16 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
           Solicitar evento
         </button>
       </footer>
+    </div>
+  </div>
+
+  <div id="modal-asist" class="modal-overlay" style="display:none">
+    <div class="modal-content card" style="width:700px;max-height:90vh;overflow:hidden">
+        <header class="card-header">
+          <h2 class="card-title">Asistencia</h2>
+          <button class="modal-close"><i class="fas fa-times"></i></button>
+        </header>
+        <div class="card-body" id="asist-body" style="overflow-y:auto"></div>
     </div>
   </div>
 

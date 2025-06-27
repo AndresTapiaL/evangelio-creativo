@@ -1,7 +1,4 @@
 <?php
-/**
- * validar_token.php  ·  centraliza…  (misma lógica de siempre + heartbeat)
- */
 date_default_timezone_set('UTC');
 require 'conexion.php';
 header('Content-Type: application/json');
