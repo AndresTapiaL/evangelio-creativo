@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 27-06-2025 a las 02:08:54
+-- Tiempo de generación: 01-07-2025 a las 01:38:13
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -357,10 +357,8 @@ CREATE TABLE `admision` (
 INSERT INTO `admision` (`id_usuario`, `id_estado_admision`, `liderazgo`, `nos_conoces`, `proposito`, `motivacion`) VALUES
 (4, 4, 'LO', 'Por un amigo/familiar', 'Aprender de evangelismo', 3),
 (11, 7, '', '', '', 0),
-(114, 4, '', '', '', 0),
-(136, 4, '', '', '', NULL),
 (137, 4, NULL, NULL, NULL, NULL),
-(142, 4, 'Non', 'Por un amigo/familiar', 'Aprender de evangelismo; Crecer espiritualmente; Comparto la Visión; Aportar con dones; Redes con mi iglesia', 1);
+(142, 4, NULL, 'Por un amigo/familiar', 'Aprender de evangelismo; Crecer espiritualmente; Comparto la Visión; Aportar con dones; Redes con mi iglesia', 1);
 
 -- --------------------------------------------------------
 
@@ -410,23 +408,35 @@ CREATE TABLE `asistencias` (
 INSERT INTO `asistencias` (`id_usuario`, `id_evento`, `id_estado_previo_asistencia`, `id_estado_asistencia`, `id_justificacion_inasistencia`, `descripcion_otros`) VALUES
 (1, 1, 1, 1, 10, NULL),
 (1, 15, 1, 2, NULL, NULL),
-(1, 25, 2, 2, NULL, NULL),
-(1, 26, 1, NULL, NULL, NULL),
-(1, 27, 2, NULL, NULL, NULL),
+(1, 25, 2, 3, NULL, NULL),
+(1, 26, 1, 1, NULL, NULL),
+(1, 27, 2, 1, NULL, NULL),
 (1, 28, NULL, 1, 10, NULL),
-(1, 29, 2, 2, NULL, NULL),
+(1, 29, 2, 1, NULL, NULL),
 (1, 30, 1, 2, NULL, NULL),
 (1, 31, 1, 2, NULL, NULL),
 (1, 32, NULL, 2, 11, NULL),
 (1, 36, NULL, 3, 7, NULL),
 (1, 49, NULL, 1, 10, NULL),
 (1, 50, 3, 3, 1, NULL),
+(1, 53, 3, NULL, NULL, NULL),
 (3, 3, 1, 2, NULL, NULL),
+(3, 26, 2, NULL, NULL, NULL),
+(3, 27, 2, NULL, NULL, NULL),
+(3, 53, 2, NULL, NULL, NULL),
 (4, 4, 2, 3, 4, NULL),
 (4, 15, 1, 2, NULL, NULL),
 (4, 25, 1, 2, NULL, NULL),
-(4, 26, 2, NULL, NULL, NULL),
-(5, 5, 1, 2, NULL, NULL);
+(4, 26, 2, 1, NULL, NULL),
+(4, 27, 3, NULL, NULL, NULL),
+(4, 53, 3, NULL, NULL, NULL),
+(5, 5, 1, 2, NULL, NULL),
+(90, 53, 3, NULL, NULL, NULL),
+(110, 53, 3, NULL, NULL, NULL),
+(111, 53, 3, NULL, NULL, NULL),
+(136, 19, 3, NULL, NULL, NULL),
+(136, 27, 3, NULL, NULL, NULL),
+(136, 53, 3, NULL, NULL, NULL);
 
 --
 -- Disparadores `asistencias`
@@ -550,7 +560,6 @@ INSERT INTO `correos_electronicos` (`correo_electronico`, `id_usuario`, `boletin
 ('2222@example.com', 110, 1, 0, NULL, NULL),
 ('aa@gmexample.com', 141, 1, 0, NULL, NULL),
 ('and.tapia.2001@gmail.com', 1, 1, 1, NULL, NULL),
-('C@e.com', 114, 1, 0, NULL, NULL),
 ('D@gmail.com', 5, 1, 0, NULL, NULL),
 ('dfghjk@gmail.com', 96, 1, 0, NULL, NULL),
 ('fu@example.com', 137, 1, 0, NULL, NULL),
@@ -678,7 +687,11 @@ INSERT INTO `equipos_proyectos_eventos` (`id_equipos_proyectos_eventos`, `id_equ
 (131, 18, 32),
 (132, 5, 36),
 (133, 4, 27),
-(134, 5, 27);
+(134, 5, 27),
+(136, 5, 52),
+(137, 4, 53),
+(138, 5, 53),
+(140, 5, 51);
 
 --
 -- Disparadores `equipos_proyectos_eventos`
@@ -866,6 +879,7 @@ CREATE TABLE `eventos` (
   `id_tipo` int(11) DEFAULT NULL,
   `encargado` int(11) DEFAULT NULL,
   `es_general` tinyint(1) DEFAULT 0,
+  `boleteria_activa` tinyint(1) DEFAULT NULL COMMENT '1 = boletería habilitada; 0/NULL = deshabilitada',
   `fecha_hora_inicio` timestamp NULL DEFAULT NULL,
   `fecha_hora_termino` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -874,33 +888,36 @@ CREATE TABLE `eventos` (
 -- Volcado de datos para la tabla `eventos`
 --
 
-INSERT INTO `eventos` (`id_evento`, `nombre_evento`, `lugar`, `descripcion`, `observacion`, `id_estado_previo`, `id_estado_final`, `id_tipo`, `encargado`, `es_general`, `fecha_hora_inicio`, `fecha_hora_termino`) VALUES
-(1, 'eze', 'Zoom', 'Aquí', 'Lorem impsum', 1, 1, 1, 1, 1, '2025-05-26 20:00:00', '2025-05-27 00:00:00'),
-(3, 'Concierto Alabanza', 'Iglesia Central', 'Evento musical', '2', 1, 4, 1, 1, 1, '2025-03-12 03:00:00', '2025-03-12 03:00:00'),
-(4, 'Jornada Misión Joven', 'Auditorio', 'Día de actividades juveniles', 'jh', 1, 3, 1, 4, 0, '2025-03-19 03:00:00', '2025-03-19 03:00:00'),
-(5, 'Seminario Comunicaciones', 'Aula 2', 'Taller de estrategias de comunicación', 'jhj', 1, 4, 1, NULL, 0, '2025-04-18 04:00:00', '2025-04-18 23:54:00'),
-(15, 'Ruta de Amor', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', NULL, 3, 3, 1, 1, 0, '2025-06-14 19:00:00', '2025-06-15 00:30:00'),
-(19, 'Reunión Directiva', 'Zoom', '', NULL, 3, 3, 2, 3, 0, '2025-08-22 00:30:00', '2025-08-22 01:30:00'),
-(25, 'Equipaje de Amor', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'kk', 1, 3, 1, 1, 0, '2025-06-14 19:00:00', '2025-06-15 00:30:00'),
-(26, 'Ruta de Amor 2', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'jhghjk', 1, 3, 1, 1, 1, '2025-07-17 19:00:00', '2025-07-18 00:30:00'),
-(27, 'Ruta de Amor 3', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'jhghjk', 1, 3, 1, NULL, 0, '2025-07-17 19:00:00', '2025-07-18 00:30:00'),
-(28, 'Reminders', NULL, NULL, NULL, 1, 4, 1, 1, 0, '2025-05-31 04:21:00', '2025-05-31 04:36:00'),
-(29, 'Equipaje de Amor 2', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'kk', 1, 3, 1, 1, 1, '2025-06-15 19:00:00', '2025-06-15 20:00:00'),
-(30, 'Reminders 2', '', '', 'jhjkl', 1, 1, 1, 1, 1, '2025-05-27 04:21:00', '2025-05-27 04:21:00'),
-(31, 'Reminders 3', NULL, NULL, NULL, 1, 1, 1, 1, 0, '2025-05-27 04:21:00', '2025-05-27 04:21:00'),
-(32, 'eze 2', 'Zoom', 'Aquí', 'Lorem impsum', 1, 6, 1, 1, 0, '2025-05-26 21:00:00', '2025-05-27 03:00:00'),
-(33, 'Reunión Directiva', NULL, NULL, NULL, 1, 3, 3, NULL, 1, '2025-05-01 07:57:00', '2025-05-01 08:12:00'),
-(36, 'Aaaa', NULL, NULL, NULL, 1, 4, 3, 1, 0, '2024-11-01 04:30:00', '2024-11-02 02:59:00'),
-(37, 'Ass', NULL, NULL, NULL, 3, 3, 3, NULL, 0, '2025-05-27 04:00:00', '2038-01-18 06:14:00'),
-(41, 'eze 3', 'Zoom', 'Aquí', 'Lorem impsum', 1, 1, 1, 1, 0, '2025-05-26 21:00:00', '2025-05-27 03:00:00'),
-(42, 'Reunión Directiva', '', '', '', 1, 3, 3, NULL, 0, '2025-05-30 03:18:00', '2025-05-30 03:39:00'),
-(43, 'Reunión Directiva', '', '', '', 1, 3, 3, NULL, 1, '2025-05-30 03:19:00', '2025-05-30 03:34:00'),
-(44, 'Reunión Directiva12345', '', '', '', 1, 3, 3, NULL, 1, '2025-05-01 07:57:00', '2025-05-01 08:13:00'),
-(45, 'Reunión DirectivaKJHGHJK', '', '', '', 1, 3, 3, NULL, 0, '2025-05-30 04:33:00', '2025-05-30 04:48:00'),
-(46, 'YoJH87678', '', '', NULL, 3, 3, 3, NULL, 0, '2025-05-30 04:34:00', '2025-05-30 04:49:00'),
-(47, 'Reunión Directiva9999', '', '', '', 1, 3, 3, NULL, 0, '2025-05-30 06:25:00', '2025-05-30 06:41:00'),
-(49, 'Avance 2 - Ejemplo 1', 'Ulagos', 'Tesis', 'Llevar PC', 1, 4, 1, 1, 0, '2025-06-01 01:00:00', '2025-06-01 01:15:00'),
-(50, 'Avance 2 - Ejemplo 2', 'Ulagos', 'Tesis', 'Llevar PC', 1, 4, 1, 1, 0, '2025-06-01 02:00:00', '2025-06-01 02:30:00');
+INSERT INTO `eventos` (`id_evento`, `nombre_evento`, `lugar`, `descripcion`, `observacion`, `id_estado_previo`, `id_estado_final`, `id_tipo`, `encargado`, `es_general`, `boleteria_activa`, `fecha_hora_inicio`, `fecha_hora_termino`) VALUES
+(1, 'eze', 'Zoom', 'Aquí', 'Lorem impsum', 1, 1, 1, 1, 1, 0, '2025-05-26 20:00:00', '2025-05-27 00:00:00'),
+(3, 'Concierto Alabanza', 'Iglesia Central', 'Evento musical', '2', 1, 4, 1, 1, 1, 0, '2025-03-12 03:00:00', '2025-03-12 03:00:00'),
+(4, 'Jornada Misión Joven', 'Auditorio', 'Día de actividades juveniles', 'jh', 1, 3, 1, 4, 0, 0, '2025-03-19 03:00:00', '2025-03-19 03:00:00'),
+(5, 'Seminario Comunicaciones', 'Aula 2', 'Taller de estrategias de comunicación', 'jhj', 1, 4, 1, NULL, 0, 0, '2025-04-18 04:00:00', '2025-04-18 23:54:00'),
+(15, 'Ruta de Amor', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', NULL, 3, 3, 1, 1, 0, 0, '2025-06-14 19:00:00', '2025-06-15 00:30:00'),
+(19, 'Reunión Directiva', 'Zoom', '', NULL, 3, 3, 2, 3, 0, 1, '2025-08-22 00:30:00', '2025-08-22 01:30:00'),
+(25, 'Equipaje de Amor', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'kk', 1, 3, 1, 1, 0, 0, '2025-06-14 19:00:00', '2025-06-15 00:30:00'),
+(26, 'Ruta de Amor 2', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'jhghjk', 1, 3, 1, 1, 1, 1, '2025-07-17 19:00:00', '2025-07-18 00:30:00'),
+(27, 'Ruta de Amor 3', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'jhghjk', 1, 3, 1, NULL, 0, 0, '2025-07-17 19:00:00', '2025-07-18 00:30:00'),
+(28, 'Reminders', NULL, NULL, NULL, 1, 4, 1, 1, 0, 0, '2025-05-31 04:21:00', '2025-05-31 04:36:00'),
+(29, 'Equipaje de Amor 2', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'kk', 1, 3, 1, 1, 1, 0, '2025-06-15 19:00:00', '2025-06-15 20:00:00'),
+(30, 'Reminders 2', '', '', 'jhjkl', 1, 1, 1, 1, 1, 0, '2025-05-27 04:21:00', '2025-05-27 04:21:00'),
+(31, 'Reminders 3', NULL, NULL, NULL, 1, 1, 1, 1, 0, 0, '2025-05-27 04:21:00', '2025-05-27 04:21:00'),
+(32, 'eze 2', 'Zoom', 'Aquí', 'Lorem impsum', 1, 6, 1, 1, 0, 0, '2025-05-26 21:00:00', '2025-05-27 03:00:00'),
+(33, 'Reunión Directiva', NULL, NULL, NULL, 1, 3, 3, NULL, 1, 0, '2025-05-01 07:57:00', '2025-05-01 08:12:00'),
+(36, 'Aaaa', NULL, NULL, NULL, 1, 4, 3, 1, 0, 0, '2024-11-01 04:30:00', '2024-11-02 02:59:00'),
+(37, 'Ass', NULL, NULL, NULL, 3, 3, 3, NULL, 0, 0, '2025-05-27 04:00:00', '2038-01-18 06:14:00'),
+(41, 'eze 3', 'Zoom', 'Aquí', 'Lorem impsum', 1, 1, 1, 1, 0, 0, '2025-05-26 21:00:00', '2025-05-27 03:00:00'),
+(42, 'Reunión Directiva', '', '', '', 1, 3, 3, NULL, 0, 0, '2025-05-30 03:18:00', '2025-05-30 03:39:00'),
+(43, 'Reunión Directiva', '', '', '', 1, 3, 3, NULL, 1, 0, '2025-05-30 03:19:00', '2025-05-30 03:34:00'),
+(44, 'Reunión Directiva12345', '', '', '', 1, 3, 3, NULL, 1, 0, '2025-05-01 07:57:00', '2025-05-01 08:13:00'),
+(45, 'Reunión DirectivaKJHGHJK', '', '', '', 1, 3, 3, NULL, 0, 0, '2025-05-30 04:33:00', '2025-05-30 04:48:00'),
+(46, 'YoJH87678', '', '', NULL, 3, 3, 3, NULL, 0, 0, '2025-05-30 04:34:00', '2025-05-30 04:49:00'),
+(47, 'Reunión Directiva9999', '', '', '', 1, 3, 3, NULL, 0, 0, '2025-05-30 06:25:00', '2025-05-30 06:41:00'),
+(49, 'Avance 2 - Ejemplo 1', 'Ulagos', 'Tesis', 'Llevar PC', 1, 4, 1, 1, 0, 0, '2025-06-01 01:00:00', '2025-06-01 01:15:00'),
+(50, 'Avance 2 - Ejemplo 2', 'Ulagos', 'Tesis', 'Llevar PC', 1, 4, 1, 1, 0, 0, '2025-06-01 02:00:00', '2025-06-01 02:30:00'),
+(51, 'Ruta de Amor', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', NULL, 1, 3, 1, 1, 0, 0, '2025-06-26 19:00:00', '2025-06-26 19:15:00'),
+(52, 'EJEMPLO Asistencias', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', '', 3, 3, 1, 1, 0, 0, '2025-06-14 19:00:00', '2025-06-15 00:30:00'),
+(53, 'EJEMPLO Asistencias - 2', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'jhghjk', 1, 3, 1, NULL, 0, 0, '2025-07-17 19:00:00', '2025-07-18 00:30:00');
 
 --
 -- Disparadores `eventos`
@@ -1006,6 +1023,33 @@ DELIMITER ;
 -- --------------------------------------------------------
 
 --
+-- Estructura de tabla para la tabla `eventos_tickets`
+--
+
+CREATE TABLE `eventos_tickets` (
+  `id_evento_ticket` int(11) NOT NULL,
+  `id_evento` int(11) NOT NULL,
+  `nombre_ticket` varchar(100) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `precio_clp` int(10) UNSIGNED DEFAULT 0,
+  `cupo_total` int(10) UNSIGNED DEFAULT 0,
+  `cupo_ocupado` int(10) UNSIGNED DEFAULT 0,
+  `activo` tinyint(1) DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `eventos_tickets`
+--
+
+INSERT INTO `eventos_tickets` (`id_evento_ticket`, `id_evento`, `nombre_ticket`, `descripcion`, `precio_clp`, `cupo_total`, `cupo_ocupado`, `activo`) VALUES
+(1, 27, 'Prueba', 'hjk', 5000, 5, 3, 1),
+(2, 27, 'Prueba 2', 'jhhjk', 10000, 5, 0, 1),
+(3, 26, 'TK 1', 'ghj', 500, 5, 0, 1),
+(5, 26, 'Prueba', '', 600, 5, 0, 1);
+
+-- --------------------------------------------------------
+
+--
 -- Estructura de tabla para la tabla `historial_estados_actividad`
 --
 
@@ -1032,7 +1076,7 @@ INSERT INTO `historial_estados_actividad` (`id_historial_estado_actividad`, `id_
 (13, 1, 1, 6, '2025-04-30'),
 (20, 9, 5, 7, '2025-06-19'),
 (22, 10, 6, 7, '2025-06-15'),
-(24, 4, 6, 7, '2025-06-21'),
+(24, 4, 5, 7, '2025-06-27'),
 (26, 4, 1, 6, '2025-04-30'),
 (27, 6, 1, 3, '2024-12-31'),
 (29, 5, 6, 7, '2025-06-16'),
@@ -1049,7 +1093,8 @@ INSERT INTO `historial_estados_actividad` (`id_historial_estado_actividad`, `id_
 (67, 20, 5, 7, '2025-06-26'),
 (71, 21, 5, 7, '2025-06-26'),
 (77, 24, 5, 7, '2025-06-26'),
-(78, 25, 6, 7, '2025-06-26');
+(78, 25, 6, 7, '2025-06-26'),
+(81, 26, 5, 7, '2025-06-30');
 
 -- --------------------------------------------------------
 
@@ -1072,12 +1117,12 @@ CREATE TABLE `integrantes_equipos_proyectos` (
 INSERT INTO `integrantes_equipos_proyectos` (`id_integrante_equipo_proyecto`, `id_usuario`, `id_equipo_proyecto`, `id_rol`, `habilitado`) VALUES
 (1, 1, 1, 1, 1),
 (3, 3, 4, 4, 1),
-(4, 4, 5, 6, 0),
+(4, 4, 5, 5, 1),
 (5, 5, 1, 4, 0),
 (6, 1, 5, 4, 1),
 (9, 1, 4, 5, 1),
 (10, 1, 19, 5, 0),
-(11, 3, 1, 5, 0),
+(11, 3, 1, 5, 1),
 (12, 5, 20, 5, 0),
 (13, 5, 32, 5, 0),
 (14, 4, 33, 5, 0),
@@ -1089,7 +1134,8 @@ INSERT INTO `integrantes_equipos_proyectos` (`id_integrante_equipo_proyecto`, `i
 (20, 110, 4, 5, 1),
 (21, 96, 22, 5, 1),
 (24, 140, 18, 5, 1),
-(25, 141, 21, 5, 0);
+(25, 141, 21, 5, 0),
+(26, 136, 4, 5, 1);
 
 --
 -- Disparadores `integrantes_equipos_proyectos`
@@ -1349,15 +1395,15 @@ INSERT INTO `resumen_estado_eventos_equipos_periodo` (`id_equipo_proyecto`, `id_
 (1, 4, 7, 2, 100.00),
 (3, 3, 8, 1, 100.00),
 (4, 3, 6, 1, 100.00),
-(4, 3, 7, 3, 100.00),
-(5, 1, 7, 2, 28.57),
+(4, 3, 7, 4, 100.00),
+(5, 1, 7, 2, 20.00),
 (5, 2, 6, 1, 100.00),
-(5, 3, 7, 3, 42.86),
+(5, 3, 7, 6, 60.00),
 (5, 4, 3, 1, 100.00),
 (5, 4, 6, 1, 100.00),
-(5, 4, 7, 1, 14.29),
+(5, 4, 7, 1, 10.00),
 (5, 5, 7, 1, 16.67),
-(5, 6, 7, 1, 14.29),
+(5, 6, 7, 1, 10.00),
 (17, 3, 7, 3, 100.00),
 (18, 1, 7, 2, 50.00),
 (18, 4, 7, 1, 25.00),
@@ -1495,91 +1541,69 @@ INSERT INTO `resumen_justificaciones_integrantes_periodo` (`id_usuario`, `id_jus
 (1, 11, 9, 0, 0.00),
 (3, 1, 5, 0, 0.00),
 (3, 1, 6, 0, 0.00),
-(3, 1, 7, 0, 0.00),
 (3, 1, 9, 0, 0.00),
 (3, 2, 5, 0, 0.00),
 (3, 2, 6, 0, 0.00),
-(3, 2, 7, 0, 0.00),
 (3, 2, 9, 0, 0.00),
 (3, 3, 5, 0, 0.00),
 (3, 3, 6, 0, 0.00),
-(3, 3, 7, 0, 0.00),
 (3, 3, 9, 0, 0.00),
 (3, 4, 5, 0, 0.00),
 (3, 4, 6, 0, 0.00),
-(3, 4, 7, 0, 0.00),
 (3, 4, 9, 0, 0.00),
 (3, 5, 5, 0, 0.00),
 (3, 5, 6, 0, 0.00),
-(3, 5, 7, 0, 0.00),
 (3, 5, 9, 0, 0.00),
 (3, 6, 5, 0, 0.00),
 (3, 6, 6, 0, 0.00),
-(3, 6, 7, 0, 0.00),
 (3, 6, 9, 0, 0.00),
 (3, 7, 5, 0, 0.00),
 (3, 7, 6, 0, 0.00),
-(3, 7, 7, 0, 0.00),
 (3, 7, 9, 0, 0.00),
 (3, 8, 5, 0, 0.00),
 (3, 8, 6, 0, 0.00),
-(3, 8, 7, 0, 0.00),
 (3, 8, 9, 0, 0.00),
 (3, 9, 5, 0, 0.00),
 (3, 9, 6, 0, 0.00),
-(3, 9, 7, 0, 0.00),
 (3, 9, 9, 0, 0.00),
 (3, 10, 5, 0, 0.00),
 (3, 10, 6, 0, 0.00),
-(3, 10, 7, 0, 0.00),
 (3, 10, 9, 0, 0.00),
 (3, 11, 5, 0, 0.00),
 (3, 11, 6, 0, 0.00),
-(3, 11, 7, 0, 0.00),
 (3, 11, 9, 0, 0.00),
 (4, 1, 5, 0, 0.00),
 (4, 1, 6, 0, 0.00),
-(4, 1, 7, 0, 0.00),
 (4, 1, 9, 0, 0.00),
 (4, 2, 5, 0, 0.00),
 (4, 2, 6, 0, 0.00),
-(4, 2, 7, 0, 0.00),
 (4, 2, 9, 0, 0.00),
 (4, 3, 5, 0, 0.00),
 (4, 3, 6, 0, 0.00),
-(4, 3, 7, 0, 0.00),
 (4, 3, 9, 0, 0.00),
 (4, 4, 5, 0, 0.00),
 (4, 4, 6, 0, 0.00),
-(4, 4, 7, 0, 0.00),
 (4, 4, 9, 0, 0.00),
 (4, 5, 5, 0, 0.00),
 (4, 5, 6, 0, 0.00),
-(4, 5, 7, 0, 0.00),
 (4, 5, 9, 0, 0.00),
 (4, 6, 5, 0, 0.00),
 (4, 6, 6, 0, 0.00),
-(4, 6, 7, 0, 0.00),
 (4, 6, 9, 0, 0.00),
 (4, 7, 5, 0, 0.00),
 (4, 7, 6, 0, 0.00),
-(4, 7, 7, 0, 0.00),
 (4, 7, 9, 0, 0.00),
 (4, 8, 5, 0, 0.00),
 (4, 8, 6, 0, 0.00),
-(4, 8, 7, 0, 0.00),
 (4, 8, 9, 0, 0.00),
 (4, 9, 5, 0, 0.00),
 (4, 9, 6, 0, 0.00),
-(4, 9, 7, 0, 0.00),
 (4, 9, 9, 0, 0.00),
 (4, 10, 5, 0, 0.00),
 (4, 10, 6, 0, 0.00),
-(4, 10, 7, 0, 0.00),
 (4, 10, 9, 0, 0.00),
 (4, 11, 5, 0, 0.00),
 (4, 11, 6, 0, 0.00),
-(4, 11, 7, 0, 0.00),
 (4, 11, 9, 0, 0.00),
 (5, 1, 5, 0, 0.00),
 (5, 1, 6, 0, 0.00),
@@ -1627,47 +1651,36 @@ INSERT INTO `resumen_justificaciones_integrantes_periodo` (`id_usuario`, `id_jus
 (5, 11, 9, 0, 0.00),
 (90, 1, 5, 0, 0.00),
 (90, 1, 6, 0, 0.00),
-(90, 1, 7, 0, 0.00),
 (90, 1, 9, 0, 0.00),
 (90, 2, 5, 0, 0.00),
 (90, 2, 6, 0, 0.00),
-(90, 2, 7, 0, 0.00),
 (90, 2, 9, 0, 0.00),
 (90, 3, 5, 0, 0.00),
 (90, 3, 6, 0, 0.00),
-(90, 3, 7, 0, 0.00),
 (90, 3, 9, 0, 0.00),
 (90, 4, 5, 0, 0.00),
 (90, 4, 6, 0, 0.00),
-(90, 4, 7, 0, 0.00),
 (90, 4, 9, 0, 0.00),
 (90, 5, 5, 0, 0.00),
 (90, 5, 6, 0, 0.00),
-(90, 5, 7, 0, 0.00),
 (90, 5, 9, 0, 0.00),
 (90, 6, 5, 0, 0.00),
 (90, 6, 6, 0, 0.00),
-(90, 6, 7, 0, 0.00),
 (90, 6, 9, 0, 0.00),
 (90, 7, 5, 0, 0.00),
 (90, 7, 6, 0, 0.00),
-(90, 7, 7, 0, 0.00),
 (90, 7, 9, 0, 0.00),
 (90, 8, 5, 0, 0.00),
 (90, 8, 6, 0, 0.00),
-(90, 8, 7, 0, 0.00),
 (90, 8, 9, 0, 0.00),
 (90, 9, 5, 0, 0.00),
 (90, 9, 6, 0, 0.00),
-(90, 9, 7, 0, 0.00),
 (90, 9, 9, 0, 0.00),
 (90, 10, 5, 0, 0.00),
 (90, 10, 6, 0, 0.00),
-(90, 10, 7, 0, 0.00),
 (90, 10, 9, 0, 0.00),
 (90, 11, 5, 0, 0.00),
 (90, 11, 6, 0, 0.00),
-(90, 11, 7, 0, 0.00),
 (90, 11, 9, 0, 0.00),
 (96, 1, 5, 0, 0.00),
 (96, 1, 6, 0, 0.00),
@@ -1715,92 +1728,103 @@ INSERT INTO `resumen_justificaciones_integrantes_periodo` (`id_usuario`, `id_jus
 (96, 11, 9, 0, 0.00),
 (110, 1, 5, 0, 0.00),
 (110, 1, 6, 0, 0.00),
-(110, 1, 7, 0, 0.00),
 (110, 1, 9, 0, 0.00),
 (110, 2, 5, 0, 0.00),
 (110, 2, 6, 0, 0.00),
-(110, 2, 7, 0, 0.00),
 (110, 2, 9, 0, 0.00),
 (110, 3, 5, 0, 0.00),
 (110, 3, 6, 0, 0.00),
-(110, 3, 7, 0, 0.00),
 (110, 3, 9, 0, 0.00),
 (110, 4, 5, 0, 0.00),
 (110, 4, 6, 0, 0.00),
-(110, 4, 7, 0, 0.00),
 (110, 4, 9, 0, 0.00),
 (110, 5, 5, 0, 0.00),
 (110, 5, 6, 0, 0.00),
-(110, 5, 7, 0, 0.00),
 (110, 5, 9, 0, 0.00),
 (110, 6, 5, 0, 0.00),
 (110, 6, 6, 0, 0.00),
-(110, 6, 7, 0, 0.00),
 (110, 6, 9, 0, 0.00),
 (110, 7, 5, 0, 0.00),
 (110, 7, 6, 0, 0.00),
-(110, 7, 7, 0, 0.00),
 (110, 7, 9, 0, 0.00),
 (110, 8, 5, 0, 0.00),
 (110, 8, 6, 0, 0.00),
-(110, 8, 7, 0, 0.00),
 (110, 8, 9, 0, 0.00),
 (110, 9, 5, 0, 0.00),
 (110, 9, 6, 0, 0.00),
-(110, 9, 7, 0, 0.00),
 (110, 9, 9, 0, 0.00),
 (110, 10, 5, 0, 0.00),
 (110, 10, 6, 0, 0.00),
-(110, 10, 7, 0, 0.00),
 (110, 10, 9, 0, 0.00),
 (110, 11, 5, 0, 0.00),
 (110, 11, 6, 0, 0.00),
-(110, 11, 7, 0, 0.00),
 (110, 11, 9, 0, 0.00),
 (111, 1, 5, 0, 0.00),
 (111, 1, 6, 0, 0.00),
-(111, 1, 7, 0, 0.00),
 (111, 1, 9, 0, 0.00),
 (111, 2, 5, 0, 0.00),
 (111, 2, 6, 0, 0.00),
-(111, 2, 7, 0, 0.00),
 (111, 2, 9, 0, 0.00),
 (111, 3, 5, 0, 0.00),
 (111, 3, 6, 0, 0.00),
-(111, 3, 7, 0, 0.00),
 (111, 3, 9, 0, 0.00),
 (111, 4, 5, 0, 0.00),
 (111, 4, 6, 0, 0.00),
-(111, 4, 7, 0, 0.00),
 (111, 4, 9, 0, 0.00),
 (111, 5, 5, 0, 0.00),
 (111, 5, 6, 0, 0.00),
-(111, 5, 7, 0, 0.00),
 (111, 5, 9, 0, 0.00),
 (111, 6, 5, 0, 0.00),
 (111, 6, 6, 0, 0.00),
-(111, 6, 7, 0, 0.00),
 (111, 6, 9, 0, 0.00),
 (111, 7, 5, 0, 0.00),
 (111, 7, 6, 0, 0.00),
-(111, 7, 7, 0, 0.00),
 (111, 7, 9, 0, 0.00),
 (111, 8, 5, 0, 0.00),
 (111, 8, 6, 0, 0.00),
-(111, 8, 7, 0, 0.00),
 (111, 8, 9, 0, 0.00),
 (111, 9, 5, 0, 0.00),
 (111, 9, 6, 0, 0.00),
-(111, 9, 7, 0, 0.00),
 (111, 9, 9, 0, 0.00),
 (111, 10, 5, 0, 0.00),
 (111, 10, 6, 0, 0.00),
-(111, 10, 7, 0, 0.00),
 (111, 10, 9, 0, 0.00),
 (111, 11, 5, 0, 0.00),
 (111, 11, 6, 0, 0.00),
-(111, 11, 7, 0, 0.00),
 (111, 11, 9, 0, 0.00),
+(136, 1, 5, 0, 0.00),
+(136, 1, 6, 0, 0.00),
+(136, 1, 9, 0, 0.00),
+(136, 2, 5, 0, 0.00),
+(136, 2, 6, 0, 0.00),
+(136, 2, 9, 0, 0.00),
+(136, 3, 5, 0, 0.00),
+(136, 3, 6, 0, 0.00),
+(136, 3, 9, 0, 0.00),
+(136, 4, 5, 0, 0.00),
+(136, 4, 6, 0, 0.00),
+(136, 4, 9, 0, 0.00),
+(136, 5, 5, 0, 0.00),
+(136, 5, 6, 0, 0.00),
+(136, 5, 9, 0, 0.00),
+(136, 6, 5, 0, 0.00),
+(136, 6, 6, 0, 0.00),
+(136, 6, 9, 0, 0.00),
+(136, 7, 5, 0, 0.00),
+(136, 7, 6, 0, 0.00),
+(136, 7, 9, 0, 0.00),
+(136, 8, 5, 0, 0.00),
+(136, 8, 6, 0, 0.00),
+(136, 8, 9, 0, 0.00),
+(136, 9, 5, 0, 0.00),
+(136, 9, 6, 0, 0.00),
+(136, 9, 9, 0, 0.00),
+(136, 10, 5, 0, 0.00),
+(136, 10, 6, 0, 0.00),
+(136, 10, 9, 0, 0.00),
+(136, 11, 5, 0, 0.00),
+(136, 11, 6, 0, 0.00),
+(136, 11, 9, 0, 0.00),
 (140, 1, 5, 0, 0.00),
 (140, 1, 6, 0, 0.00),
 (140, 1, 7, 0, 0.00),
@@ -1909,7 +1933,6 @@ CREATE TABLE `retirados` (
 --
 
 INSERT INTO `retirados` (`id_usuario`, `fecha_retiro`, `razon`, `ex_equipo`, `es_difunto`) VALUES
-(4, '2025-06-26', 'Ok', 'Biobío', 0),
 (141, '2025-06-26', 'iuio', 'Ñuble', 0);
 
 -- --------------------------------------------------------
@@ -1966,6 +1989,135 @@ INSERT INTO `telefonos` (`id_usuario`, `telefono`, `es_principal`, `id_descripci
 (136, '+56999999999', 1, 1),
 (137, '+595777777777', 1, 3),
 (142, '+56977557010', 1, 3);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `ticket_admins`
+--
+
+CREATE TABLE `ticket_admins` (
+  `id_evento_ticket` int(11) NOT NULL,
+  `id_usuario` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `ticket_admins`
+--
+
+INSERT INTO `ticket_admins` (`id_evento_ticket`, `id_usuario`) VALUES
+(3, 3),
+(5, 3);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `ticket_horarios`
+--
+
+CREATE TABLE `ticket_horarios` (
+  `id_ticket_horario` int(11) NOT NULL,
+  `id_evento` int(11) DEFAULT NULL,
+  `fecha_inicio` datetime NOT NULL,
+  `fecha_fin` datetime NOT NULL,
+  `nombre_horario` varchar(60) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `ticket_scans`
+--
+
+CREATE TABLE `ticket_scans` (
+  `id_ticket_scan` bigint(20) NOT NULL,
+  `id_ticket_horario` int(11) NOT NULL,
+  `id_ticket_usuario` int(11) NOT NULL,
+  `es_ingreso` tinyint(1) NOT NULL,
+  `scan_at` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Disparadores `ticket_scans`
+--
+DELIMITER $$
+CREATE TRIGGER `trg_scan_before_insert` BEFORE INSERT ON `ticket_scans` FOR EACH ROW BEGIN
+    DECLARE v_last_ingreso TINYINT(1);
+    DECLARE v_ini DATETIME;
+    DECLARE v_fin DATETIME;
+
+    /* 1)  horario válido ---------------------------------------- */
+    SELECT th.fecha_inicio, th.fecha_fin
+      INTO v_ini, v_fin
+      FROM ticket_horarios th
+     WHERE th.id_ticket_horario = NEW.id_ticket_horario
+     LIMIT 1;
+
+    IF NEW.scan_at IS NULL THEN
+        SET NEW.scan_at = NOW();
+    END IF;
+
+    IF NEW.scan_at NOT BETWEEN v_ini AND v_fin THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Fuera del horario autorizado.';
+    END IF;
+
+    /* 2)  secuencia ingreso / salida ----------------------------- */
+    SELECT es_ingreso
+      INTO v_last_ingreso
+      FROM ticket_scans
+     WHERE id_ticket_horario = NEW.id_ticket_horario
+       AND id_ticket_usuario = NEW.id_ticket_usuario
+  ORDER BY scan_at DESC
+     LIMIT 1;
+
+    IF v_last_ingreso IS NULL THEN
+        /* primer registro ⇒ forzar ingreso                         */
+        SET NEW.es_ingreso = 1;
+    ELSEIF v_last_ingreso = 1 AND NEW.es_ingreso = 1 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ya hay ingreso; marque salida antes.';
+    ELSEIF v_last_ingreso = 0 AND NEW.es_ingreso = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Primero debe registrar el ingreso.';
+    END IF;
+END
+$$
+DELIMITER ;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `ticket_usuario`
+--
+
+CREATE TABLE `ticket_usuario` (
+  `id_ticket_usuario` int(11) NOT NULL,
+  `id_evento_ticket` int(11) NOT NULL,
+  `fecha_inscripcion` datetime DEFAULT current_timestamp(),
+  `correo_electronico` varchar(320) NOT NULL,
+  `nombre_completo` varchar(120) NOT NULL,
+  `contacto` varchar(16) NOT NULL,
+  `edad` int(10) UNSIGNED DEFAULT NULL,
+  `equipo` varchar(100) DEFAULT NULL,
+  `tipo_ticket` varchar(100) DEFAULT NULL,
+  `alimentacion` varchar(100) DEFAULT NULL,
+  `hospedaje` varchar(50) DEFAULT NULL,
+  `enfermedad` varchar(255) DEFAULT NULL,
+  `alergia` varchar(255) DEFAULT NULL,
+  `medicamentos` varchar(255) DEFAULT NULL,
+  `alimentacion_especial` varchar(255) DEFAULT NULL,
+  `contacto_emergencia` varchar(100) DEFAULT NULL,
+  `qr_codigo` char(64) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `ticket_usuario`
+--
+
+INSERT INTO `ticket_usuario` (`id_ticket_usuario`, `id_evento_ticket`, `fecha_inscripcion`, `correo_electronico`, `nombre_completo`, `contacto`, `edad`, `equipo`, `tipo_ticket`, `alimentacion`, `hospedaje`, `enfermedad`, `alergia`, `medicamentos`, `alimentacion_especial`, `contacto_emergencia`, `qr_codigo`) VALUES
+(1, 1, '2025-06-29 20:16:09', 'and.tapia.2001@gmail.com', 'Andres', '+56987254068', 23, 'Los Lagos', '', '', '', '', '', '', '', '', '9e9b1d05b5af2750f1aec2689daf383e819e5854d99cc99bf65cea700c4b09a3'),
+(3, 1, '2025-06-29 20:57:39', 'ana.hernandez@example.com', 'Ana', '+56977777777', 30, 'Los Lagos', '', '', '', '', '', '', '', '', '7d61b948faa42d202ea74453dbfccd7f4097104932da3ea05dd7bfa3059a483c');
 
 -- --------------------------------------------------------
 
@@ -2049,7 +2201,7 @@ CREATE TABLE `tokens_usuarios` (
 --
 
 INSERT INTO `tokens_usuarios` (`token`, `id_usuario`, `creado_en`, `expira_en`) VALUES
-('32db3f953b7fd268865dd801ee7a60602d2de51a1652d461f56765bc8c2db513', 1, '2025-06-26 18:22:06', '2025-06-27 05:00:58');
+('a31867da89163c78d04daab69c046c5b75f284ce43ba5d80d326f9ec444e2619', 3, '2025-06-30 16:44:58', '2025-07-01 04:28:51');
 
 --
 -- Disparadores `tokens_usuarios`
@@ -2107,18 +2259,17 @@ CREATE TABLE `usuarios` (
 --
 
 INSERT INTO `usuarios` (`id_usuario`, `nombres`, `apellido_paterno`, `apellido_materno`, `foto_perfil`, `fecha_nacimiento`, `rut_dni`, `id_pais`, `id_region_estado`, `id_ciudad_comuna`, `direccion`, `iglesia_ministerio`, `profesion_oficio_estudio`, `password`, `fecha_registro`, `ultima_actualizacion`) VALUES
-(1, 'Andrés Saúl', 'Tapia', 'Loncón', NULL, '2001-07-04', '206257660', 1, 6, 6, 'Polloico #2505', 'IMPCH - Iglesia Metodista Pentecostal de Chile - Rahue Alto Osorno', 'Estudiante de Ingeniería Civil en Informática', '$2y$10$oVxZlKGkdi4iYeKI4fIqF.I5KL0A14kuPQJwgZHsZTJZJLL3L/gGu', '2024-01-01', '2025-06-26 07:25:30'),
-(3, 'Leonardo Elías', 'Tapia', 'Loncón', 'uploads/fotos/f_681d6ad82209c1.87939487.jpg', '2001-07-04', '206257652', 1, 6, 6, 'Polloico #2505 Villa Quilacahuin', 'IMPCH Rahue Alto', 'Estudiante de Ingenieria civil en informatica', '$2y$10$2qk2P31Zd7iJg4Lnzu/6mO8U.upiPQf7AGILWPmVTQ4ybdOi/o7fW', '2025-06-16', '2025-06-22 01:21:52'),
-(4, 'Admi', 'tido', '', NULL, '2008-06-06', '98789', 3, NULL, NULL, 'p', 'p', 'p', '$2y$10$qELX9YEaQLRwwq0so7chvOaT.YaA3fp7Nct1Ht65qd59g2XbfA/ry', '2025-06-25', '2025-06-26 07:30:22'),
-(5, 'D', 'D', '', NULL, '2000-07-07', '567890123', 2, NULL, NULL, 'D', 'D', 'D', '$2y$10$/dL8fMcGEY8iiKM.EmSO8.4Fkyzkp69BtgJCl4hRhCxGnmOhVaRSy', '2025-06-26', '2025-06-26 07:03:29'),
+(1, 'Andrés Saúl', 'Tapia', 'Loncón', NULL, '2001-07-04', '206257660', 1, 6, 6, 'Polloico #2505', 'IMPCH - Iglesia Metodista Pentecostal de Chile - Rahue Alto Osorno', 'Estudiante de Ingeniería Civil en Informática', '$2y$10$1gSCMiWl0sNKkJlRgSvAoeg16qyyBNMNj6m4ex2oF03pjzWe8TmTu', '2024-01-01', '2025-06-26 07:25:30'),
+(3, 'Leonardo Elías', 'Tapia', 'Loncón', 'uploads/fotos/f_681d6ad82209c1.87939487.jpg', '2001-07-04', '206257652', 1, 6, 6, 'Polloico #2505 Villa Quilacahuin', 'IMPCH Rahue Alto', 'Estudiante de Ingenieria civil en informatica', '$2y$10$TD/.EMnJ7N5jjyp/dwnI/exqzw/YlCEexMWT1GSgCB0/wn/BMvG/C', '2025-06-16', '2025-06-22 01:21:52'),
+(4, 'Admi', 'tido', '', NULL, '2008-06-06', '98789', 3, NULL, NULL, 'p', 'p', 'p', '$2y$10$oVxZlKGkdi4iYeKI4fIqF.I5KL0A14kuPQJwgZHsZTJZJLL3L/gGu', '2025-06-27', '2025-06-26 07:30:22'),
+(5, 'D', 'D', '', NULL, '2000-07-07', '567890123', 2, NULL, NULL, 'D', 'D', 'D', '$2y$10$oVxZlKGkdi4iYeKI4fIqF.I5KL0A14kuPQJwgZHsZTJZJLL3L/gGu', '2025-06-26', '2025-06-26 07:03:29'),
 (11, 'Yo', 'No', 'K', NULL, '2008-08-09', '87', 3, 3, 3, 'lll', 'll', 'LLL', NULL, '2025-06-23', '2025-06-23 06:41:18'),
 (90, 'AAA', 'jhg', '', NULL, '2000-03-22', '8789', 3, NULL, NULL, 'jhhjkl', 'jhghjkl', 'jhghjkl', NULL, '2025-06-26', '2025-06-26 05:19:46'),
 (96, 'AAA', 'BBB', '', NULL, '2000-09-09', '87890', 5, NULL, NULL, 'jhghjkl', 'jhghjk', 'kjhjkl', NULL, '2025-06-26', '2025-06-23 20:57:54'),
 (105, 'AAA', 'BBB', '', NULL, '2000-09-09', '8789088', 5, NULL, NULL, 'jhghjkl', 'jhghjk', 'kjhjkl', NULL, '2025-06-23', '2025-06-25 21:29:58'),
 (110, 'Aaaaaaaaa', 'Bbb', 'Cccc', NULL, '2000-06-06', '878', 5, 5, 5, 'juyyuio', 'jhghu', 'kkkkkk', NULL, '2025-06-26', '2025-06-23 22:13:25'),
 (111, 'NN', 'NN', '', NULL, '2012-08-08', '111111111', 5, NULL, NULL, 'NNNn', 'NNN', 'NNN', NULL, '2025-06-26', '2025-06-23 22:28:17'),
-(114, 'C', 'C', '', NULL, '2000-08-08', '9999', 2, 2, 2, 'C', 'C', 'C', NULL, '2025-06-23', '2025-06-23 23:50:49'),
-(136, 'Patricio', 'Pérez', 'DELLLA - TORRE', NULL, '2009-06-06', '678', 2, 2, 2, 'Concepción', 'IMP', 'ING', NULL, '2025-06-25', '2025-06-26 18:29:18'),
+(136, 'Patricio', 'Pérez', 'DELLLA - TORRE', NULL, '2009-06-06', '678', 2, 2, 2, 'Concepción', 'IMP', 'ING', NULL, '2025-06-30', '2025-06-26 18:29:18'),
 (137, 'Fernanda', 'Ugarte', '', NULL, '1871-06-06', '7898789009878', 5, 5, 5, 'Mi casa', 'Mi iglesia', 'Mi trabajo', NULL, '2025-06-25', '2025-06-26 02:58:44'),
 (140, 'Am', 'Erico', '', NULL, '2007-05-05', '98890', 5, NULL, NULL, 'p', 'p', 'p', NULL, '2025-06-26', '2025-06-26 07:33:05'),
 (141, 'ni', 'ño', '', NULL, '2008-05-05', '78345', 5, NULL, NULL, 'l', 'l', 'l', NULL, '2025-06-26', '2025-06-26 07:34:09'),
@@ -2150,7 +2301,6 @@ INSERT INTO `usuarios_ocupaciones` (`id_usuario`, `id_ocupacion`) VALUES
 (105, 5),
 (110, 1),
 (111, 5),
-(114, 5),
 (136, 5),
 (137, 1),
 (137, 2),
@@ -2159,6 +2309,15 @@ INSERT INTO `usuarios_ocupaciones` (`id_usuario`, `id_ocupacion`) VALUES
 (140, 5),
 (141, 5),
 (142, 1);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura Stand-in para la vista `v_horarios_activos`
+-- (Véase abajo para la vista actual)
+--
+CREATE TABLE `v_horarios_activos` (
+);
 
 -- --------------------------------------------------------
 
@@ -2238,6 +2397,15 @@ CREATE TABLE `v_rep_justif_integrantes` (
 ,`total` int(11)
 ,`porcentaje` decimal(5,2)
 );
+
+-- --------------------------------------------------------
+
+--
+-- Estructura para la vista `v_horarios_activos`
+--
+DROP TABLE IF EXISTS `v_horarios_activos`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_horarios_activos`  AS SELECT `h`.`id_ticket_horario` AS `id_ticket_horario`, `h`.`id_evento_ticket` AS `id_evento_ticket`, `h`.`fecha_inicio` AS `fecha_inicio`, `h`.`fecha_fin` AS `fecha_fin`, `h`.`nombre_horario` AS `nombre_horario`, `et`.`nombre_ticket` AS `nombre_ticket`, `e`.`nombre_evento` AS `nombre_evento` FROM ((`ticket_horarios` `h` join `eventos_tickets` `et` on(`h`.`id_evento_ticket` = `et`.`id_evento_ticket`)) join `eventos` `e` on(`et`.`id_evento` = `e`.`id_evento`)) WHERE `e`.`boleteria_activa` = 1 AND `et`.`activo` = 1 AND `h`.`fecha_fin` >= current_timestamp() ;
 
 -- --------------------------------------------------------
 
@@ -2403,6 +2571,13 @@ ALTER TABLE `eventos`
   ADD KEY `idx_evento_fechainicio` (`fecha_hora_inicio`,`es_general`);
 
 --
+-- Indices de la tabla `eventos_tickets`
+--
+ALTER TABLE `eventos_tickets`
+  ADD PRIMARY KEY (`id_evento_ticket`),
+  ADD KEY `fk_evt_ticket_evento` (`id_evento`);
+
+--
 -- Indices de la tabla `historial_estados_actividad`
 --
 ALTER TABLE `historial_estados_actividad`
@@ -2502,6 +2677,36 @@ ALTER TABLE `telefonos`
   ADD KEY `fk_telefono_descripcion` (`id_descripcion_telefono`);
 
 --
+-- Indices de la tabla `ticket_admins`
+--
+ALTER TABLE `ticket_admins`
+  ADD PRIMARY KEY (`id_evento_ticket`,`id_usuario`),
+  ADD KEY `fk_admin_user` (`id_usuario`);
+
+--
+-- Indices de la tabla `ticket_horarios`
+--
+ALTER TABLE `ticket_horarios`
+  ADD PRIMARY KEY (`id_ticket_horario`),
+  ADD KEY `idx_hor_evento` (`id_evento`);
+
+--
+-- Indices de la tabla `ticket_scans`
+--
+ALTER TABLE `ticket_scans`
+  ADD PRIMARY KEY (`id_ticket_scan`),
+  ADD KEY `fk_scan_horario` (`id_ticket_horario`),
+  ADD KEY `idx_scan_fast` (`id_ticket_usuario`,`id_ticket_horario`,`scan_at`);
+
+--
+-- Indices de la tabla `ticket_usuario`
+--
+ALTER TABLE `ticket_usuario`
+  ADD PRIMARY KEY (`id_ticket_usuario`),
+  ADD UNIQUE KEY `qr_codigo` (`qr_codigo`),
+  ADD KEY `fk_ticket_usr_event` (`id_evento_ticket`);
+
+--
 -- Indices de la tabla `tipos_estados_actividad`
 --
 ALTER TABLE `tipos_estados_actividad`
@@ -2571,7 +2776,7 @@ ALTER TABLE `equipos_proyectos`
 -- AUTO_INCREMENT de la tabla `equipos_proyectos_eventos`
 --
 ALTER TABLE `equipos_proyectos_eventos`
-  MODIFY `id_equipos_proyectos_eventos` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=135;
+  MODIFY `id_equipos_proyectos_eventos` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=141;
 
 --
 -- AUTO_INCREMENT de la tabla `estados_admision`
@@ -2607,19 +2812,25 @@ ALTER TABLE `estados_previos_eventos`
 -- AUTO_INCREMENT de la tabla `eventos`
 --
 ALTER TABLE `eventos`
-  MODIFY `id_evento` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=51;
+  MODIFY `id_evento` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=54;
+
+--
+-- AUTO_INCREMENT de la tabla `eventos_tickets`
+--
+ALTER TABLE `eventos_tickets`
+  MODIFY `id_evento_ticket` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `historial_estados_actividad`
 --
 ALTER TABLE `historial_estados_actividad`
-  MODIFY `id_historial_estado_actividad` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=80;
+  MODIFY `id_historial_estado_actividad` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=82;
 
 --
 -- AUTO_INCREMENT de la tabla `integrantes_equipos_proyectos`
 --
 ALTER TABLE `integrantes_equipos_proyectos`
-  MODIFY `id_integrante_equipo_proyecto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
+  MODIFY `id_integrante_equipo_proyecto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
 
 --
 -- AUTO_INCREMENT de la tabla `justificacion_inasistencia`
@@ -2643,7 +2854,7 @@ ALTER TABLE `paises`
 -- AUTO_INCREMENT de la tabla `periodos`
 --
 ALTER TABLE `periodos`
-  MODIFY `id_periodo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=335;
+  MODIFY `id_periodo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=382;
 
 --
 -- AUTO_INCREMENT de la tabla `region_estado`
@@ -2656,6 +2867,24 @@ ALTER TABLE `region_estado`
 --
 ALTER TABLE `roles`
   MODIFY `id_rol` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- AUTO_INCREMENT de la tabla `ticket_horarios`
+--
+ALTER TABLE `ticket_horarios`
+  MODIFY `id_ticket_horario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
+-- AUTO_INCREMENT de la tabla `ticket_scans`
+--
+ALTER TABLE `ticket_scans`
+  MODIFY `id_ticket_scan` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+
+--
+-- AUTO_INCREMENT de la tabla `ticket_usuario`
+--
+ALTER TABLE `ticket_usuario`
+  MODIFY `id_ticket_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `tipos_estados_actividad`
@@ -2734,6 +2963,12 @@ ALTER TABLE `eventos`
   ADD CONSTRAINT `eventos_ibfk_4` FOREIGN KEY (`id_tipo`) REFERENCES `tipos_evento` (`id_tipo`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
+-- Filtros para la tabla `eventos_tickets`
+--
+ALTER TABLE `eventos_tickets`
+  ADD CONSTRAINT `fk_evt_ticket_evento` FOREIGN KEY (`id_evento`) REFERENCES `eventos` (`id_evento`) ON DELETE CASCADE;
+
+--
 -- Filtros para la tabla `historial_estados_actividad`
 --
 ALTER TABLE `historial_estados_actividad`
@@ -2802,6 +3037,32 @@ ALTER TABLE `roles`
 ALTER TABLE `telefonos`
   ADD CONSTRAINT `fk_telefono_descripcion` FOREIGN KEY (`id_descripcion_telefono`) REFERENCES `descripcion_telefonos` (`id_descripcion_telefono`) ON UPDATE CASCADE,
   ADD CONSTRAINT `telefonos_ibfk_1` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Filtros para la tabla `ticket_admins`
+--
+ALTER TABLE `ticket_admins`
+  ADD CONSTRAINT `fk_admin_ticket` FOREIGN KEY (`id_evento_ticket`) REFERENCES `eventos_tickets` (`id_evento_ticket`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_admin_user` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `ticket_horarios`
+--
+ALTER TABLE `ticket_horarios`
+  ADD CONSTRAINT `fk_hor_evento` FOREIGN KEY (`id_evento`) REFERENCES `eventos` (`id_evento`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Filtros para la tabla `ticket_scans`
+--
+ALTER TABLE `ticket_scans`
+  ADD CONSTRAINT `fk_scan_horario` FOREIGN KEY (`id_ticket_horario`) REFERENCES `ticket_horarios` (`id_ticket_horario`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_scan_usuario` FOREIGN KEY (`id_ticket_usuario`) REFERENCES `ticket_usuario` (`id_ticket_usuario`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `ticket_usuario`
+--
+ALTER TABLE `ticket_usuario`
+  ADD CONSTRAINT `fk_ticket_usr_event` FOREIGN KEY (`id_evento_ticket`) REFERENCES `eventos_tickets` (`id_evento_ticket`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `tokens_usuarios`

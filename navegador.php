@@ -143,7 +143,7 @@ nav .logo:hover img{
         <a href="reportes.php">Reportes</a>
     <?php endif; ?>
 
-    <a href="admision.php">Admisión</a>
+    <a href="tickets.php">Tickets</a>
   </div>
 
   <!-- -------- avatar + nombre + logout -------- -->
