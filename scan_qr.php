@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+date_default_timezone_set('UTC');
 session_start();
 require 'conexion.php';
 
@@ -8,11 +9,12 @@ if (empty($_SESSION['id_usuario'])) {
     http_response_code(401);
     exit('Sesión no iniciada');
 }
-$uid = $_SESSION['id_usuario'];
+$id_usuario = $_SESSION['id_usuario'];
+
 $ok  = $pdo->prepare("
        SELECT 1 FROM integrantes_equipos_proyectos
         WHERE id_usuario=? AND id_equipo_proyecto=1 AND habilitado=1");
-$ok->execute([$uid]);
+$ok->execute([$id_usuario]);
 if (!$ok->fetchColumn()){
     http_response_code(403);
     exit('Sin permiso');

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 01-07-2025 a las 01:38:13
+-- Tiempo de generación: 02-07-2025 a las 10:38:35
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -409,8 +409,6 @@ INSERT INTO `asistencias` (`id_usuario`, `id_evento`, `id_estado_previo_asistenc
 (1, 1, 1, 1, 10, NULL),
 (1, 15, 1, 2, NULL, NULL),
 (1, 25, 2, 3, NULL, NULL),
-(1, 26, 1, 1, NULL, NULL),
-(1, 27, 2, 1, NULL, NULL),
 (1, 28, NULL, 1, 10, NULL),
 (1, 29, 2, 1, NULL, NULL),
 (1, 30, 1, 2, NULL, NULL),
@@ -421,21 +419,16 @@ INSERT INTO `asistencias` (`id_usuario`, `id_evento`, `id_estado_previo_asistenc
 (1, 50, 3, 3, 1, NULL),
 (1, 53, 3, NULL, NULL, NULL),
 (3, 3, 1, 2, NULL, NULL),
-(3, 26, 2, NULL, NULL, NULL),
-(3, 27, 2, NULL, NULL, NULL),
 (3, 53, 2, NULL, NULL, NULL),
 (4, 4, 2, 3, 4, NULL),
 (4, 15, 1, 2, NULL, NULL),
 (4, 25, 1, 2, NULL, NULL),
-(4, 26, 2, 1, NULL, NULL),
-(4, 27, 3, NULL, NULL, NULL),
 (4, 53, 3, NULL, NULL, NULL),
 (5, 5, 1, 2, NULL, NULL),
 (90, 53, 3, NULL, NULL, NULL),
 (110, 53, 3, NULL, NULL, NULL),
 (111, 53, 3, NULL, NULL, NULL),
 (136, 19, 3, NULL, NULL, NULL),
-(136, 27, 3, NULL, NULL, NULL),
 (136, 53, 3, NULL, NULL, NULL);
 
 --
@@ -686,8 +679,6 @@ INSERT INTO `equipos_proyectos_eventos` (`id_equipos_proyectos_eventos`, `id_equ
 (130, 5, 32),
 (131, 18, 32),
 (132, 5, 36),
-(133, 4, 27),
-(134, 5, 27),
 (136, 5, 52),
 (137, 4, 53),
 (138, 5, 53),
@@ -894,10 +885,8 @@ INSERT INTO `eventos` (`id_evento`, `nombre_evento`, `lugar`, `descripcion`, `ob
 (4, 'Jornada Misión Joven', 'Auditorio', 'Día de actividades juveniles', 'jh', 1, 3, 1, 4, 0, 0, '2025-03-19 03:00:00', '2025-03-19 03:00:00'),
 (5, 'Seminario Comunicaciones', 'Aula 2', 'Taller de estrategias de comunicación', 'jhj', 1, 4, 1, NULL, 0, 0, '2025-04-18 04:00:00', '2025-04-18 23:54:00'),
 (15, 'Ruta de Amor', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', NULL, 3, 3, 1, 1, 0, 0, '2025-06-14 19:00:00', '2025-06-15 00:30:00'),
-(19, 'Reunión Directiva', 'Zoom', '', NULL, 3, 3, 2, 3, 0, 1, '2025-08-22 00:30:00', '2025-08-22 01:30:00'),
+(19, 'Reunión Directiva', 'Zoom', '', NULL, 3, 3, 2, 3, 0, 0, '2025-08-22 00:30:00', '2025-08-22 01:30:00'),
 (25, 'Equipaje de Amor', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'kk', 1, 3, 1, 1, 0, 0, '2025-06-14 19:00:00', '2025-06-15 00:30:00'),
-(26, 'Ruta de Amor 2', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'jhghjk', 1, 3, 1, 1, 1, 1, '2025-07-17 19:00:00', '2025-07-18 00:30:00'),
-(27, 'Ruta de Amor 3', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'jhghjk', 1, 3, 1, NULL, 0, 0, '2025-07-17 19:00:00', '2025-07-18 00:30:00'),
 (28, 'Reminders', NULL, NULL, NULL, 1, 4, 1, 1, 0, 0, '2025-05-31 04:21:00', '2025-05-31 04:36:00'),
 (29, 'Equipaje de Amor 2', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'kk', 1, 3, 1, 1, 1, 0, '2025-06-15 19:00:00', '2025-06-15 20:00:00'),
 (30, 'Reminders 2', '', '', 'jhjkl', 1, 1, 1, 1, 1, 0, '2025-05-27 04:21:00', '2025-05-27 04:21:00'),
@@ -922,6 +911,16 @@ INSERT INTO `eventos` (`id_evento`, `nombre_evento`, `lugar`, `descripcion`, `ob
 --
 -- Disparadores `eventos`
 --
+DELIMITER $$
+CREATE TRIGGER `trg_evento_boleteria_off_AU` AFTER UPDATE ON `eventos` FOR EACH ROW BEGIN
+    IF OLD.boleteria_activa = 1 AND NEW.boleteria_activa = 0 THEN
+        /* FK ON DELETE CASCADE se encarga de horarios, scans, usuarios */
+        DELETE FROM eventos_tickets
+         WHERE id_evento = NEW.id_evento;
+    END IF;
+END
+$$
+DELIMITER ;
 DELIMITER $$
 CREATE TRIGGER `trg_eventos_ai` AFTER INSERT ON `eventos` FOR EACH ROW BEGIN
   CALL sp_refresh_resumen_estado_eventos(NEW.id_evento);
@@ -1033,19 +1032,8 @@ CREATE TABLE `eventos_tickets` (
   `descripcion` text DEFAULT NULL,
   `precio_clp` int(10) UNSIGNED DEFAULT 0,
   `cupo_total` int(10) UNSIGNED DEFAULT 0,
-  `cupo_ocupado` int(10) UNSIGNED DEFAULT 0,
   `activo` tinyint(1) DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Volcado de datos para la tabla `eventos_tickets`
---
-
-INSERT INTO `eventos_tickets` (`id_evento_ticket`, `id_evento`, `nombre_ticket`, `descripcion`, `precio_clp`, `cupo_total`, `cupo_ocupado`, `activo`) VALUES
-(1, 27, 'Prueba', 'hjk', 5000, 5, 3, 1),
-(2, 27, 'Prueba 2', 'jhhjk', 10000, 5, 0, 1),
-(3, 26, 'TK 1', 'ghj', 500, 5, 0, 1),
-(5, 26, 'Prueba', '', 600, 5, 0, 1);
 
 -- --------------------------------------------------------
 
@@ -1997,17 +1985,9 @@ INSERT INTO `telefonos` (`id_usuario`, `telefono`, `es_principal`, `id_descripci
 --
 
 CREATE TABLE `ticket_admins` (
-  `id_evento_ticket` int(11) NOT NULL,
+  `id_evento` int(11) NOT NULL,
   `id_usuario` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Volcado de datos para la tabla `ticket_admins`
---
-
-INSERT INTO `ticket_admins` (`id_evento_ticket`, `id_usuario`) VALUES
-(3, 3),
-(5, 3);
 
 -- --------------------------------------------------------
 
@@ -2099,8 +2079,10 @@ CREATE TABLE `ticket_usuario` (
   `nombre_completo` varchar(120) NOT NULL,
   `contacto` varchar(16) NOT NULL,
   `edad` int(10) UNSIGNED DEFAULT NULL,
+  `credencial` varchar(100) DEFAULT NULL,
+  `acompanantes` varchar(255) DEFAULT NULL,
+  `extras` varchar(255) DEFAULT NULL,
   `equipo` varchar(100) DEFAULT NULL,
-  `tipo_ticket` varchar(100) DEFAULT NULL,
   `alimentacion` varchar(100) DEFAULT NULL,
   `hospedaje` varchar(50) DEFAULT NULL,
   `enfermedad` varchar(255) DEFAULT NULL,
@@ -2112,12 +2094,57 @@ CREATE TABLE `ticket_usuario` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Volcado de datos para la tabla `ticket_usuario`
+-- Disparadores `ticket_usuario`
 --
+DELIMITER $$
+CREATE TRIGGER `trg_ticket_usuario_cap_BI` BEFORE INSERT ON `ticket_usuario` FOR EACH ROW BEGIN
+    DECLARE v_cupo   INT;
+    DECLARE v_actual INT;
 
-INSERT INTO `ticket_usuario` (`id_ticket_usuario`, `id_evento_ticket`, `fecha_inscripcion`, `correo_electronico`, `nombre_completo`, `contacto`, `edad`, `equipo`, `tipo_ticket`, `alimentacion`, `hospedaje`, `enfermedad`, `alergia`, `medicamentos`, `alimentacion_especial`, `contacto_emergencia`, `qr_codigo`) VALUES
-(1, 1, '2025-06-29 20:16:09', 'and.tapia.2001@gmail.com', 'Andres', '+56987254068', 23, 'Los Lagos', '', '', '', '', '', '', '', '', '9e9b1d05b5af2750f1aec2689daf383e819e5854d99cc99bf65cea700c4b09a3'),
-(3, 1, '2025-06-29 20:57:39', 'ana.hernandez@example.com', 'Ana', '+56977777777', 30, 'Los Lagos', '', '', '', '', '', '', '', '', '7d61b948faa42d202ea74453dbfccd7f4097104932da3ea05dd7bfa3059a483c');
+    SELECT cupo_total
+      INTO v_cupo
+      FROM eventos_tickets
+     WHERE id_evento_ticket = NEW.id_evento_ticket
+     LIMIT 1;
+
+    SELECT COUNT(*)
+      INTO v_actual
+      FROM ticket_usuario
+     WHERE id_evento_ticket = NEW.id_evento_ticket;
+
+    IF v_actual >= v_cupo THEN
+        SIGNAL SQLSTATE '45000'
+           SET MESSAGE_TEXT = 'Cupo agotado para este ticket.';
+    END IF;
+END
+$$
+DELIMITER ;
+DELIMITER $$
+CREATE TRIGGER `trg_ticket_usuario_cap_BU` BEFORE UPDATE ON `ticket_usuario` FOR EACH ROW BEGIN
+    /* DECLAREs SIEMPRE al inicio del bloque */
+    DECLARE v_cupo   INT;
+    DECLARE v_actual INT;
+
+    IF NEW.id_evento_ticket <> OLD.id_evento_ticket THEN
+        SELECT cupo_total
+          INTO v_cupo
+          FROM eventos_tickets
+         WHERE id_evento_ticket = NEW.id_evento_ticket
+         LIMIT 1;
+
+        SELECT COUNT(*)
+          INTO v_actual
+          FROM ticket_usuario
+         WHERE id_evento_ticket = NEW.id_evento_ticket;
+
+        IF v_actual >= v_cupo THEN
+            SIGNAL SQLSTATE '45000'
+               SET MESSAGE_TEXT = 'El ticket de destino está lleno.';
+        END IF;
+    END IF;
+END
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -2201,7 +2228,7 @@ CREATE TABLE `tokens_usuarios` (
 --
 
 INSERT INTO `tokens_usuarios` (`token`, `id_usuario`, `creado_en`, `expira_en`) VALUES
-('a31867da89163c78d04daab69c046c5b75f284ce43ba5d80d326f9ec444e2619', 3, '2025-06-30 16:44:58', '2025-07-01 04:28:51');
+('710b4a7567c6dba383098b26786ea009d44e8204813870e17106e3deb3dab0de', 1, '2025-07-02 00:12:55', '2025-07-02 13:37:11');
 
 --
 -- Disparadores `tokens_usuarios`
@@ -2680,7 +2707,7 @@ ALTER TABLE `telefonos`
 -- Indices de la tabla `ticket_admins`
 --
 ALTER TABLE `ticket_admins`
-  ADD PRIMARY KEY (`id_evento_ticket`,`id_usuario`),
+  ADD PRIMARY KEY (`id_evento`,`id_usuario`),
   ADD KEY `fk_admin_user` (`id_usuario`);
 
 --
@@ -2818,7 +2845,7 @@ ALTER TABLE `eventos`
 -- AUTO_INCREMENT de la tabla `eventos_tickets`
 --
 ALTER TABLE `eventos_tickets`
-  MODIFY `id_evento_ticket` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id_evento_ticket` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT de la tabla `historial_estados_actividad`
@@ -2854,7 +2881,7 @@ ALTER TABLE `paises`
 -- AUTO_INCREMENT de la tabla `periodos`
 --
 ALTER TABLE `periodos`
-  MODIFY `id_periodo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=382;
+  MODIFY `id_periodo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=390;
 
 --
 -- AUTO_INCREMENT de la tabla `region_estado`
@@ -2872,19 +2899,19 @@ ALTER TABLE `roles`
 -- AUTO_INCREMENT de la tabla `ticket_horarios`
 --
 ALTER TABLE `ticket_horarios`
-  MODIFY `id_ticket_horario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id_ticket_horario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_scans`
 --
 ALTER TABLE `ticket_scans`
-  MODIFY `id_ticket_scan` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id_ticket_scan` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_usuario`
 --
 ALTER TABLE `ticket_usuario`
-  MODIFY `id_ticket_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id_ticket_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT de la tabla `tipos_estados_actividad`
@@ -3042,7 +3069,7 @@ ALTER TABLE `telefonos`
 -- Filtros para la tabla `ticket_admins`
 --
 ALTER TABLE `ticket_admins`
-  ADD CONSTRAINT `fk_admin_ticket` FOREIGN KEY (`id_evento_ticket`) REFERENCES `eventos_tickets` (`id_evento_ticket`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_admin_evento` FOREIGN KEY (`id_evento`) REFERENCES `eventos` (`id_evento`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_admin_user` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`) ON DELETE CASCADE;
 
 --

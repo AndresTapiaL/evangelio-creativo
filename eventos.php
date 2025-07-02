@@ -364,36 +364,6 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    nav {
-      background: #f0f0f0;
-      padding: 1rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    nav .menu {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      align-items: center;
-    }
-    nav a {
-      text-decoration: none;
-      color: #222;
-      font-weight: bold;
-    }
-    .perfil {
-      display: flex;
-      align-items: center;
-      gap: .5rem;
-    }
-    .perfil img {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
     body {
       font-family: sans-serif;
       background: #f6f6f6;

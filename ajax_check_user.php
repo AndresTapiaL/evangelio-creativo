@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
+date_default_timezone_set('UTC');
 session_start();
+if (empty($_SESSION['id_usuario'])) { http_response_code(401); exit; }
 require 'conexion.php';
 
 header('Content-Type: application/json; charset=utf-8');
