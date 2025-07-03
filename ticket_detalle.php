@@ -196,9 +196,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_usr'])) {
             $_POST['medicamentos'], $_POST['alim_esp'], $_POST['contacto_emerg'],
             $_POST['credencial'], $_POST['acompanantes'], $_POST['extras'], $hash
         ]);
-
-        /* QR y contador */
-        generarQR($hash, __DIR__."/qr/{$hash}.png");
     }
 
     header("Location: ticket_detalle.php?evt=$idEvento&tkt=$idTicketSel&ok=1");
@@ -343,10 +340,6 @@ if (isset($_GET['del_usr'])){
              WHERE id_ticket_usuario = ?");
     $stmt->execute([(int)$_GET['del_usr']]);
     $hash = $stmt->fetchColumn();
-    if ($hash){
-        $file = __DIR__."/qr/{$hash}.png";
-        if (is_file($file)) unlink($file);
-    }
 
     $pdo->prepare("DELETE FROM ticket_usuario WHERE id_ticket_usuario=?")
         ->execute([(int)$_GET['del_usr']]);
@@ -361,14 +354,11 @@ if (isset($_GET['del_usr'])){
   <!-- ==== NAV: css + validación de token ==== -->
   <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- JSZip – necesario antes de cualquier script que lo use -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <style>
-  /* ═══════════ 1. FUENTE POPPINS (latin) ═══════════ */
-  @font-face{font-family:"Poppins";src:url("styles/poppins-v23-latin-400.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap;}
-  @font-face{font-family:"Poppins";src:url("styles/poppins-v23-latin-500.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap;}
-  @font-face{font-family:"Poppins";src:url("styles/poppins-v23-latin-600.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap;}
-  @font-face{font-family:"Poppins";src:url("styles/poppins-v23-latin-700.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap;}
-
   /* ═══════════ 2. PALETA Y VARIABLES ═══════════ */
   :root{
     /* corporativo EC */
@@ -582,6 +572,12 @@ if (isset($_GET['del_usr'])){
   ::-webkit-scrollbar{height:8px;width:8px;}
   ::-webkit-scrollbar-thumb{background:#c5c9d6;border-radius:8px;}
   ::-webkit-scrollbar-thumb:hover{background:#a9afc4;}
+
+  dialog[open]{
+    position:fixed;
+    top:50%; left:50%;
+    transform:translate(-50%,-50%);
+  }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -620,7 +616,13 @@ if (isset($_GET['del_usr'])){
 </head><body>
 <?php require_once 'navegador.php'; ?>
 
-<h1><?=htmlspecialchars($evtRow['nombre_evento'])?></h1>
+<!-- ░░ cabecera con botón Volver + título ░░ -->
+<div style="display:flex;align-items:center;justify-content:center;gap:1rem;margin-top:1.6rem">
+  <a href="tickets.php" class="action-btn" style="font-size:.85rem">
+    <i class="fa-solid fa-arrow-left"></i> Volver
+  </a>
+  <h1 style="margin:0"><?=htmlspecialchars($evtRow['nombre_evento'])?></h1>
+</div>
 
 <?php
 /* ─── inscritos del evento (todos los tickets) ──────────────── */
@@ -957,6 +959,9 @@ function editTicket(t){
 <section>
  <h2>Inscritos (<?=$totalIns?>/<?=$totalCupo?>)</h2>
  <button id="btnAddUsr">➕ Añadir inscripción</button>
+ <button id="btnZip" class="action-btn" style="margin-left:.6rem">
+   <i class="fa-solid fa-file-zipper"></i> Descargar QRs
+ </button>
   <div class="tbl-scroll">
     <table>
       <thead>
@@ -989,19 +994,15 @@ function editTicket(t){
           <td><?=htmlspecialchars($u['acompanantes'])?></td>
           <td><?=htmlspecialchars($u['extras'])?></td>
           <td>
-            <?php
-              $png = "qr/{$u['qr_codigo']}.png";
-              echo file_exists(__DIR__.'/'.$png)
-                  ? "<a href=\"".htmlspecialchars($png)."\" target=\"_blank\">QR</a>"
-                  : '—';
-            ?>
-          </td>
-          <td>
-            <button class="edit-usr"
+            <button type="button" class="show-qr action-btn" data-code="<?=$u['qr_codigo']?>">
+              <i class="fa-solid fa-qrcode"></i> QR
+            </button>
+            <button class="edit-usr action-btn"
                     data-json='<?=json_encode($u,JSON_HEX_APOS)?>'>
-                    <i class="fa-solid fa-edit"></i> Editar
+              <i class="fa-solid fa-edit"></i> Editar
             </button>
             <a href="?evt=<?=$idEvento?>&del_usr=<?=$u['id_ticket_usuario']?>"
+              class="action-btn"
               onclick="return confirm('¿Eliminar inscripción?')">
               <i class="fa-solid fa-trash"></i> Eliminar
             </a>
@@ -1055,6 +1056,20 @@ function editTicket(t){
   </form>
 </dialog>
 
+<!-- Dialog QR -->
+<dialog id="dlgQR" style="text-align:center;padding:1.6rem">
+  <h3 style="margin:0 0 1rem">Código QR</h3>
+  <img id="qrImg" alt="QR" style="max-width:320px;width:100%;height:auto">
+  <div class="dlg-btns" style="justify-content:center;margin-top:1rem">
+    <a  id="qrDownload" class="action-btn" download>
+        <i class="fa-solid fa-download"></i> Descargar
+    </a>
+    <button type="button" id="qrClose" class="action-btn">
+        <i class="fa-solid fa-xmark"></i> Cerrar
+    </button>
+  </div>
+</dialog>
+
 <script>
 // ===== NUEVA inscripción =====
 btnAddUsr.onclick = () => {
@@ -1092,7 +1107,202 @@ document.querySelectorAll('.edit-usr').forEach(btn => {
 u_cancel.onclick = () => dlgUsr.close();
 </script>
 
-<script src="heartbeat.js"></script>
+<script>
+(() => {
+  const dlg   = document.getElementById('dlgQR');
+  const img   = document.getElementById('qrImg');
+  const down  = document.getElementById('qrDownload');
+  const close = document.getElementById('qrClose');
+
+  document.querySelectorAll('.show-qr').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const code = btn.dataset.code;
+      let urlObj = null;
+
+      try {
+        const res = await fetch('get_qr.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type'   : 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest'                // <- lo validamos en PHP
+          },
+          body: new URLSearchParams({ code })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const svgText = await res.text();                 // ← SVG como texto
+
+        /* ① mostramos el SVG */
+        const svgBlob = new Blob([svgText], {type:'image/svg+xml'});
+        const svgUrl  = URL.createObjectURL(svgBlob);
+        urlObj        = svgUrl;           // Lo usaremos luego para revocar
+        img.src       = svgUrl;
+
+        /* ② nombre original (.svg) que mandó PHP */
+        const cd = res.headers.get('Content-Disposition') || '';
+        let fileName = '';
+        /* 1) Preferencia: filename*=UTF-8''…  (RFC 5987) */
+        let m = cd.match(/filename\*=UTF-8''([^;]+)/i);
+        if (m) {
+          fileName = decodeURIComponent(m[1]);
+        }
+        /* 2) Fallback legacy: filename="…" */
+        else if (m = cd.match(/filename="?([^";]+)/i)) {
+          fileName = m[1];
+        }
+
+        /* ③ cuando la imagen SVG esté cargada → rasterizamos a PNG */
+        const tmpImg = new Image();
+        tmpImg.onload = () => {
+           const cvs   = document.createElement('canvas');
+           cvs.width   = tmpImg.naturalWidth;
+           cvs.height  = tmpImg.naturalHeight;
+           const ctx   = cvs.getContext('2d');
+           ctx.drawImage(tmpImg, 0, 0);
+
+           cvs.toBlob(blob => {
+               down.href = URL.createObjectURL(blob);          // ← PNG listo
+               down.download = (fileName||'qr.svg')
+                                 .replace(/\.svg$/i,'.png');   // *.png
+           }, 'image/png');
+        };
+        tmpImg.src = svgUrl;
+
+        dlg.showModal();
+      } catch (e) {
+        console.error(e);
+        alert('No se pudo cargar el QR');
+      }
+
+      /* limpieza ─ revoca URL al cerrar */
+      close.onclick = () => {
+        dlg.close();
+        if (urlObj) URL.revokeObjectURL(urlObj);
+        img.removeAttribute('src');
+      };
+    });
+  });
+})();
+</script>
+
+<script>
+/* Convierte un SVG (string) a Blob-PNG 1080×1080 px */
+function svgToPng(svgText, size = 1080){
+  return new Promise((resolve,reject)=>{
+    const svgBlob = new Blob([svgText], {type:'image/svg+xml'});
+    const url     = URL.createObjectURL(svgBlob);
+    const img     = new Image();
+    img.onload = ()=> {
+        const cvs = document.createElement('canvas');
+        cvs.width  = cvs.height = size;
+        const ctx  = cvs.getContext('2d');
+        ctx.imageSmoothingEnabled = false;      // evita blur
+        ctx.drawImage(img, 0, 0, size, size);   // escala
+        cvs.toBlob(blob=>{
+            URL.revokeObjectURL(url);
+            blob ? resolve(blob) : reject(new Error('toBlob fail'));
+        }, 'image/png');
+    };
+    img.onerror = ()=> reject(new Error('SVG load error'));
+    img.src = url;
+  });
+}
+
+/* ░░ Descargar ZIP de QRs (cliente) ░░ */
+btnZip.addEventListener('click', async () => {
+
+  /* 1. Reúne los códigos */
+  const codes = Array.from(document.querySelectorAll('.show-qr'))
+                     .map(el => el.dataset.code)
+                     .filter(Boolean);
+
+  if (!codes.length){
+      alert('No hay QRs para descargar.');
+      return;
+  }
+
+  /* 2. Overlay */
+  const ov = document.createElement('div');
+  ov.style.cssText =
+     'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;'
+    +'background:rgba(0,0,0,.45);z-index:3000';
+  ov.innerHTML =
+     '<div style="background:#fff;padding:1.2rem 2rem;border-radius:10px;'
+    +'box-shadow:0 6px 18px rgba(0,0,0,.25);font-weight:600;'
+    +'font-family:Poppins,system-ui,sans-serif">Descargando QRs…</div>';
+  document.body.appendChild(ov);
+
+  try{
+      const zip = new JSZip();
+      const dup = new Set();      // evita nombres repetidos
+
+      /* 3. Procesa en lotes de 100 para no colapsar RAM */
+      const CHUNK = 100;
+      for (let i = 0; i < codes.length; i += CHUNK){
+          const slice = codes.slice(i, i + CHUNK);
+
+          /* texto de progreso simple */
+          ov.firstChild.textContent =
+              `Descargando QRs…  ${Math.min(i+CHUNK,codes.length)} / ${codes.length}`;
+
+          await Promise.all(slice.map(async (code,idx) => {
+              /* --- a) baja el SVG --- */
+              const res = await fetch('get_qr.php', {
+                  method:'POST',
+                  headers:{
+                    'Content-Type':'application/x-www-form-urlencoded',
+                    'X-Requested-With':'XMLHttpRequest'
+                  },
+                  body: new URLSearchParams({code})
+              });
+              if(!res.ok) throw new Error('QR '+code+' HTTP '+res.status);
+
+              /* --- b) nombre seguro --- */
+              let base = '';
+              const cd = res.headers.get('Content-Disposition') || '';
+              let m = cd.match(/filename\*=UTF-8''([^;]+)/i);
+              if(m) base = decodeURIComponent(m[1]).replace(/\.svg$/i,'');
+              else if(m = cd.match(/filename="?([^";]+)/i))
+                       base = m[1].replace(/\.svg$/i,'');
+              if(!base) base = 'qr_'+code;
+
+              let fn = base+'.png';
+              while(zip.file(fn)) fn = base+'_'+Date.now()+'.png';
+
+              /* --- c) rasteriza y agrega --- */
+              const pngBlob = await svgToPng(await res.text());
+              zip.file(fn, pngBlob);
+          }));
+      }
+
+      /* 4. Genera el ZIP y dispara descarga */
+      const blob = await zip.generateAsync({type:'blob'});
+      const url  = URL.createObjectURL(blob);
+      const a    = Object.assign(document.createElement('a'), {
+          href:url,
+          download:'QRs_'+new Date().toISOString()
+                     .slice(0,19).replace(/[:T]/g,'')+'.zip'
+      });
+      a.click();
+      URL.revokeObjectURL(url);
+
+  }catch(err){
+      console.error(err);
+      alert('Fallo al generar el ZIP:\n'+err.message);
+  }finally{
+      ov.remove();
+  }
+});
+</script>
+
+<script>
+/* ░░ Cerrar cualquier <dialog> al clicar fuera ░░ */
+document.querySelectorAll('dialog').forEach(dlg=>{
+  dlg.addEventListener('click',e=>{
+    if(e.target===dlg) dlg.close();
+  });
+});
+</script>
+
 <script>
 document.getElementById('logout').addEventListener('click', async e => {
   e.preventDefault();
