@@ -235,7 +235,7 @@ const EQUIPOS_PROMISE = fetch(`${API}?accion=equipos`)
          .map  (e => `<option value="${e.id}">${e.nombre}</option>`)
          .join('');
   })
-  /* ⬇︎ NUEVO: si la llamada falla, la promesa queda resuelta
+  /* si la llamada falla, la promesa queda resuelta
      (no «rejected») y no bloquea el modal Editar          */
   .catch(err => {
       console.error('Catálogo equipos:', err);
@@ -286,15 +286,15 @@ function initIntlTelInputs () {
       initialCountry   : 'cl',
       utilsScript      : 'https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js'
     });
-    /* ——— calcula el largo máximo dinámico para ese país ——— */            //  <<< NUEVO
-    const setDynMax = () => {                                               //  <<< NUEVO
-      const data = iti.getSelectedCountryData();                            //  <<< NUEVO
-      const iso  = data.iso2;                                               //  <<< NUEVO
-      const pref = data.dialCode || '';                                     //  <<< NUEVO
-      const lim  = MOBILE_MAX_ES[iso] ?? 15;                                //  <<< NUEVO
-      inp._maxLen = 1 + pref.length + lim;          /* + «+» */             //  <<< NUEVO
-    };                                                                      //  <<< NUEVO
-    setDynMax();                                                            //  <<< NUEVO
+    /* ——— calcula el largo máximo dinámico para ese país ——— */
+    const setDynMax = () => {
+      const data = iti.getSelectedCountryData();
+      const iso  = data.iso2;
+      const pref = data.dialCode || '';
+      const lim  = MOBILE_MAX_ES[iso] ?? 15;
+      inp._maxLen = 1 + pref.length + lim;
+    };
+    setDynMax();
     inp.addEventListener('countrychange', () => {
       /* mantiene el largo máximo dinámico */
       setDynMax();
@@ -326,8 +326,8 @@ function initIntlTelInputs () {
       }
 
       v = '+' + v;                                // antepone un único ‘+’
-      const lim = inp._maxLen || PHONE_MAX;          //  <<< NUEVO
-      if (v.length > lim) v = v.slice(0, lim);       //  <<< NUEVO
+      const lim = inp._maxLen || PHONE_MAX;
+      if (v.length > lim) v = v.slice(0, lim);
       inp.value = v;
     });
 
@@ -350,7 +350,7 @@ function validateNameField (inp){
   const txt = inp.value.trim();
   let msg = '';
 
-  /* ⬇︎ NUEVO – obligatorio */
+  /* obligatorio */
   if (!txt && inp.required){
       msg = '* Obligatorio';
   } else if (txt.length > max){
@@ -690,7 +690,7 @@ function validatePhoneRows () {
           rowHasError = true;
 
       } else {
-          const subscrLen = digits.length - pref.length;      //  <<< NUEVO
+          const subscrLen = digits.length - pref.length;
 
           /* ─── chequeo de largo de suscriptor ─── */
           const minSubscr = MOBILE_MIN_ES[iso] ?? 8;     // ← mínimo por país (o 8 global)

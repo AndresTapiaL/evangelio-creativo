@@ -318,14 +318,12 @@ if ($isSuper){                               // puede ver sección 0
       margin-bottom:.8rem;
   }
 
-  /* ── NUEVO ──   el <label> ya no se estira a todo el ancho */
   #phone-container .phone-row label{
       width:fit-content;     /* solo lo justo para el input + su padding */
       flex:0 0 auto;         /* evita que FlexBox dentro lo expanda */
   }
 
   #phone-container .phone-row{
-      /* al aparecer el <small> de error el select ya no se descoloca */
       align-items:start;               /* top-align */
   }
 
@@ -343,7 +341,7 @@ if ($isSuper){                               // puede ver sección 0
   ::-webkit-scrollbar-thumb{background:#c5c9d6;border-radius:8px;}
   ::-webkit-scrollbar-thumb:hover{background:#a9afc4;}
 
-  /* ───────────  NUEVO CONTENEDOR FLEX  ─────────── */
+  /* ───────────  CONTENEDOR FLEX  ─────────── */
   /* envuelve <aside id="sidebar"> y <section id="section-table">   */
   .layout{
     display:flex;                 /* ← sidebar + tabla uno al lado del otro   */
@@ -351,7 +349,7 @@ if ($isSuper){                               // puede ver sección 0
   }
 
   /* el viejo #sidebar mantiene sus 240 px y sticky ↓ */
-  .sidebar{flex:0 0 240px;}       /* ya no “flota”, ocupa su hueco fijo       */
+  .sidebar{flex:0 0 240px;}
 
   #section-table{
     flex:1;
@@ -409,7 +407,6 @@ if ($isSuper){                               // puede ver sección 0
     z-index:200;       /* por encima de la tabla  */
   }
 
-  /* pequeño facelift */
   /* pop-up pegado al botón */
   #btn-cols .cols-menu{
     position:fixed;                  /* ⬅  antes era absolute            */
@@ -588,11 +585,10 @@ if ($isSuper){                               // puede ver sección 0
   /* desplazamientos dentro de la caja del modal con animación */
   .modal-box{
     scroll-behavior:smooth;        /* ← hace que cualquier scroll sea “deslizado” */
-    max-height:90vh;             /* ← NUEVO (imprescindible)      */
-    overflow-y:auto;             /* ← NUEVO (permite el scroll)   */
+    max-height:90vh;
+    overflow-y:auto;
   }
 
-  /* mismos colores que los <input> */
   select.invalid{
     border-color:#d93025 !important;
     box-shadow:0 0 0 2px rgba(217,48,37,.25) !important;
@@ -606,7 +602,7 @@ if ($isSuper){                               // puede ver sección 0
     border:1px solid #d6d9e2;
     border-radius:20px;
     font:400 .9rem/1 "Poppins",sans-serif;
-    width:260px;                /* según tu layout  */
+    width:260px;
     transition:border-color .2s;
   }
   #search-box:focus{
@@ -847,20 +843,20 @@ if ($isSuper){                               // puede ver sección 0
             <legend>Ubicación</legend>
             <label>País
               <select id="ed-pais" name="id_pais" class="loc-sel"></select>
-              <small class="err-msg"></small>          <!-- NUEVO -->
+              <small class="err-msg"></small>
             </label>
             <label>Región / Estado
               <select id="ed-region" name="id_region_estado" class="loc-sel"></select>
-              <small class="err-msg"></small>          <!-- NUEVO -->
+              <small class="err-msg"></small>
             </label>
             <label>Ciudad / Comuna
               <select id="ed-ciudad" name="id_ciudad_comuna" class="loc-sel"></select>
-              <small class="err-msg"></small>          <!-- NUEVO -->
+              <small class="err-msg"></small>
             </label>
             <!-- Dirección -->
             <label>Dirección
               <input id="ed-dir" name="direccion" required maxlength="255">
-              <small class="err-msg"></small>        <!-- ← NUEVO -->
+              <small class="err-msg"></small>
             </label>
           </fieldset>
 
@@ -870,13 +866,13 @@ if ($isSuper){                               // puede ver sección 0
             <!-- Iglesia / Ministerio -->
             <label>Iglesia / Ministerio
               <input id="ed-ig" name="iglesia_ministerio" required maxlength="255">
-              <small class="err-msg"></small>        <!-- ← NUEVO -->
+              <small class="err-msg"></small>
             </label>
 
             <!-- Profesión / Oficio / Estudio -->
             <label>Profesión / Oficio / Estudio
               <input id="ed-pro" name="profesion_oficio_estudio" required maxlength="255">
-              <small class="err-msg"></small>        <!-- ← NUEVO -->
+              <small class="err-msg"></small>
             </label>
           </fieldset>
 
@@ -885,7 +881,7 @@ if ($isSuper){                               // puede ver sección 0
             <legend>Contacto</legend>
             <label>Correo electrónico
               <input id="ed-correo" name="correo" type="email" maxlength="320" required>
-              <small class="err-msg"></small>          <!-- ← NUEVO -->
+              <small class="err-msg"></small>
             </label>
 
             <div id="phone-container">

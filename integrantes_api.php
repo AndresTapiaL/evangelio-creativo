@@ -8,6 +8,278 @@ require 'conexion.php';
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 
+/* ─────── Helpers e-mail (PHPMailer) ───────────────────────────── */
+require_once __DIR__.'/phpmailer/Exception.php';
+require_once __DIR__.'/phpmailer/PHPMailer.php';
+require_once __DIR__.'/phpmailer/SMTP.php';
+
+/**
+ * Devuelve un array asociativo con TODA la información que hay que
+ * mostrar de la persona ($uid) según las tablas indicadas en el enunciado.
+ * Si está en admision o retirados añade también esos datos.
+ */
+function getUserFullInfo(int $uid, PDO $pdo): array {
+    /* — datos básicos + catálogo de nombres — */
+    $sql = "
+      SELECT
+        CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS nombre_completo,
+        DATE_FORMAT(u.fecha_nacimiento,'%d-%m-%Y') AS fecha_nacimiento,
+        u.rut_dni,
+        p.nombre_pais,
+        re.nombre_region_estado,
+        cc.nombre_ciudad_comuna,
+        u.direccion,
+        u.iglesia_ministerio,
+        u.profesion_oficio_estudio
+      FROM usuarios u
+      LEFT JOIN paises        p  ON p.id_pais           = u.id_pais
+      LEFT JOIN region_estado re ON re.id_region_estado = u.id_region_estado
+      LEFT JOIN ciudad_comuna cc ON cc.id_ciudad_comuna = u.id_ciudad_comuna
+      WHERE u.id_usuario = ?";
+    $row = $pdo->prepare($sql);
+    $row->execute([$uid]);
+    $info = $row->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    /* teléfonos (el principal primero) */
+    $tels = $pdo->prepare("
+        SELECT t.telefono,
+               dt.nombre_descripcion_telefono     AS descripcion,
+               t.es_principal
+          FROM telefonos t
+          LEFT JOIN descripcion_telefonos dt USING(id_descripcion_telefono)
+         WHERE t.id_usuario = ?
+      ORDER BY t.es_principal DESC");
+    $tels->execute([$uid]);
+    $info['telefonos'] = $tels->fetchAll(PDO::FETCH_ASSOC);
+
+    /* ocupaciones */
+    $oc = $pdo->prepare("
+        SELECT o.nombre
+          FROM usuarios_ocupaciones uo
+          JOIN ocupaciones o USING(id_ocupacion)
+         WHERE uo.id_usuario = ?
+      ORDER BY o.nombre");
+    $oc->execute([$uid]);
+    $info['ocupaciones'] = $oc->fetchAll(PDO::FETCH_COLUMN);
+
+    /* correo */
+    $mailStmt = $pdo->prepare("
+            SELECT correo_electronico
+            FROM correos_electronicos
+            WHERE id_usuario = ?
+            LIMIT 1");
+    $mailStmt->execute([$uid]);
+    $info['correo_electronico'] = (string)$mailStmt->fetchColumn();
+
+    /* datos Admision, si existen */
+    $adm = $pdo->prepare("
+        SELECT liderazgo,nos_conoces,proposito,motivacion
+          FROM admision WHERE id_usuario=? LIMIT 1");
+    $adm->execute([$uid]);
+    if ($admRow = $adm->fetch(PDO::FETCH_ASSOC)) $info['admision'] = $admRow;
+
+    /* datos Retirados, si existen */
+    $ret = $pdo->prepare("
+        SELECT razon FROM retirados WHERE id_usuario=? LIMIT 1");
+    $ret->execute([$uid]);
+    if ($retRow = $ret->fetch(PDO::FETCH_ASSOC)) $info['retirado'] = $retRow;
+
+    return $info;
+}
+
+/**
+ * Envía la notificación a todos los miembros (rol 4 ó 6, habilitados)
+ * del equipo/proyecto $eqId.
+ *
+ * @param string $tipo   'alta' | 'baja'
+ * @param array  $userInfo  resultado de getUserFullInfo()
+ * @param array  $extra     ['eqNom'=>, 'es_equipo'=>, 'razon'=>null|cadena]
+ */
+function notificarEquipo(string $tipo,int $eqId,array $userInfo,array $extra,PDO $pdo): void{
+
+  /* destinatarios ------------------------------------------------- */
+  $dest = $pdo->prepare("
+      SELECT ce.correo_electronico
+        FROM integrantes_equipos_proyectos iep
+        JOIN correos_electronicos ce USING(id_usuario)
+       WHERE iep.id_equipo_proyecto = ?
+         AND iep.habilitado = 1
+         AND iep.id_rol IN (4,6)");
+  $dest->execute([$eqId]);
+  $toList = $dest->fetchAll(PDO::FETCH_COLUMN);
+  if(!$toList) return;                     // no hay a quién enviar
+
+  $esEquipo = ($extra['es_equipo']==1);
+  $asunto = ($tipo === 'alta')
+      ? "Tienes un nuevo integrante en tu ".($esEquipo ? 'Equipo' : 'Proyecto')
+          ." ({$extra['eqNom']})"
+      : "Integrante eliminado de tu ".($esEquipo ? 'Equipo' : 'Proyecto')
+          ." ({$extra['eqNom']})";
+
+  /* ---- cuerpo de correo (texto simple) ---- */
+  $u = $userInfo;                     // alias corto
+  $txt  = "Detalle del usuario:\n";
+  $txt .= "Nombre completo : {$u['nombre_completo']}\n";
+  $txt .= "Fecha nacimiento: {$u['fecha_nacimiento']}\n";
+  $txt .= "RUT / DNI       : {$u['rut_dni']}\n";
+  $txt .= "País / Región / Ciudad: {$u['nombre_pais']} / ".
+          "{$u['nombre_region_estado']} / {$u['nombre_ciudad_comuna']}\n";
+  $txt .= "Dirección       : {$u['direccion']}\n";
+  $txt .= "Iglesia/Ministerio : {$u['iglesia_ministerio']}\n";
+  $txt .= "Profesión/Oficio  : {$u['profesion_oficio_estudio']}\n";
+  $txt .= "Ocupaciones       : ".implode(', ',$u['ocupaciones'])."\n";
+
+  /* teléfonos */
+  foreach($u['telefonos'] as $t){
+     $tag = $t['es_principal']?' (principal)':'';
+     $txt.="Teléfono         : {$t['telefono']}".
+           ($t['descripcion']?" ({$t['descripcion']})":'').$tag."\n";
+  }
+  $txt .= "Correo electrónico: {$u['correo_electronico']}\n";
+
+  /* admisión extra (solo nuevas altas)  */
+  if($tipo==='alta' && isset($u['admision'])){
+      $a=$u['admision'];
+      $txt.="\n--- Información admisión ---\n";
+      $txt.="Experiencia liderazgo : ".$a['liderazgo']."\n";
+      $txt.="¿Cómo nos conoció?    : ".$a['nos_conoces']."\n";
+      $txt.="Propósito             : ".$a['proposito']."\n";
+      $txt.="Motivación (1-5)      : ".$a['motivacion']."\n";
+  }
+
+  /* retirados extra (solo bajas) */
+  if($tipo==='baja' && isset($extra['razon'])){
+      $txt.="\nRazón del retiro: ".$extra['razon']."\n";
+  }
+
+    /* ---------- versión HTML responsiva ---------- */
+    // ——— variables auxiliares ———
+    $ocupacionesStr = implode(', ', $u['ocupaciones']);
+    $anioActual     = date('Y');
+
+    /* 1-a) filas básicas ------------------------------------------------ */
+    $rows = [
+    ['Nombre completo:',          $u['nombre_completo']],
+    ['Fecha nacimiento:',         $u['fecha_nacimiento']],
+    ['RUT / DNI:',                $u['rut_dni']],
+    ['Ubicación:',                "{$u['nombre_pais']} / {$u['nombre_region_estado']} / {$u['nombre_ciudad_comuna']}"],
+    ['Dirección:',                $u['direccion']],
+    ['Iglesia / Ministerio:',     $u['iglesia_ministerio']],
+    ['Profesión / Oficio:',       $u['profesion_oficio_estudio']],
+    ['Ocupaciones:',              $ocupacionesStr],
+    ];
+
+    /* 1-b) teléfonos ---------------------------------------------------- */
+    foreach ($u['telefonos'] as $t){
+        $tag = $t['es_principal'] ? ' (principal)' : '';
+        $rows[] = [
+            'Teléfono:',
+            $t['telefono'] .
+            ($t['descripcion'] ? " ({$t['descripcion']})" : '') .
+            $tag
+        ];
+    }
+
+    /* 1-c) render a <tr> … --------------------------------------------- */
+    $rowsHtml = '';
+    foreach ($rows as [$lbl,$val]){
+        $rowsHtml .= "<tr><td class=\"label\">$lbl</td><td>$val</td></tr>";
+    }
+
+    /* ─── Información de admisión (se convierte en filas de la misma tabla) ─── */
+    if ($tipo === 'alta' && isset($u['admision'])){
+        $a = $u['admision'];
+        $admRows = [
+            ['Experiencia liderazgo:', $a['liderazgo']],
+            ['¿Cómo nos conoció?:',    $a['nos_conoces']],
+            ['Propósito:',             $a['proposito']],
+            ['Motivación (1-5):',      $a['motivacion']],
+        ];
+        foreach ($admRows as [$lbl,$val]){
+            $rowsHtml .= "<tr><td class=\"label\">$lbl</td><td>$val</td></tr>";
+        }
+    }
+
+    $retHtml = ($tipo === 'baja' && isset($extra['razon']))
+            ? "<p style=\"margin-top:22px\"><strong>Razón del retiro:</strong> {$extra['razon']}</p>"
+            : '';
+
+    $html = <<<HTML
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{$asunto}</title>
+    <style>
+    body{margin:0;padding:0;background:#f6f8fc;font-family:'Poppins',Arial,Helvetica,sans-serif;color:#111;}
+    .container{max-width:600px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;}
+    .header{background:#ff6b00;color:#fff;padding:22px 18px;text-align:center;font-size:1.15rem;font-weight:600;}
+    .content{padding:26px;font-size:.92rem;line-height:1.45}
+    .info{width:100%;border-collapse:collapse;font-size:.92rem;line-height:1.45}
+    .info td{padding:4px 0;vertical-align:top}
+    .info tr:not(:last-child) td{padding-bottom:6px}
+    .label{width:165px;font-weight:600;color:#ff6b00;padding-right:8px}
+    .footer{background:#fff4e6;font-size:.8rem;color:#555;text-align:center;padding:14px}
+    @media(max-width:500px){
+        .label{width:auto;display:block;padding-right:0;margin-bottom:2px}
+    }
+    </style>
+    </head>
+    <body>
+    <div class="container">
+        <div class="header">{$asunto}</div>
+
+        <div style="text-align:center">
+            <img src="cid:logoEC" alt="Evangelio Creativo" style="max-width:140px;margin:18px auto 0;display:block">
+        </div>
+
+        <div class="content">
+        <p><strong>Detalle del usuario</strong></p>
+
+        <table class="info" role="presentation" cellpadding="0" cellspacing="0" border="0">
+            {$rowsHtml}
+        </table>
+
+        {$retHtml}
+        </div>
+
+        <div class="footer">© Evangelio Creativo – {$anioActual}</div>
+    </div>
+    </body>
+    </html>
+    HTML;
+
+  /* ---- envío con una única conexión SMTP ---- */
+  $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+  /* ── NUEVO ── */
+  $mail->CharSet  = 'UTF-8';      // asunto y cuerpo en UTF-8
+  $mail->Encoding = 'base64';     // codificación sugerida para textos largos
+  try{
+     $mail->isSMTP();
+     $mail->Host       = 'smtp.gmail.com';
+     $mail->SMTPAuth   = true;
+     $mail->Username   = 'actividades.evangeliocreativo@gmail.com';
+     $mail->Password   = 'vwsgpbigmyqaknpc';
+     $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+     $mail->Port       = 587;
+
+     $mail->setFrom('actividades.evangeliocreativo@gmail.com','Evangelio Creativo');
+     foreach($toList as $dir) $mail->addAddress($dir);
+
+     $mail->addEmbeddedImage(__DIR__.'/images/LogoEC.png', 'logoEC');
+
+     $mail->isHTML(true);
+
+     $mail->Subject = $asunto;
+     $mail->Body    = $html;   // versión HTML responsiva
+     $mail->AltBody = $txt;    // texto plano de respaldo
+     $mail->send();
+  }catch(\PHPMailer\PHPMailer\Exception $e){
+     error_log('[Mail] '.$mail->ErrorInfo);   // no interrumpe la API
+  }
+}
+
 define('UPLOADS_FOTOS_DIR', realpath(__DIR__.'/uploads/fotos'));
 
 /* Privilegios solicitante ───────────────────── */
@@ -1035,7 +1307,7 @@ try {
             $old->execute([':id'=>$id]);
             $path = $old->fetchColumn();
 
-            $baseDir = realpath(__DIR__.'UPLOADS_FOTOS_DIR');   // carpeta segura
+            $baseDir = UPLOADS_FOTOS_DIR;   // ruta absoluta ya resuelta en la constante
             if ($path) {
                 $real = realpath($path);
                 /*  Abortamos si el archivo está fuera de /uploads/fotos  */
@@ -1163,6 +1435,16 @@ try {
         /* 4) Equipos / proyectos */
         if (!empty($_POST['equip'])) {
             $rows = json_decode($_POST['equip'], true) ?: [];
+            /* equipos activos ANTES de editar */
+            $prevEq = $pdo->prepare("
+                SELECT id_equipo_proyecto
+                    FROM integrantes_equipos_proyectos
+                WHERE id_usuario = ?
+                    AND habilitado = 1");
+            $prevEq->execute([$id]);
+            $__eq_prev = $prevEq->fetchAll(PDO::FETCH_COLUMN);
+            $__eq_newAlta = [];          // se llenará dentro del foreach
+
             foreach ($rows as $r) {
                 $eq  = (int)$r['eq'];   $rol = (int)$r['rol'];
                 if (!$eq || !$rol) continue;
@@ -1203,6 +1485,7 @@ try {
                         ->execute([':u'=>$id,':e'=>$eq,':r'=>$rol]);
 
                     $iepId = $pdo->lastInsertId();
+                    $__eq_newAlta[] = $eq;   // lo guardamos para email
                     insertar_historial($pdo,$iepId);
                 }
             }
@@ -1299,6 +1582,27 @@ try {
         }
 
       $pdo->commit();
+
+      /* ─── envíos solo por los equipos añadidos ─── */
+      $__userInfo = ($__eq_newAlta) ? getUserFullInfo($id,$pdo) : null;
+      foreach($__eq_newAlta as $nEq){
+      $rowEq = $pdo->query("
+              SELECT nombre_equipo_proyecto, es_equipo
+              FROM equipos_proyectos
+              WHERE id_equipo_proyecto = $nEq")->fetch(PDO::FETCH_ASSOC);
+      notificarEquipo(
+              'alta',
+              $nEq,
+              $__userInfo,
+              [
+              'eqNom'     => $rowEq['nombre_equipo_proyecto'],
+              'es_equipo' => $rowEq['es_equipo'],
+              'razon'     => null
+              ],
+              $pdo
+      );
+      }
+
       echo json_encode(['ok'=>true]);
       break;
   }
@@ -1330,6 +1634,19 @@ try {
     /* ════════════════ 7) ELIMINAR VÍNCULO / RETIRO ════════════════ */
   case 'POST:eliminar': {
     $iep  = (int)($_POST['iep']   ?? 0);
+
+    /* capturamos datos para mailing ANTES de tocar nada */
+    $__delDatos = $pdo->prepare("
+        SELECT iep.id_usuario,
+                ep.id_equipo_proyecto,
+                ep.nombre_equipo_proyecto,
+                ep.es_equipo
+        FROM integrantes_equipos_proyectos iep
+        JOIN equipos_proyectos ep USING(id_equipo_proyecto)
+        WHERE iep.id_integrante_equipo_proyecto = ?");
+    $__delDatos->execute([$iep]);
+    $__delDatos = $__delDatos->fetch(PDO::FETCH_ASSOC);
+
     $forceret = (int)($_POST['force'] ?? 0);          // 1 = retiro confirmado
     $motivo   = trim($_POST['motivo'] ?? '');
     $difunto  = (int)($_POST['difunto'] ?? 0);
@@ -1454,7 +1771,23 @@ try {
                 ':dif' => $difunto
             ]);
 
+    $__razonRet = $motivo;
     $pdo->commit();
+
+    /* correo de BAJA */
+    $__usrInfo = getUserFullInfo($__delDatos['id_usuario'],$pdo);
+    notificarEquipo(
+    'baja',
+    $__delDatos['id_equipo_proyecto'],
+    $__usrInfo,
+    [
+        'eqNom'     => $__delDatos['nombre_equipo_proyecto'],
+        'es_equipo' => $__delDatos['es_equipo'],
+        'razon'     => $forceret ? $__razonRet : null
+    ],
+    $pdo
+    );
+
     echo json_encode(['ok'=>true,'retirado'=>1]);
     break;
   }
@@ -1489,6 +1822,14 @@ try {
         $iep = $pdo->lastInsertId();
     }
 
+    $__mail_accion   = 'alta';
+    $__mail_eqId     = $eq;
+    $__mail_eqNombre = $pdo->query("
+        SELECT nombre_equipo_proyecto, es_equipo
+            FROM equipos_proyectos
+            WHERE id_equipo_proyecto = $eq")->fetch(PDO::FETCH_ASSOC);
+    $__mail_userInfo = getUserFullInfo($id,$pdo);   // ← id del re-ingresado
+
     /* b)  inserta historial estado “5 = Nuevo” */
     $per = $pdo->query("SELECT get_period_id(CURDATE())")->fetchColumn();
     $pdo->prepare("INSERT INTO historial_estados_actividad
@@ -1507,6 +1848,19 @@ try {
     $pdo->prepare("DELETE FROM retirados WHERE id_usuario=:u")->execute([':u'=>$id]);
 
     $pdo->commit();
+
+    notificarEquipo(
+        $__mail_accion,
+        $__mail_eqId,
+        $__mail_userInfo,
+        [
+        'eqNom'     => $__mail_eqNombre['nombre_equipo_proyecto'],
+        'es_equipo' => $__mail_eqNombre['es_equipo'],
+        'razon'     => null
+        ],
+        $pdo
+    );
+
     echo json_encode(['ok'=>true]);
     break;
   }
@@ -1519,6 +1873,10 @@ try {
     if(!$uid||!$eq||!$rol) throw new Exception('params');
 
     $pdo->beginTransaction();
+
+    /* ► capturamos TODO (incluida admisión) para el e-mail */
+    $__mail_userInfo = getUserFullInfo($uid, $pdo);
+
     /* 1. borra de admisión y (si existe) de retirados */
     $pdo->prepare("DELETE FROM admision  WHERE id_usuario=?")->execute([$uid]);
     $pdo->prepare("DELETE FROM retirados WHERE id_usuario=?")->execute([$uid]);
@@ -1529,6 +1887,14 @@ try {
           VALUES (?,?,?,1)")
         ->execute([$uid,$eq,$rol]);
     $iep = $pdo->lastInsertId();
+
+    /* ► lista para mailing */
+    $__mail_accion   = 'alta';
+    $__mail_eqId     = $eq;
+    $__mail_eqNombre = $pdo->query("
+        SELECT nombre_equipo_proyecto, es_equipo
+            FROM equipos_proyectos
+            WHERE id_equipo_proyecto = $eq")->fetch(PDO::FETCH_ASSOC);
 
     /* 3. historial estado «5 = Nuevo» */
     $per=$pdo->query("SELECT get_period_id(CURDATE())")->fetchColumn();
@@ -1542,6 +1908,20 @@ try {
                     WHERE id_usuario=?")->execute([$uid]);
 
     $pdo->commit();
+
+    /* — ENVÍO de correo una vez confirmado el commit — */
+    notificarEquipo(
+        $__mail_accion,
+        $__mail_eqId,
+        $__mail_userInfo,
+        [
+        'eqNom'     => $__mail_eqNombre['nombre_equipo_proyecto'],
+        'es_equipo' => $__mail_eqNombre['es_equipo'],
+        'razon'     => null
+        ],
+        $pdo
+    );
+
     echo json_encode(['ok'=>true]);
     break;
   }
