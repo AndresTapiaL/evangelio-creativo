@@ -847,7 +847,7 @@ $admins = $admins->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!-- // BEGIN MOD 6 : admins -->
 <section>
-  <h2>Acceso de usuarios a boletería</h2>
+  <h2>Administradores</h2>
 
   <button id="btnAddAdm">➕ Añadir administrador</button>
 
@@ -959,6 +959,12 @@ function editTicket(t){
 <section>
  <h2>Inscritos (<?=$totalIns?>/<?=$totalCupo?>)</h2>
  <button id="btnAddUsr">➕ Añadir inscripción</button>
+ <a href="ticket_resumen.php?evt=<?=$idEvento?>"  class="action-btn" style="margin-left:.6rem">
+    <i class="fa-solid fa-table-list"></i> Resumen
+ </a>
+ <a href="ticket_escaneados.php?evt=<?=$idEvento?>" class="action-btn" style="margin-left:.6rem">
+    <i class="fa-solid fa-barcode"></i> Escaneados
+ </a>
  <button id="btnZip" class="action-btn" style="margin-left:.6rem">
    <i class="fa-solid fa-file-zipper"></i> Descargar QRs
  </button>

@@ -14,16 +14,15 @@
         --naranjo:  #ff3600;
         --amarillo: #fee920;
         --rojo:     #d60000;
-        --blanco:   #e1e5ea;
+        --blanco:   #ffffff;   /* blanco puro para textos sobre naranjo */
 
         --primary  : #005ad4;
         --primary-t: var(--naranjo);
         --border   : #d0d7e2;
-        --bg-card  : var(--card-bg);
+        --card-bg  : #ff6600;          /* naranjo un poco más claro */
         --bg-page  : #f7f9fc;
         --text-600 : #1d2939;
         --text-500 : #475467;
-        --card-bg  : var(--naranjo);   /* fondo de las tarjetas */
         --card-fg  : var(--blanco);    /* texto encima del naranjo */
         --legend-bg: var(--rojo);      /* tira detrás de cada <legend> */
         --ph-light : #000000;   /* gris medio: contraste sobre blanco      */
@@ -32,6 +31,7 @@
         --radius   : 12px;
         --gap      : 1rem;
         --gap-s    : .6rem;
+        --err: #8f0000;      /* texto de mensajes de error */
         }
 
         /* -------- layout ------------ */
@@ -217,11 +217,12 @@
         .phone-row select{width:100%;}            /* descripción = 170px        */
 
         /* —— mensaje de error bajo la fila —— */
+        .err-msg{color:var(--err); font-size:.8rem; margin-top:.2rem;}
         .phone-row .err-msg{
-            grid-column:1 / -1;                   /* ocupa ambas columnas       */
-            margin:0;                             /* sin margen lateral         */
-            padding-left:calc(2.4rem + .2rem);    /* alinea bajo el número      */
-            color:#e03131;
+            grid-column:1 / -1;
+            margin:0;
+            padding-left:calc(2.4rem + .2rem);
+            color:var(--err);         /* antes #e03131 */
             display:block;
         }
 
@@ -282,15 +283,19 @@
             border-color:#e03131;
             background:#fff5f5;
         }
-        .err-msg{color:#e03131;font-size:.8rem;margin-top:.2rem}
 
         .btn-bar{text-align:center;margin-top:2rem}
         .btn-prim{
-        background:var(--primary);color:#fff;border:0;border-radius:8px;
-        padding:.7rem 2.2rem;font:500 1rem/1 var(--font-head,Poppins);cursor:pointer;
-        transition:.2s;
+            background:var(--rojo);       /* rojo oscuro, igual que <legend> */
+            color:#fff;
+            border:0;
+            border-radius:8px;
+            padding:.7rem 2.2rem;
+            font:500 1rem/1 var(--font-head,Poppins);
+            cursor:pointer;
+            transition:.2s;
         }
-        .btn-prim:hover{background:#004bb3;transform:translateY(-1px)}
+        .btn-prim:hover{background:var(--naranjo);transform:translateY(-1px)}
         .btn-prim:active{transform:none}
 
         /* ═════════════════  MOBILE FIRST  ═════════════════
@@ -333,22 +338,6 @@
             .choices.horizontal{flex-wrap:wrap;gap:.5rem;}
         }
 
-        @media (prefers-color-scheme:dark){
-        :root{
-            --card-bg  : #19223b;
-            --legend-bg: #005ad4;
-            --card-fg  : #e1e5ea;
-            --bg-card:var(--naranjo);
-            --bg-page:#111727;
-            --border:#26304f;
-            --text-600:#e6e9f0;
-            --text-500:#aeb6cf;
-            --ph-light : #505050;      /* placeholder siempre negro */
-            --ph-dark  : #cbd5e1;   /* gris claro: contraste sobre azul oscuro */
-        }
-        .btn-prim:hover{background:#3878ff}
-        }
-
         #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
         background:rgba(250,252,255,.65);backdrop-filter:blur(3px);z-index:1000}
         #overlay.hidden{display:none}
@@ -385,8 +374,18 @@
 
         /* errores de todo el cuestionario siempre en bloque y debajo  */
         .q-field .err-msg{display:block;margin:.35rem 0 0 0}
-
-        /* (por si alguno ya existía con display:inline)              */
+        /* ——— chips sobre fondo naranjo: texto y borde en blanco ——— */
+        .chips label{
+            color:#fff;              /* texto blanco                        */
+            border-color:#fff;       /* borde blanco                        */
+        }
+        .chips input:checked+span,
+        .chips input:checked ~ span{
+            /* cuando el chip está marcado: mantiene el fondo naranjo       */
+            background:var(--primary-t);
+            color:#fff;              /* texto blanco sobre naranjo          */
+            border-color:#fff;       /* borde blanco                        */
+        }
     </style>
 </head>
 <body>
@@ -677,6 +676,53 @@
         href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">
     <script defer
             src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
+
+    <!-- 👉 1) UUID persistente -->
+    <script type="module">
+    import { v4 as uuidv4 } from 'https://cdn.jsdelivr.net/npm/uuid@9.0.0/dist/esm-browser/index.js';
+
+    const FORM = document.getElementById('form-admision');
+
+    /* genera / recupera device_id */
+    function getDeviceId () {
+    let id = localStorage.getItem('ec_device_id');
+    if (!id) {
+        id = uuidv4();
+        localStorage.setItem('ec_device_id', id);
+        document.cookie = `ec_device_id=${id}; path=/; max-age=31536000; SameSite=Lax`;
+    }
+    return id;
+    }
+
+    /* lo insertamos apenas cargue la página */
+    const did = getDeviceId();
+    const inpDev = document.createElement('input');
+    inpDev.type  = 'hidden';
+    inpDev.name  = 'device_id';
+    inpDev.value = did;
+    FORM.appendChild(inpDev);
+    </script>
+
+    <!-- 👉 2) FingerprintJS OSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
+    <script>
+    /* se carga en paralelo; si falla, simplemente no se envía fp_id */
+    FingerPrintInit: (async () => {
+    try{
+            const fp  = await FingerprintJS.load();
+            const res = await fp.get();
+            const id  = res.visitorId;
+
+            const inp = document.createElement('input');
+            inp.type  = 'hidden';
+            inp.name  = 'fp_id';
+            inp.value = id;
+            document.getElementById('form-admision').appendChild(inp);
+    }catch(err){
+            console.warn('[FPJS]', err);    // opcional
+    }
+    })();
+    </script>
 
     <!--  ↓↓↓  copia/pega tal cual el bloque utilidades de integrantes.js ↓↓↓  -->
     <script src="admision.js"></script>

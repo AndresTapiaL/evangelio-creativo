@@ -52,11 +52,17 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body {
-      font-family: sans-serif;
-      background: #f6f6f6;
-      margin: 0;
-      padding: 2rem;
+    /* ===== Reset + body idénticos a ticket_detalle.php ===== */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+
+    body{
+      font:400 15px/1.55 "Poppins",system-ui,sans-serif;
+      background:var(--bg-main);
+      color:var(--negro);
+      margin:0;      /* sin márgenes */
+      padding:0;     /* ❗ quita los 2 rem que empujaban el nav */
+      min-height:100vh;
     }
     .container {
       max-width: 800px;

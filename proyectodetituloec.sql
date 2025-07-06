@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 02-07-2025 a las 10:38:35
+-- Tiempo de generación: 06-07-2025 a las 02:39:40
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -355,10 +355,7 @@ CREATE TABLE `admision` (
 --
 
 INSERT INTO `admision` (`id_usuario`, `id_estado_admision`, `liderazgo`, `nos_conoces`, `proposito`, `motivacion`) VALUES
-(4, 4, 'LO', 'Por un amigo/familiar', 'Aprender de evangelismo', 3),
-(11, 7, '', '', '', 0),
-(137, 4, NULL, NULL, NULL, NULL),
-(142, 4, NULL, 'Por un amigo/familiar', 'Aprender de evangelismo; Crecer espiritualmente; Comparto la Visión; Aportar con dones; Redes con mi iglesia', 1);
+(4, 4, 'LO', 'Por un amigo/familiar', 'Aprender de evangelismo', 3);
 
 -- --------------------------------------------------------
 
@@ -368,6 +365,8 @@ INSERT INTO `admision` (`id_usuario`, `id_estado_admision`, `liderazgo`, `nos_co
 
 CREATE TABLE `admision_envios` (
   `id_envio` int(10) UNSIGNED NOT NULL,
+  `device_id` char(36) NOT NULL,
+  `fp_id` varchar(32) DEFAULT NULL,
   `ip` varchar(45) NOT NULL,
   `fecha` date NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -376,15 +375,42 @@ CREATE TABLE `admision_envios` (
 -- Volcado de datos para la tabla `admision_envios`
 --
 
-INSERT INTO `admision_envios` (`id_envio`, `ip`, `fecha`) VALUES
-(8, '192.168.1.12', '2025-06-26'),
-(1, '::1', '2025-06-25'),
-(2, '::1', '2025-06-25'),
-(3, '::1', '2025-06-26'),
-(4, '::1', '2025-06-26'),
-(5, '::1', '2025-06-26'),
-(6, '::1', '2025-06-26'),
-(7, '::1', '2025-06-26');
+INSERT INTO `admision_envios` (`id_envio`, `device_id`, `fp_id`, `ip`, `fecha`) VALUES
+(1, '', NULL, '::1', '2025-06-25'),
+(2, '', NULL, '::1', '2025-06-25'),
+(3, '', NULL, '::1', '2025-06-26'),
+(4, '', NULL, '::1', '2025-06-26'),
+(5, '', NULL, '::1', '2025-06-26'),
+(6, '', NULL, '::1', '2025-06-26'),
+(7, '', NULL, '::1', '2025-06-26'),
+(8, '', NULL, '192.168.1.12', '2025-06-26'),
+(9, '', NULL, '192.168.1.11', '2025-07-03'),
+(10, '', NULL, '192.168.1.11', '2025-07-03');
+
+--
+-- Disparadores `admision_envios`
+--
+DELIMITER $$
+CREATE TRIGGER `trg_adm_envios_BI` BEFORE INSERT ON `admision_envios` FOR EACH ROW BEGIN
+    DECLARE v_tot INT DEFAULT 0;
+
+    /* cuenta envíos del mismo día que coincidan con *cualquiera*
+       de los dos identificadores */
+    SELECT COUNT(*) INTO v_tot
+      FROM admision_envios
+     WHERE fecha       = CURDATE()
+       AND (
+             device_id = NEW.device_id
+             OR (NEW.fp_id IS NOT NULL AND fp_id = NEW.fp_id)
+           );
+
+    IF v_tot >= 5 THEN
+        SIGNAL SQLSTATE '45000'
+              SET MESSAGE_TEXT = 'Máx 5 envíos por dispositivo al día.';
+    END IF;
+END
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -417,7 +443,7 @@ INSERT INTO `asistencias` (`id_usuario`, `id_evento`, `id_estado_previo_asistenc
 (1, 36, NULL, 3, 7, NULL),
 (1, 49, NULL, 1, 10, NULL),
 (1, 50, 3, 3, 1, NULL),
-(1, 53, 3, NULL, NULL, NULL),
+(1, 53, 2, NULL, NULL, NULL),
 (3, 3, 1, 2, NULL, NULL),
 (3, 53, 2, NULL, NULL, NULL),
 (4, 4, 2, 3, 4, NULL),
@@ -425,11 +451,17 @@ INSERT INTO `asistencias` (`id_usuario`, `id_evento`, `id_estado_previo_asistenc
 (4, 25, 1, 2, NULL, NULL),
 (4, 53, 3, NULL, NULL, NULL),
 (5, 5, 1, 2, NULL, NULL),
-(90, 53, 3, NULL, NULL, NULL),
-(110, 53, 3, NULL, NULL, NULL),
+(11, 19, 3, NULL, NULL, NULL),
+(11, 53, 3, NULL, NULL, NULL),
 (111, 53, 3, NULL, NULL, NULL),
 (136, 19, 3, NULL, NULL, NULL),
-(136, 53, 3, NULL, NULL, NULL);
+(136, 53, 3, NULL, NULL, NULL),
+(137, 19, 3, NULL, NULL, NULL),
+(137, 53, 3, NULL, NULL, NULL),
+(143, 19, 3, NULL, NULL, NULL),
+(143, 53, 3, NULL, NULL, NULL),
+(144, 19, 3, NULL, NULL, NULL),
+(144, 53, 3, NULL, NULL, NULL);
 
 --
 -- Disparadores `asistencias`
@@ -551,12 +583,14 @@ CREATE TABLE `correos_electronicos` (
 
 INSERT INTO `correos_electronicos` (`correo_electronico`, `id_usuario`, `boletin`, `verified`, `verify_token`, `token_expires`) VALUES
 ('2222@example.com', 110, 1, 0, NULL, NULL),
+('a@example.com', 144, 1, 0, NULL, NULL),
 ('aa@gmexample.com', 141, 1, 0, NULL, NULL),
 ('and.tapia.2001@gmail.com', 1, 1, 1, NULL, NULL),
 ('D@gmail.com', 5, 1, 0, NULL, NULL),
 ('dfghjk@gmail.com', 96, 1, 0, NULL, NULL),
 ('fu@example.com', 137, 1, 0, NULL, NULL),
 ('jk@gmail.com', 105, 1, 0, NULL, NULL),
+('l@example.com', 143, 1, 0, NULL, NULL),
 ('leonardo.tapia.2001@gmail.com', 3, 1, 1, NULL, NULL),
 ('leonardoelias.tapia@alumnos.ulagos.cl', 142, 1, 0, NULL, NULL),
 ('N@example.com', 111, 1, 0, NULL, NULL),
@@ -906,16 +940,24 @@ INSERT INTO `eventos` (`id_evento`, `nombre_evento`, `lugar`, `descripcion`, `ob
 (50, 'Avance 2 - Ejemplo 2', 'Ulagos', 'Tesis', 'Llevar PC', 1, 4, 1, 1, 0, 0, '2025-06-01 02:00:00', '2025-06-01 02:30:00'),
 (51, 'Ruta de Amor', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', NULL, 1, 3, 1, 1, 0, 0, '2025-06-26 19:00:00', '2025-06-26 19:15:00'),
 (52, 'EJEMPLO Asistencias', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', '', 3, 3, 1, 1, 0, 0, '2025-06-14 19:00:00', '2025-06-15 00:30:00'),
-(53, 'EJEMPLO Asistencias - 2', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'jhghjk', 1, 3, 1, NULL, 0, 0, '2025-07-17 19:00:00', '2025-07-18 00:30:00');
+(53, 'EJEMPLO Asistencias - 2', 'Terminal de Buses, Concepción', 'Evangelismo persona a persona', 'jhghjk', 1, 3, 1, NULL, 0, 1, '2025-07-17 19:00:00', '2025-07-18 00:30:00');
 
 --
 -- Disparadores `eventos`
 --
 DELIMITER $$
 CREATE TRIGGER `trg_evento_boleteria_off_AU` AFTER UPDATE ON `eventos` FOR EACH ROW BEGIN
+    /* 1) boletería pasa de “activa” a “inactiva” */
     IF OLD.boleteria_activa = 1 AND NEW.boleteria_activa = 0 THEN
-        /* FK ON DELETE CASCADE se encarga de horarios, scans, usuarios */
+
+        /* — Tickets, horarios, scans y usuarios —
+           (cascada ya configurada)                       */
         DELETE FROM eventos_tickets
+         WHERE id_evento = NEW.id_evento;
+
+        /* — NUEVO —  
+           borra todos los admins ligados a la boletería  */
+        DELETE FROM ticket_admins
          WHERE id_evento = NEW.id_evento;
     END IF;
 END
@@ -1035,6 +1077,13 @@ CREATE TABLE `eventos_tickets` (
   `activo` tinyint(1) DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `eventos_tickets`
+--
+
+INSERT INTO `eventos_tickets` (`id_evento_ticket`, `id_evento`, `nombre_ticket`, `descripcion`, `precio_clp`, `cupo_total`, `activo`) VALUES
+(7, 53, 'Semilla', 'lorem ipsun', 6000, 5, 1);
+
 -- --------------------------------------------------------
 
 --
@@ -1068,7 +1117,7 @@ INSERT INTO `historial_estados_actividad` (`id_historial_estado_actividad`, `id_
 (26, 4, 1, 6, '2025-04-30'),
 (27, 6, 1, 3, '2024-12-31'),
 (29, 5, 6, 7, '2025-06-16'),
-(35, 11, 6, 7, '2025-06-16'),
+(35, 11, 1, 7, '2025-08-31'),
 (37, 3, 5, 7, '2025-06-16'),
 (39, 12, 6, 7, '2025-06-19'),
 (42, 13, 6, 7, '2025-06-16'),
@@ -1077,12 +1126,18 @@ INSERT INTO `historial_estados_actividad` (`id_historial_estado_actividad`, `id_
 (63, 16, 6, 7, '2025-06-26'),
 (64, 17, 5, 7, '2025-06-26'),
 (65, 18, 5, 7, '2025-06-26'),
-(66, 19, 5, 7, '2025-06-26'),
-(67, 20, 5, 7, '2025-06-26'),
+(66, 19, 6, 7, '2025-07-03'),
+(67, 20, 6, 7, '2025-07-03'),
 (71, 21, 5, 7, '2025-06-26'),
 (77, 24, 5, 7, '2025-06-26'),
 (78, 25, 6, 7, '2025-06-26'),
-(81, 26, 5, 7, '2025-06-30');
+(81, 26, 5, 7, '2025-06-30'),
+(82, 27, 6, 7, '2025-07-03'),
+(84, 28, 5, 7, '2025-07-03'),
+(86, 29, 5, 7, '2025-07-03'),
+(87, 30, 5, 7, '2025-07-03'),
+(89, 31, 5, 7, '2025-07-03'),
+(90, 32, 5, 7, '2025-07-03');
 
 -- --------------------------------------------------------
 
@@ -1108,7 +1163,7 @@ INSERT INTO `integrantes_equipos_proyectos` (`id_integrante_equipo_proyecto`, `i
 (4, 4, 5, 5, 1),
 (5, 5, 1, 4, 0),
 (6, 1, 5, 4, 1),
-(9, 1, 4, 5, 1),
+(9, 1, 4, 4, 1),
 (10, 1, 19, 5, 0),
 (11, 3, 1, 5, 1),
 (12, 5, 20, 5, 0),
@@ -1118,12 +1173,18 @@ INSERT INTO `integrantes_equipos_proyectos` (`id_integrante_equipo_proyecto`, `i
 (16, 96, 4, 5, 0),
 (17, 5, 16, 5, 1),
 (18, 111, 4, 5, 1),
-(19, 90, 4, 5, 1),
-(20, 110, 4, 5, 1),
+(19, 90, 4, 5, 0),
+(20, 110, 4, 5, 0),
 (21, 96, 22, 5, 1),
 (24, 140, 18, 5, 1),
 (25, 141, 21, 5, 0),
-(26, 136, 4, 5, 1);
+(26, 136, 4, 5, 1),
+(27, 142, 5, 5, 0),
+(28, 1, 33, 4, 1),
+(29, 137, 4, 5, 1),
+(30, 11, 4, 5, 1),
+(31, 143, 4, 5, 1),
+(32, 144, 4, 5, 1);
 
 --
 -- Disparadores `integrantes_equipos_proyectos`
@@ -1637,6 +1698,39 @@ INSERT INTO `resumen_justificaciones_integrantes_periodo` (`id_usuario`, `id_jus
 (5, 11, 6, 0, 0.00),
 (5, 11, 7, 0, 0.00),
 (5, 11, 9, 0, 0.00),
+(11, 1, 5, 0, 0.00),
+(11, 1, 6, 0, 0.00),
+(11, 1, 9, 0, 0.00),
+(11, 2, 5, 0, 0.00),
+(11, 2, 6, 0, 0.00),
+(11, 2, 9, 0, 0.00),
+(11, 3, 5, 0, 0.00),
+(11, 3, 6, 0, 0.00),
+(11, 3, 9, 0, 0.00),
+(11, 4, 5, 0, 0.00),
+(11, 4, 6, 0, 0.00),
+(11, 4, 9, 0, 0.00),
+(11, 5, 5, 0, 0.00),
+(11, 5, 6, 0, 0.00),
+(11, 5, 9, 0, 0.00),
+(11, 6, 5, 0, 0.00),
+(11, 6, 6, 0, 0.00),
+(11, 6, 9, 0, 0.00),
+(11, 7, 5, 0, 0.00),
+(11, 7, 6, 0, 0.00),
+(11, 7, 9, 0, 0.00),
+(11, 8, 5, 0, 0.00),
+(11, 8, 6, 0, 0.00),
+(11, 8, 9, 0, 0.00),
+(11, 9, 5, 0, 0.00),
+(11, 9, 6, 0, 0.00),
+(11, 9, 9, 0, 0.00),
+(11, 10, 5, 0, 0.00),
+(11, 10, 6, 0, 0.00),
+(11, 10, 9, 0, 0.00),
+(11, 11, 5, 0, 0.00),
+(11, 11, 6, 0, 0.00),
+(11, 11, 9, 0, 0.00),
 (90, 1, 5, 0, 0.00),
 (90, 1, 6, 0, 0.00),
 (90, 1, 9, 0, 0.00),
@@ -1813,6 +1907,39 @@ INSERT INTO `resumen_justificaciones_integrantes_periodo` (`id_usuario`, `id_jus
 (136, 11, 5, 0, 0.00),
 (136, 11, 6, 0, 0.00),
 (136, 11, 9, 0, 0.00),
+(137, 1, 5, 0, 0.00),
+(137, 1, 6, 0, 0.00),
+(137, 1, 9, 0, 0.00),
+(137, 2, 5, 0, 0.00),
+(137, 2, 6, 0, 0.00),
+(137, 2, 9, 0, 0.00),
+(137, 3, 5, 0, 0.00),
+(137, 3, 6, 0, 0.00),
+(137, 3, 9, 0, 0.00),
+(137, 4, 5, 0, 0.00),
+(137, 4, 6, 0, 0.00),
+(137, 4, 9, 0, 0.00),
+(137, 5, 5, 0, 0.00),
+(137, 5, 6, 0, 0.00),
+(137, 5, 9, 0, 0.00),
+(137, 6, 5, 0, 0.00),
+(137, 6, 6, 0, 0.00),
+(137, 6, 9, 0, 0.00),
+(137, 7, 5, 0, 0.00),
+(137, 7, 6, 0, 0.00),
+(137, 7, 9, 0, 0.00),
+(137, 8, 5, 0, 0.00),
+(137, 8, 6, 0, 0.00),
+(137, 8, 9, 0, 0.00),
+(137, 9, 5, 0, 0.00),
+(137, 9, 6, 0, 0.00),
+(137, 9, 9, 0, 0.00),
+(137, 10, 5, 0, 0.00),
+(137, 10, 6, 0, 0.00),
+(137, 10, 9, 0, 0.00),
+(137, 11, 5, 0, 0.00),
+(137, 11, 6, 0, 0.00),
+(137, 11, 9, 0, 0.00),
 (140, 1, 5, 0, 0.00),
 (140, 1, 6, 0, 0.00),
 (140, 1, 7, 0, 0.00),
@@ -1900,7 +2027,106 @@ INSERT INTO `resumen_justificaciones_integrantes_periodo` (`id_usuario`, `id_jus
 (141, 11, 5, 0, 0.00),
 (141, 11, 6, 0, 0.00),
 (141, 11, 7, 0, 0.00),
-(141, 11, 9, 0, 0.00);
+(141, 11, 9, 0, 0.00),
+(142, 1, 5, 0, 0.00),
+(142, 1, 6, 0, 0.00),
+(142, 1, 9, 0, 0.00),
+(142, 2, 5, 0, 0.00),
+(142, 2, 6, 0, 0.00),
+(142, 2, 9, 0, 0.00),
+(142, 3, 5, 0, 0.00),
+(142, 3, 6, 0, 0.00),
+(142, 3, 9, 0, 0.00),
+(142, 4, 5, 0, 0.00),
+(142, 4, 6, 0, 0.00),
+(142, 4, 9, 0, 0.00),
+(142, 5, 5, 0, 0.00),
+(142, 5, 6, 0, 0.00),
+(142, 5, 9, 0, 0.00),
+(142, 6, 5, 0, 0.00),
+(142, 6, 6, 0, 0.00),
+(142, 6, 9, 0, 0.00),
+(142, 7, 5, 0, 0.00),
+(142, 7, 6, 0, 0.00),
+(142, 7, 9, 0, 0.00),
+(142, 8, 5, 0, 0.00),
+(142, 8, 6, 0, 0.00),
+(142, 8, 9, 0, 0.00),
+(142, 9, 5, 0, 0.00),
+(142, 9, 6, 0, 0.00),
+(142, 9, 9, 0, 0.00),
+(142, 10, 5, 0, 0.00),
+(142, 10, 6, 0, 0.00),
+(142, 10, 9, 0, 0.00),
+(142, 11, 5, 0, 0.00),
+(142, 11, 6, 0, 0.00),
+(142, 11, 9, 0, 0.00),
+(143, 1, 5, 0, 0.00),
+(143, 1, 6, 0, 0.00),
+(143, 1, 9, 0, 0.00),
+(143, 2, 5, 0, 0.00),
+(143, 2, 6, 0, 0.00),
+(143, 2, 9, 0, 0.00),
+(143, 3, 5, 0, 0.00),
+(143, 3, 6, 0, 0.00),
+(143, 3, 9, 0, 0.00),
+(143, 4, 5, 0, 0.00),
+(143, 4, 6, 0, 0.00),
+(143, 4, 9, 0, 0.00),
+(143, 5, 5, 0, 0.00),
+(143, 5, 6, 0, 0.00),
+(143, 5, 9, 0, 0.00),
+(143, 6, 5, 0, 0.00),
+(143, 6, 6, 0, 0.00),
+(143, 6, 9, 0, 0.00),
+(143, 7, 5, 0, 0.00),
+(143, 7, 6, 0, 0.00),
+(143, 7, 9, 0, 0.00),
+(143, 8, 5, 0, 0.00),
+(143, 8, 6, 0, 0.00),
+(143, 8, 9, 0, 0.00),
+(143, 9, 5, 0, 0.00),
+(143, 9, 6, 0, 0.00),
+(143, 9, 9, 0, 0.00),
+(143, 10, 5, 0, 0.00),
+(143, 10, 6, 0, 0.00),
+(143, 10, 9, 0, 0.00),
+(143, 11, 5, 0, 0.00),
+(143, 11, 6, 0, 0.00),
+(143, 11, 9, 0, 0.00),
+(144, 1, 5, 0, 0.00),
+(144, 1, 6, 0, 0.00),
+(144, 1, 9, 0, 0.00),
+(144, 2, 5, 0, 0.00),
+(144, 2, 6, 0, 0.00),
+(144, 2, 9, 0, 0.00),
+(144, 3, 5, 0, 0.00),
+(144, 3, 6, 0, 0.00),
+(144, 3, 9, 0, 0.00),
+(144, 4, 5, 0, 0.00),
+(144, 4, 6, 0, 0.00),
+(144, 4, 9, 0, 0.00),
+(144, 5, 5, 0, 0.00),
+(144, 5, 6, 0, 0.00),
+(144, 5, 9, 0, 0.00),
+(144, 6, 5, 0, 0.00),
+(144, 6, 6, 0, 0.00),
+(144, 6, 9, 0, 0.00),
+(144, 7, 5, 0, 0.00),
+(144, 7, 6, 0, 0.00),
+(144, 7, 9, 0, 0.00),
+(144, 8, 5, 0, 0.00),
+(144, 8, 6, 0, 0.00),
+(144, 8, 9, 0, 0.00),
+(144, 9, 5, 0, 0.00),
+(144, 9, 6, 0, 0.00),
+(144, 9, 9, 0, 0.00),
+(144, 10, 5, 0, 0.00),
+(144, 10, 6, 0, 0.00),
+(144, 10, 9, 0, 0.00),
+(144, 11, 5, 0, 0.00),
+(144, 11, 6, 0, 0.00),
+(144, 11, 9, 0, 0.00);
 
 -- --------------------------------------------------------
 
@@ -1921,7 +2147,10 @@ CREATE TABLE `retirados` (
 --
 
 INSERT INTO `retirados` (`id_usuario`, `fecha_retiro`, `razon`, `ex_equipo`, `es_difunto`) VALUES
-(141, '2025-06-26', 'iuio', 'Ñuble', 0);
+(90, '2025-07-03', 'Jotita...', 'Biobío', 1),
+(110, '2025-07-03', 'Jota', 'Biobío', 1),
+(141, '2025-06-26', 'iuio', 'Ñuble', 0),
+(142, '2025-07-03', 'JOTA', 'Los Lagos', 1);
 
 -- --------------------------------------------------------
 
@@ -1975,8 +2204,12 @@ INSERT INTO `telefonos` (`id_usuario`, `telefono`, `es_principal`, `id_descripci
 (136, '+56555555555', 0, 4),
 (136, '+56777777777', 0, 1),
 (136, '+56999999999', 1, 1),
+(137, '+56988888888', 0, 1),
+(137, '+56999999999', 0, 4),
 (137, '+595777777777', 1, 3),
-(142, '+56977557010', 1, 3);
+(142, '+56977557010', 1, 3),
+(143, '+56984126585', 1, 3),
+(144, '+56989898989', 1, 1);
 
 -- --------------------------------------------------------
 
@@ -1988,6 +2221,14 @@ CREATE TABLE `ticket_admins` (
   `id_evento` int(11) NOT NULL,
   `id_usuario` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `ticket_admins`
+--
+
+INSERT INTO `ticket_admins` (`id_evento`, `id_usuario`) VALUES
+(53, 1),
+(53, 3);
 
 -- --------------------------------------------------------
 
@@ -2003,6 +2244,13 @@ CREATE TABLE `ticket_horarios` (
   `nombre_horario` varchar(60) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `ticket_horarios`
+--
+
+INSERT INTO `ticket_horarios` (`id_ticket_horario`, `id_evento`, `fecha_inicio`, `fecha_fin`, `nombre_horario`) VALUES
+(5, 53, '2025-07-02 17:19:00', '2025-07-04 17:19:00', 'General');
+
 -- --------------------------------------------------------
 
 --
@@ -2016,6 +2264,22 @@ CREATE TABLE `ticket_scans` (
   `es_ingreso` tinyint(1) NOT NULL,
   `scan_at` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `ticket_scans`
+--
+
+INSERT INTO `ticket_scans` (`id_ticket_scan`, `id_ticket_horario`, `id_ticket_usuario`, `es_ingreso`, `scan_at`) VALUES
+(7, 5, 14, 1, '2025-07-03 05:14:20'),
+(8, 5, 14, 0, '2025-07-03 05:15:35'),
+(9, 5, 14, 1, '2025-07-03 05:20:32'),
+(10, 5, 14, 0, '2025-07-03 05:22:30'),
+(11, 5, 14, 1, '2025-07-03 05:30:31'),
+(12, 5, 14, 0, '2025-07-03 05:30:38'),
+(13, 5, 14, 1, '2025-07-03 05:30:51'),
+(14, 5, 10, 1, '2025-07-03 19:00:43'),
+(15, 5, 10, 0, '2025-07-03 19:01:09'),
+(16, 5, 10, 1, '2025-07-03 19:01:48');
 
 --
 -- Disparadores `ticket_scans`
@@ -2092,6 +2356,16 @@ CREATE TABLE `ticket_usuario` (
   `contacto_emergencia` varchar(100) DEFAULT NULL,
   `qr_codigo` char(64) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `ticket_usuario`
+--
+
+INSERT INTO `ticket_usuario` (`id_ticket_usuario`, `id_evento_ticket`, `fecha_inscripcion`, `correo_electronico`, `nombre_completo`, `contacto`, `edad`, `credencial`, `acompanantes`, `extras`, `equipo`, `alimentacion`, `hospedaje`, `enfermedad`, `alergia`, `medicamentos`, `alimentacion_especial`, `contacto_emergencia`, `qr_codigo`) VALUES
+(10, 7, '2025-07-02 17:20:13', 'and.tapia.2001@gmail.com', 'Andrés Tapia', '+56987254068', 23, 'Sí', 'Leo y Pato', 'No', 'Los Lagos', 'Normal', 'Sí', 'Sí', 'Látex', 'Muchos', 'No', '+56987254068 - Leonor Loncón - Madre', '66f56cdb4bc909bea401a3580308bbab88a49468504844e312e941424a153d1b'),
+(11, 7, '2025-07-03 00:26:56', 'ana.hernandez@example.com', 'Andres2', '+56977777778', 0, '', '', '', '', '', '', '', '', '', '', '', 'bd7cbf5f005ec44340894a3ce30c52951b9ef2d4a46bdbf674f966b720dcd3e2'),
+(12, 7, '2025-07-03 00:27:40', 'juan.perez@example.com', 'Andres3', '+56987254068', 0, '', '', '', '', '', '', '', '', '', '', '', 'd195136949c5de0c06f0c9cfabb1f61944003e43840cec1b81a7031ffbb1363e'),
+(14, 7, '2025-07-03 00:28:05', 'pedro.martinez@example.com', 'Andres5', '+56987254068', 0, '', '', '', '', '', '', '', '', '', '', '', 'd47bfc7fe982bdcc3edc6874adab740d0f69ae16e53f8898bd36e415c4b14a10');
 
 --
 -- Disparadores `ticket_usuario`
@@ -2228,7 +2502,7 @@ CREATE TABLE `tokens_usuarios` (
 --
 
 INSERT INTO `tokens_usuarios` (`token`, `id_usuario`, `creado_en`, `expira_en`) VALUES
-('710b4a7567c6dba383098b26786ea009d44e8204813870e17106e3deb3dab0de', 1, '2025-07-02 00:12:55', '2025-07-02 13:37:11');
+('8915871e1053f7637a41e4a456e85c3eea912fe941e9ff7cf630ed25f4cfabcd', 3, '2025-07-03 22:54:36', '2025-07-04 05:56:54');
 
 --
 -- Disparadores `tokens_usuarios`
@@ -2286,21 +2560,23 @@ CREATE TABLE `usuarios` (
 --
 
 INSERT INTO `usuarios` (`id_usuario`, `nombres`, `apellido_paterno`, `apellido_materno`, `foto_perfil`, `fecha_nacimiento`, `rut_dni`, `id_pais`, `id_region_estado`, `id_ciudad_comuna`, `direccion`, `iglesia_ministerio`, `profesion_oficio_estudio`, `password`, `fecha_registro`, `ultima_actualizacion`) VALUES
-(1, 'Andrés Saúl', 'Tapia', 'Loncón', NULL, '2001-07-04', '206257660', 1, 6, 6, 'Polloico #2505', 'IMPCH - Iglesia Metodista Pentecostal de Chile - Rahue Alto Osorno', 'Estudiante de Ingeniería Civil en Informática', '$2y$10$1gSCMiWl0sNKkJlRgSvAoeg16qyyBNMNj6m4ex2oF03pjzWe8TmTu', '2024-01-01', '2025-06-26 07:25:30'),
+(1, 'Andrés Saúl', 'Tapia', 'Loncón', NULL, '2001-07-04', '206257660', 1, 6, 6, 'Polloico #2505', 'IMPCH - Iglesia Metodista Pentecostal de Chile - Rahue Alto Osorno', 'Estudiante de Ingeniería Civil en Informática', '$2y$10$1gSCMiWl0sNKkJlRgSvAoeg16qyyBNMNj6m4ex2oF03pjzWe8TmTu', '2024-01-01', '2025-07-03 21:54:54'),
 (3, 'Leonardo Elías', 'Tapia', 'Loncón', 'uploads/fotos/f_681d6ad82209c1.87939487.jpg', '2001-07-04', '206257652', 1, 6, 6, 'Polloico #2505 Villa Quilacahuin', 'IMPCH Rahue Alto', 'Estudiante de Ingenieria civil en informatica', '$2y$10$TD/.EMnJ7N5jjyp/dwnI/exqzw/YlCEexMWT1GSgCB0/wn/BMvG/C', '2025-06-16', '2025-06-22 01:21:52'),
 (4, 'Admi', 'tido', '', NULL, '2008-06-06', '98789', 3, NULL, NULL, 'p', 'p', 'p', '$2y$10$oVxZlKGkdi4iYeKI4fIqF.I5KL0A14kuPQJwgZHsZTJZJLL3L/gGu', '2025-06-27', '2025-06-26 07:30:22'),
 (5, 'D', 'D', '', NULL, '2000-07-07', '567890123', 2, NULL, NULL, 'D', 'D', 'D', '$2y$10$oVxZlKGkdi4iYeKI4fIqF.I5KL0A14kuPQJwgZHsZTJZJLL3L/gGu', '2025-06-26', '2025-06-26 07:03:29'),
-(11, 'Yo', 'No', 'K', NULL, '2008-08-09', '87', 3, 3, 3, 'lll', 'll', 'LLL', NULL, '2025-06-23', '2025-06-23 06:41:18'),
+(11, 'Yo', 'No', 'K', NULL, '2008-08-09', '87', 3, 3, 3, 'lll', 'll', 'LLL', NULL, '2025-07-03', '2025-06-23 06:41:18'),
 (90, 'AAA', 'jhg', '', NULL, '2000-03-22', '8789', 3, NULL, NULL, 'jhhjkl', 'jhghjkl', 'jhghjkl', NULL, '2025-06-26', '2025-06-26 05:19:46'),
 (96, 'AAA', 'BBB', '', NULL, '2000-09-09', '87890', 5, NULL, NULL, 'jhghjkl', 'jhghjk', 'kjhjkl', NULL, '2025-06-26', '2025-06-23 20:57:54'),
 (105, 'AAA', 'BBB', '', NULL, '2000-09-09', '8789088', 5, NULL, NULL, 'jhghjkl', 'jhghjk', 'kjhjkl', NULL, '2025-06-23', '2025-06-25 21:29:58'),
 (110, 'Aaaaaaaaa', 'Bbb', 'Cccc', NULL, '2000-06-06', '878', 5, 5, 5, 'juyyuio', 'jhghu', 'kkkkkk', NULL, '2025-06-26', '2025-06-23 22:13:25'),
 (111, 'NN', 'NN', '', NULL, '2012-08-08', '111111111', 5, NULL, NULL, 'NNNn', 'NNN', 'NNN', NULL, '2025-06-26', '2025-06-23 22:28:17'),
 (136, 'Patricio', 'Pérez', 'DELLLA - TORRE', NULL, '2009-06-06', '678', 2, 2, 2, 'Concepción', 'IMP', 'ING', NULL, '2025-06-30', '2025-06-26 18:29:18'),
-(137, 'Fernanda', 'Ugarte', '', NULL, '1871-06-06', '7898789009878', 5, 5, 5, 'Mi casa', 'Mi iglesia', 'Mi trabajo', NULL, '2025-06-25', '2025-06-26 02:58:44'),
+(137, 'Fernanda', 'Ugarte', 'Vega', NULL, '1871-06-06', '7898789009878', 5, 5, 5, 'Mi casa', 'Mi iglesia', 'Mi trabajo', NULL, '2025-07-03', '2025-07-03 22:19:20'),
 (140, 'Am', 'Erico', '', NULL, '2007-05-05', '98890', 5, NULL, NULL, 'p', 'p', 'p', NULL, '2025-06-26', '2025-06-26 07:33:05'),
 (141, 'ni', 'ño', '', NULL, '2008-05-05', '78345', 5, NULL, NULL, 'l', 'l', 'l', NULL, '2025-06-26', '2025-06-26 07:34:09'),
-(142, 'Elías Saúl', 'Tapia', 'Tapia', NULL, '2004-06-26', '2737477474838', 2, 2, 2, 'Polloico', 'IMPCH', 'ICINF', NULL, '2025-06-26', '2025-06-26 17:51:29');
+(142, 'Elías Saúl', 'Tapia', 'Tapia', NULL, '2004-06-26', '2737477474838', 2, 2, 2, 'Polloico', 'IMPCH', 'ICINF', NULL, '2025-07-03', '2025-06-26 17:51:29'),
+(143, 'Leonor', 'Loncón', 'Guzmán', NULL, '1973-02-06', '84196312', 1, 6, 6, 'Polloico 2505', 'IMPCH', 'no tiene', NULL, '2025-07-03', '2025-07-03 22:43:06'),
+(144, 'miguel', 'valladares', 'valladarea', NULL, '2001-01-01', '45678', 3, 3, 3, 'avenida miraflores', 'IUMP', 'Ingenierio', NULL, '2025-07-03', '2025-07-03 22:48:11');
 
 -- --------------------------------------------------------
 
@@ -2335,7 +2611,10 @@ INSERT INTO `usuarios_ocupaciones` (`id_usuario`, `id_ocupacion`) VALUES
 (137, 4),
 (140, 5),
 (141, 5),
-(142, 1);
+(142, 1),
+(143, 3),
+(143, 4),
+(144, 1);
 
 -- --------------------------------------------------------
 
@@ -2495,7 +2774,8 @@ ALTER TABLE `admision`
 --
 ALTER TABLE `admision_envios`
   ADD PRIMARY KEY (`id_envio`),
-  ADD KEY `ip_fecha` (`ip`,`fecha`);
+  ADD KEY `device_fecha` (`device_id`,`fecha`),
+  ADD KEY `fp_fecha` (`fp_id`,`fecha`);
 
 --
 -- Indices de la tabla `asistencias`
@@ -2779,7 +3059,7 @@ ALTER TABLE `usuarios_ocupaciones`
 -- AUTO_INCREMENT de la tabla `admision_envios`
 --
 ALTER TABLE `admision_envios`
-  MODIFY `id_envio` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id_envio` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `ciudad_comuna`
@@ -2845,19 +3125,19 @@ ALTER TABLE `eventos`
 -- AUTO_INCREMENT de la tabla `eventos_tickets`
 --
 ALTER TABLE `eventos_tickets`
-  MODIFY `id_evento_ticket` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_evento_ticket` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT de la tabla `historial_estados_actividad`
 --
 ALTER TABLE `historial_estados_actividad`
-  MODIFY `id_historial_estado_actividad` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=82;
+  MODIFY `id_historial_estado_actividad` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=92;
 
 --
 -- AUTO_INCREMENT de la tabla `integrantes_equipos_proyectos`
 --
 ALTER TABLE `integrantes_equipos_proyectos`
-  MODIFY `id_integrante_equipo_proyecto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
+  MODIFY `id_integrante_equipo_proyecto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
 
 --
 -- AUTO_INCREMENT de la tabla `justificacion_inasistencia`
@@ -2881,7 +3161,7 @@ ALTER TABLE `paises`
 -- AUTO_INCREMENT de la tabla `periodos`
 --
 ALTER TABLE `periodos`
-  MODIFY `id_periodo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=390;
+  MODIFY `id_periodo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=393;
 
 --
 -- AUTO_INCREMENT de la tabla `region_estado`
@@ -2899,19 +3179,19 @@ ALTER TABLE `roles`
 -- AUTO_INCREMENT de la tabla `ticket_horarios`
 --
 ALTER TABLE `ticket_horarios`
-  MODIFY `id_ticket_horario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id_ticket_horario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_scans`
 --
 ALTER TABLE `ticket_scans`
-  MODIFY `id_ticket_scan` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_ticket_scan` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_usuario`
 --
 ALTER TABLE `ticket_usuario`
-  MODIFY `id_ticket_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id_ticket_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT de la tabla `tipos_estados_actividad`
@@ -2929,7 +3209,7 @@ ALTER TABLE `tipos_evento`
 -- AUTO_INCREMENT de la tabla `usuarios`
 --
 ALTER TABLE `usuarios`
-  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=143;
+  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=145;
 
 --
 -- Restricciones para tablas volcadas

@@ -52,20 +52,35 @@ try {
   case 'POST:nuevo': {
       $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;   // 0 = nuevo
 
-      /* ———  Rate-limit: máx 5 formularios por IP y día ——— */
-      $ipAddr = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
-      if (!filter_var($ipAddr, FILTER_VALIDATE_IP)) $ipAddr = '0.0.0.0';
+      /* ———  Rate-limit: máx 5 formularios por **dispositivo** y día ——— */
+      $deviceId = trim($_POST['device_id'] ?? '');
+      $fpId     = trim($_POST['fp_id']     ?? '');   // puede venir vacío
 
+      if ($deviceId === '' && $fpId === '') {
+          reply(['ok'=>false,
+              'error'=>'No pudimos identificar tu dispositivo; vuelve a intentarlo.']);
+      }
+
+      /* cuenta envíos del mismo device_id **o** del mismo fp_id */
       $limStmt = $pdo->prepare("
-          SELECT COUNT(*)                            AS n
+          SELECT COUNT(*) AS n
           FROM admision_envios
-          WHERE ip    = :ip
-          AND fecha = CURDATE()
+          WHERE fecha = CURDATE()
+          AND (
+                  device_id = :d
+              OR ( :f <> '' AND fp_id = :f )
+              OR (device_id IS NULL AND fp_id IS NULL AND ip = :ip) /* fallback legacy */
+          )
       ");
-      $limStmt->execute([':ip'=>$ipAddr]);
+      $limStmt->execute([
+          ':d'  => $deviceId,
+          ':f'  => $fpId,
+          ':ip' => $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? ''
+      ]);
+
       if ($limStmt->fetchColumn() >= 5){
           reply(['ok'=>false,
-              'error'=>'Límite diario de 5 formularios alcanzado desde esta IP; inténtalo mañana.']);
+              'error'=>'Límite diario de 5 formularios alcanzado desde este dispositivo; inténtalo mañana.']);
       }
 
       /* ── 1. VALIDACIÓN de nombres / apellidos ─────────────────────── */
@@ -699,9 +714,13 @@ try {
 
         /* registra el envío exitoso (para el rate-limit) */
         $pdo->prepare("
-            INSERT INTO admision_envios (ip, fecha)
-            VALUES (:ip, CURDATE())
-        ")->execute([':ip'=>$ipAddr]);
+            INSERT INTO admision_envios (ip, device_id, fp_id, fecha)
+            VALUES (:ip, :d, :f, CURDATE())
+        ")->execute([
+            ':ip' => $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '',
+            ':d'  => $deviceId ?: null,
+            ':f'  => $fpId     ?: null
+        ]);
 
       $pdo->commit();
       reply(['ok'=>true]);

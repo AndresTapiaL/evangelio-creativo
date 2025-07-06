@@ -314,7 +314,15 @@ nav .menu a.active::after{
       <a href="reportes.php"    <?= $curr==='reportes.php'        ? 'class="active"' : '' ?>>Reportes</a>
     <?php endif; ?>
 
-    <a href="tickets.php"        <?= in_array($curr,['tickets.php','ticket_detalle.php']) ? 'class="active"' : '' ?>>Tickets</a>
+    <a href="tickets.php"
+      <?= in_array($curr,
+                    ['tickets.php',
+                    'ticket_detalle.php',
+                    'ticket_resumen.php',    // ← nuevo
+                    'ticket_escaneados.php']) // ← nuevo (si aplica)
+            ? 'class="active"' : '' ?>>
+      Tickets
+    </a>
   </div>
 
   <!-- ▼ 1.-a  Nuevo botón hamburger (colócalo dentro del <nav>) -->
