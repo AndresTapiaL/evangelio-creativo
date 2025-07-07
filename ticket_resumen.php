@@ -85,6 +85,49 @@ $horarios = $pdo->prepare("
 $horarios->execute([$idEvento]);
 $horarios = $horarios->fetchAll(PDO::FETCH_KEY_PAIR);      // [id ⇒ nombre]
 
+/* ────────────────── A)  Tabla ASISTENCIA ────────────────── */
+/* ①  inscritos (id + nombre) */
+$usrStmt = $pdo->prepare("
+    SELECT tu.id_ticket_usuario, tu.nombre_completo
+      FROM ticket_usuario tu
+      JOIN eventos_tickets et USING(id_evento_ticket)
+     WHERE et.id_evento = ?
+  ORDER BY tu.id_ticket_usuario");
+$usrStmt->execute([$idEvento]);
+$users = $usrStmt->fetchAll(PDO::FETCH_ASSOC);         // lista ordenada por ID
+
+/* ②  estado final (ingreso / salida) de CADA usuario-horario  */
+$estadoUsrHor = [];   // [ id_ticket_usuario ][ id_horario ] = 1 | 0
+if ($users && $horarios) {
+    $placeholders = implode(',', array_fill(0, count($users), '?'));
+    $userIds      = array_column($users, 'id_ticket_usuario', 'id_ticket_usuario');
+
+    $scanStmt = $pdo->prepare("
+        SELECT s.id_ticket_usuario,
+               s.id_ticket_horario,
+               s.es_ingreso
+          FROM ticket_scans s
+          JOIN (  /* último scan del mismo user-horario */
+                 SELECT id_ticket_usuario, id_ticket_horario, MAX(scan_at) last_scan
+                   FROM ticket_scans
+              GROUP BY id_ticket_usuario, id_ticket_horario
+               ) last
+             ON  last.id_ticket_usuario = s.id_ticket_usuario
+             AND last.id_ticket_horario = s.id_ticket_horario
+             AND last.last_scan         = s.scan_at
+         WHERE s.id_ticket_usuario IN ($placeholders)
+    ");
+    $scanStmt->execute(array_keys($userIds));
+
+    foreach ($scanStmt as $r) {
+        $estadoUsrHor[$r['id_ticket_usuario']][$r['id_ticket_horario']]
+            = (int)$r['es_ingreso'];                 // 1 = ingreso, 0 = salida
+    }
+}
+
+/* ③  totales por horario – se llenan al mismo tiempo que se pinta la tabla */
+$totIng = $totSal = $totSin = array_fill_keys(array_keys($horarios), 0);
+
 if (!$tickets) {                         // evento sin tickets
     $tablaMsg = 'Sin resultados para este evento';
 } else {
@@ -143,6 +186,31 @@ if (!$tickets) {                         // evento sin tickets
         $sin[$hid] = $totalEvento - ($ing[$hid] + $sal[$hid]);
     }
 }
+
+/* ────────────────── ⑨  conteo dinámico de atributos  ────────────────── */
+/**
+ * Devuelve  [ valor ⇒ total ]  del atributo $col
+ * (solo inscripciones del evento actual y sin valores vacíos/NULL)
+ */
+function eventoAttrCount(PDO $pdo, int $evt, string $col): array {
+    $sql = "SELECT tu.$col   AS val,
+                   COUNT(*)   AS total
+              FROM ticket_usuario tu
+              JOIN eventos_tickets et ON et.id_evento_ticket = tu.id_evento_ticket
+             WHERE et.id_evento = ?
+               AND tu.$col IS NOT NULL
+               AND tu.$col <> ''
+          GROUP BY val
+          ORDER BY val";
+    $st = $pdo->prepare($sql);
+    $st->execute([$evt]);
+    return $st->fetchAll(PDO::FETCH_KEY_PAIR);     //  [valor ⇒ total]
+}
+
+$foodCnt = eventoAttrCount($pdo, $idEvento, 'alimentacion');
+$credCnt = eventoAttrCount($pdo, $idEvento, 'credencial');
+$teamCnt = eventoAttrCount($pdo, $idEvento, 'equipo');
+$hostCnt = eventoAttrCount($pdo, $idEvento, 'hospedaje');
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -375,6 +443,11 @@ if (!$tickets) {                         // evento sin tickets
     z-index:2;                     /* queda por encima de las demás celdas */
     }
 
+      /* ░░░ Marcas ingreso / salida ░░░ */
+    .mark {font-weight:700;font-size:.85rem}
+    .ing  {color:var(--success);}    /* verde */
+    .sal  {color:var(--danger);}     /* rojo  */
+
     /* ── Mantiene el color original de cada fila en la columna fija ── */
 
     /* cabecera */
@@ -391,6 +464,10 @@ if (!$tickets) {                         // evento sin tickets
     .tbl-scroll tbody tr:nth-child(even) td:first-child{
     background:#fff;
     }
+
+    /* ░░░ pie de tabla – misma lógica que el body ░░░ */
+    .tbl-scroll tfoot tr:nth-child(odd)  td:first-child{background:#fcfcff;}
+    .tbl-scroll tfoot tr:nth-child(even) td:first-child{background:#fff;}
 
     /* ── estilo genérico de botones ─────────────────────────────────────────────── */
     button,
@@ -438,6 +515,70 @@ if (!$tickets) {                         // evento sin tickets
     color:#fff;
     border-color:var(--primary);
     }
+
+    /* ─── Leyenda “Asistencia por horario” ─── */
+    .legend-att{
+      display:flex;
+      gap:1.5rem;
+      justify-content:center;
+      align-items:center;
+      margin-bottom:.8rem;
+      font-size:.9rem;
+      font-weight:600;
+    }
+    .legend-att .mark{
+      display:inline-block;      /* centra mejor el símbolo */
+      width:1.1em;               /* ancho fijo para alinear */
+      text-align:center;
+    }
+
+    /* ─── titulos de sección ─── */
+    h2{
+      font-size:1.35rem;
+      font-weight:700;
+      color:var(--negro);
+      display:flex;align-items:center;gap:.55rem;
+      margin:3rem 0 .9rem;            /* espacio extra entre tablas */
+    }
+    h2::before{                       /* barrita naranja al costado */
+      content:'';
+      flex:0 0 6px;height:1.25em;
+      background:var(--primary);
+      border-radius:3px;
+    }
+
+    /* ─── envoltura de cada tabla ─── */
+    .tbl-scroll{
+      margin-top:1rem;margin-bottom:3rem;
+      border:1px solid #e5e7f0;
+      border-radius:8px;
+      overflow-x:auto;          /* scroll horizontal cuando sea necesario */
+      overflow-y:hidden;        /* sin scroll vertical extra              */
+      position:relative;        /* mantiene la referencia para celdas sticky */
+      box-shadow:0 4px 12px rgba(0,0,0,.05);
+    }
+
+    tbody tr:hover td{background:#f2f4ff}
+
+    /* ─── paginador ─── */
+    .table-pager{
+      display:flex;justify-content:center;gap:.45rem;
+      margin:1rem 0 2.5rem;
+    }
+    .table-pager button{
+      border:1px solid #dfe1ea;
+      background:#f5f6fa;
+      padding:.38rem .7rem;
+      border-radius:6px;
+      cursor:pointer;font-weight:600;font-size:.86rem;
+      transition:all var(--transition);
+    }
+    .table-pager button:hover,
+    .table-pager button.active{
+      background:var(--primary);
+      color:#fff;border-color:var(--primary);
+    }
+    .table-pager button:disabled{opacity:.45;cursor:default}
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -489,63 +630,191 @@ if (!$tickets) {                         // evento sin tickets
     </div>
 
     <section>
-    <?php if(isset($tablaMsg)): ?>
-    <p style="text-align:center;font-weight:600"><?=$tablaMsg?></p>
+    <!-- ░░░ TABLA ASISTENCIA ░░░ -->
+    <h2 style="margin:2.2rem 0 .8rem;text-align:center">Asistencia por horario</h2>
+
+    <!-- ─── Simbología de la tabla ─── -->
+    <div class="legend-att">
+      <span><span class="mark ing"  aria-label="Ingreso">✔</span> Ingreso</span>
+      <span><span class="mark sal"  aria-label="Salida">✖</span> Salida</span>
+      <span><span class="mark"      aria-label="Sin llegar">-</span> Sin llegar</span>
+    </div>
+
+    <?php if (!$users): ?>
+        <p style="text-align:center;font-weight:600">Sin resultados para este evento</p>
     <?php else: ?>
     <div class="tbl-scroll">
-        <table>
+      <table>
         <thead>
-            <tr>
-            <th>Tickets</th>
-            <?php foreach($horarios as $nom): ?>
-                <th><?=htmlspecialchars($nom)?></th>
-            <?php endforeach ?>
-            </tr>
+          <tr>
+            <th style="text-align:left">Nombre completo</th>
+            <th>ID</th>
+            <?php foreach($horarios as $hid=>$nom): ?>
+              <th><?=htmlspecialchars($nom)?></th>
+            <?php endforeach; ?>
+          </tr>
         </thead>
-        <tbody>
-
-        <!-- 1) filas por tipo de ticket -->
-        <?php foreach($tickets as $tid=>$nom): ?>
+        <tbody id="user-body"> <!-- ← filas de usuarios (se paginan) -->
+          <?php foreach($users as $u): ?>
             <tr>
-            <td style="text-align:left;font-weight:600"><?=htmlspecialchars($nom)?></td>
-            <td colspan="<?=count($horarios)?>">
-                <?= $totPorTicket[$tid] ?? '-' ?>
-            </td>
+              <td style="text-align:left"><?=htmlspecialchars($u['nombre_completo'])?></td>
+              <td><?=$u['id_ticket_usuario']?></td>
+
+              <?php foreach($horarios as $hid=>$nom):
+                    $estado = $estadoUsrHor[$u['id_ticket_usuario']][$hid] ?? null;
+                    if ($estado === 1){
+                        $totIng[$hid]++;  $txt='✔'; $cls='ing';
+                    }elseif ($estado === 0){
+                        $totSal[$hid]++;  $txt='✖'; $cls='sal';
+                    }else{
+                        $totSin[$hid]++;  $txt='-';  $cls='';
+                    } ?>
+                    <td><span class="mark <?=$cls?>"><?=$txt?></span></td>
+              <?php endforeach; ?>
             </tr>
-        <?php endforeach ?>
-
-        <!-- separación -->
-        <tr><td colspan="<?=count($horarios)+1?>" 
-                style="background:#e5e7f0;height:4px;padding:0"></td></tr>
-
-        <!-- 2) Ingresos / Salidas / Sin acreditar -->
-        <?php
-            $bloques = [
-            'Ingresos'      => $ing,
-            'Salidas'       => $sal,
-            'Sin acreditar' => $sin
-            ];
-            foreach($bloques as $lbl=>$arr): ?>
-            <tr>
-                <td style="text-align:left;font-weight:600"><?=$lbl?></td>
-                <?php foreach($horarios as $hid=>$n): ?>
-                <td><?= $arr[$hid] ?: '-' ?></td>
-                <?php endforeach ?>
-            </tr>
-        <?php endforeach ?>
-
-        <!-- separación -->
-        <tr><td colspan="<?=count($horarios)+1?>" 
-                style="background:#e5e7f0;height:4px;padding:0"></td></tr>
-
-        <!-- 3) Total global -->
-        <tr>
-            <td style="text-align:left;font-weight:600">Total</td>
-            <td colspan="<?=count($horarios)?>"><?= $totalEvento ?: '-' ?></td>
-        </tr>
+          <?php endforeach; ?>
 
         </tbody>
+
+        <tfoot>
+          <!-- separación visual -->
+          <tr><td colspan="<?=count($horarios)+2?>" style="background:#e5e7f0;height:4px;padding:0"></td></tr>
+
+          <?php
+            /* === totales por horario === */
+            $totTot = [];
+            foreach ($horarios as $hid => $_) {
+                $totTot[$hid] = $totIng[$hid] + $totSal[$hid] + $totSin[$hid];
+            }
+            $bloqueTot = [
+                'Ingresos'   => $totIng,
+                'Salidas'    => $totSal,
+                'Sin llegar' => $totSin
+            ];
+            foreach($bloqueTot as $lbl=>$arr): ?>
+              <tr>
+                <td style="text-align:left;font-weight:600"><?=$lbl?></td>
+                <td></td>
+                <?php foreach($horarios as $hid=>$n): ?>
+                  <td><?=$arr[$hid] ?: '-'?></td>
+                <?php endforeach; ?>
+              </tr>
+          <?php endforeach; ?>
+
+          <!-- total global -->
+          <tr>
+            <td style="text-align:left;font-weight:600">Total</td>
+            <td colspan="<?=count($horarios)+1?>"><?= $totalEvento ?: '-' ?></td>
+          </tr>
+        </tfoot>
+      </table>
+      <div id="pager" class="table-pager"></div>
+    </div>
+    <?php endif; ?>
+
+    <h2 style="margin:2.2rem 0 .8rem;text-align:center">Tipos de tickets</h2>
+    <?php if(isset($tablaMsg)): ?>
+      <p style="text-align:center;font-weight:600"><?=$tablaMsg?></p>
+    <?php else: ?>
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>—</th>
+              <?php foreach($tickets as $tid=>$nom): ?>
+                <th><?=htmlspecialchars($nom)?></th>
+              <?php endforeach ?>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="text-align:left;font-weight:600">Total</td>
+              <?php foreach($tickets as $tid=>$nom): ?>
+                <td><?= $totPorTicket[$tid] ?? '-' ?></td>
+              <?php endforeach ?>
+            </tr>
+          </tbody>
         </table>
+      </div>
+    <?php endif; ?>
+
+    <!-- ░░░ TABLA A.2  Tipo de alimentación ░░░ -->
+    <h2 style="margin:2.2rem 0 .8rem;text-align:center">Tipo de alimentación</h2>
+    <?php if (!$foodCnt): ?>
+      <p style="text-align:center;font-weight:600">Sin resultados para este evento</p>
+    <?php else: ?>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>—</th>
+            <?php foreach($foodCnt as $val=>$tot): ?>
+              <th><?=htmlspecialchars($val)?></th>
+            <?php endforeach ?>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="text-align:left;font-weight:600">Total</td>
+            <?php foreach($foodCnt as $tot): ?>
+              <td><?= $tot ?: '-' ?></td>
+            <?php endforeach ?>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <?php endif; ?>
+
+    <!-- ░░░ TABLA Credencial ░░░ -->
+    <h2 style="margin:2.2rem 0 .8rem;text-align:center">Credencial</h2>
+    <?php if (!$credCnt): ?>
+      <p style="text-align:center;font-weight:600">Sin resultados para este evento</p>
+    <?php else: ?>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr><th>—</th>
+            <?php foreach($credCnt as $val=>$tot): ?><th><?=htmlspecialchars($val)?></th><?php endforeach ?>
+          </tr>
+        </thead>
+        <tbody><tr><td style="text-align:left;font-weight:600">Total</td>
+          <?php foreach($credCnt as $tot): ?><td><?= $tot ?: '-' ?></td><?php endforeach ?>
+        </tr></tbody>
+      </table>
+    </div>
+    <?php endif; ?>
+
+    <!-- ░░░ TABLA Equipo ░░░ -->
+    <h2 style="margin:2.2rem 0 .8rem;text-align:center">Equipo</h2>
+    <?php if (!$teamCnt): ?>
+      <p style="text-align:center;font-weight:600">Sin resultados para este evento</p>
+    <?php else: ?>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>—</th>
+          <?php foreach($teamCnt as $val=>$tot): ?><th><?=htmlspecialchars($val)?></th><?php endforeach ?>
+        </tr></thead>
+        <tbody><tr><td style="text-align:left;font-weight:600">Total</td>
+          <?php foreach($teamCnt as $tot): ?><td><?= $tot ?: '-' ?></td><?php endforeach ?>
+        </tr></tbody>
+      </table>
+    </div>
+    <?php endif; ?>
+
+    <!-- ░░░ TABLA Hospedaje ░░░ -->
+    <h2 style="margin:2.2rem 0 .8rem;text-align:center">Hospedaje</h2>
+    <?php if (!$hostCnt): ?>
+      <p style="text-align:center;font-weight:600">Sin resultados para este evento</p>
+    <?php else: ?>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>—</th>
+          <?php foreach($hostCnt as $val=>$tot): ?><th><?=htmlspecialchars($val)?></th><?php endforeach ?>
+        </tr></thead>
+        <tbody><tr><td style="text-align:left;font-weight:600">Total</td>
+          <?php foreach($hostCnt as $tot): ?><td><?= $tot ?: '-' ?></td><?php endforeach ?>
+        </tr></tbody>
+      </table>
     </div>
     <?php endif; ?>
     </section>
@@ -580,6 +849,52 @@ if (!$tickets) {                         // evento sin tickets
       localStorage.clear();
       location.replace('login.html');
     }
+  });
+  </script>
+
+  <script>
+  /* Paginador para “Asistencia por horario” */
+  document.addEventListener('DOMContentLoaded', () => {
+    const rows       = Array.from(document.querySelectorAll('#user-body tr'));
+    const perPage    = 50;
+    const pager      = document.getElementById('pager');
+    if (!rows.length || rows.length <= perPage) return;   // nada que paginar
+
+    const pageCount  = Math.ceil(rows.length / perPage);
+    let   current    = 1;
+
+    const prev = mkBtn('‹', () => show(current-1));
+    const next = mkBtn('›', () => show(current+1));
+    pager.append(prev);
+
+    for (let i=1;i<=pageCount;i++){
+      pager.append(mkBtn(i, () => show(i), 'page'));
+    }
+    pager.append(next);
+
+    function mkBtn(txt, fn, cls=''){
+      const b = document.createElement('button');
+      b.textContent = txt;
+      if (cls) b.classList.add(cls);
+      b.addEventListener('click', fn);
+      return b;
+    }
+
+    function show(n){
+      current = n;
+      /* muestra/oculta filas */
+      rows.forEach((tr,i)=>{
+        tr.style.display = (i >= (n-1)*perPage && i < n*perPage) ? '' : 'none';
+      });
+      /* resalta página activa y controla prev/next */
+      [...pager.querySelectorAll('button.page')].forEach((b,idx)=>{
+        b.classList.toggle('active', idx+1 === n);
+      });
+      prev.disabled = (n === 1);
+      next.disabled = (n === pageCount);
+    }
+
+    show(1);
   });
   </script>
 

@@ -4,6 +4,20 @@ session_start();
 date_default_timezone_set('UTC');
 require 'conexion.php';
 
+/* ─── helper: aborta mostrando JSON si llega vía AJAX ─── */
+function abort(string $msg, int $http = 400): never {
+    $isAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+           && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+    http_response_code($http);
+    if ($isAjax) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'error' => $msg], JSON_UNESCAPED_UNICODE);
+    } else {
+        echo $msg;        // comportamiento anterior (fallback)
+    }
+    exit;
+}
+
 /* ─── NUEVO: verificación de GD ─────────────────────────────── */
 if (!extension_loaded('gd')) {
     http_response_code(500);          // error interno
@@ -202,50 +216,71 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_usr'])) {
     exit;
 }
 
-/* ─── crear / actualizar ticket ------------------------------- */
-if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_ticket'])){
-    $idET = (int)$_POST['id_evento_ticket'];
-    if($idET){   // update
-        $pdo->prepare("
-           UPDATE eventos_tickets
-              SET nombre_ticket = ?, descripcion = ?, precio_clp = ?,
-                  cupo_total = ?, activo = ?
-            WHERE id_evento_ticket = ? AND id_evento = ?")
-            ->execute([
-                trim($_POST['nombre_ticket']),
-                trim($_POST['descripcion']),
-                (int)$_POST['precio_clp'],
-                (int)$_POST['cupo_total'],
-                (int)$_POST['activo'],
-                $idET,$idEvento
-            ]);
-    }else{       // insert
-        $stmt = $pdo->prepare("
-           INSERT INTO eventos_tickets(id_evento,nombre_ticket,descripcion,
-                                        precio_clp,cupo_total,activo)
-           VALUES(?,?,?,?,?,?)")
-           ->execute([
-               $idEvento,
-               trim($_POST['nombre_ticket']),
-               trim($_POST['descripcion']),
-               (int)$_POST['precio_clp'],
-               (int)$_POST['cupo_total'],
-               (int)$_POST['activo']
-           ]);
-    }
-    $newId = (int)$pdo->lastInsertId();
-    header("Location: ticket_detalle.php?evt=$idEvento");
-    exit;
-}
-
-/* ─── eliminar ticket ----------------------------------------- */
-if(isset($_GET['del_ticket'])){
+/* ─── eliminar ticket ------------------------------- */
+if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['del_ticket'])){
     $pdo->prepare("
         DELETE FROM eventos_tickets
          WHERE id_evento_ticket = ? AND id_evento = ?")
-        ->execute([(int)$_GET['del_ticket'],$idEvento]);
-    header("Location: ticket_detalle.php?evt=$idEvento");
-    exit;
+        ->execute([(int)$_POST['del_ticket'],$idEvento]);
+    header("Location: ticket_detalle.php?evt=$idEvento"); exit;
+}
+
+/* ─── crear / actualizar ticket ------------------------------- */
+if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_ticket'])) {
+
+    /* 1 – recoger y sanear --------------------- */
+    $idET     = (int)$_POST['id_evento_ticket'];
+    $nom      = trim($_POST['nombre_ticket'] ?? '');
+    $desc     = trim($_POST['descripcion'] ?? '');
+    $precio   = (int)($_POST['precio_clp']  ?? 0);
+    $cupo     = (int)($_POST['cupo_total']  ?? 0);
+    $activo   = (int)($_POST['activo']      ?? 1);
+
+    /* 2 – regex de seguridad ------------------- */
+    $pat = '/^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$/u';
+    if ($nom==='' || mb_strlen($nom)>100 || !preg_match($pat,$nom))
+        abort('Nombre de ticket no válido.');
+    if ($desc!=='' && !preg_match($pat,$desc))
+        abort('Descripción no válida.');
+
+    if ($precio<0 || $cupo<0) abort('Valores numéricos incorrectos.');
+
+    /* 3 – regla cupo ≥ inscritos --------------- */
+    if ($idET){
+        $stmt = $pdo->prepare("
+              SELECT COUNT(*) FROM ticket_usuario
+               WHERE id_evento_ticket = ?");
+        $stmt->execute([$idET]);
+        $ocupados = (int)$stmt->fetchColumn();
+        if ($cupo < $ocupados)
+            abort("El cupo total ($cupo) no puede ser menor que los inscritos ($ocupados).");
+    }
+
+    /* 4 – INSERT o UPDATE ---------------------- */
+    if ($idET){
+        $pdo->prepare("
+           UPDATE eventos_tickets
+              SET nombre_ticket=?, descripcion=?, precio_clp=?,
+                  cupo_total=?,  activo=?
+            WHERE id_evento_ticket=? AND id_evento=?")
+        ->execute([$nom,$desc,$precio,$cupo,$activo,$idET,$idEvento]);
+    }else{
+        $pdo->prepare("
+           INSERT INTO eventos_tickets(id_evento,nombre_ticket,descripcion,
+                                        precio_clp,cupo_total,activo)
+           VALUES(?,?,?,?,?,?)")
+        ->execute([$idEvento,$nom,$desc,$precio,$cupo,$activo]);
+    }
+
+    /* ─── si vino vía AJAX devolvemos éxito en JSON ─── */
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+      && strtolower($_SERVER['HTTP_X_REQUESTED_WITH'])==='xmlhttprequest') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok'=>true]);
+        exit;
+    }
+
+    header("Location: ticket_detalle.php?evt=$idEvento"); exit;
 }
 
 /* ─── CRUD horarios ---------------------------------------- */
@@ -382,7 +417,7 @@ if (isset($_GET['del_usr'])){
     --radius:12px;
     --shadow:0 6px 20px rgba(0,0,0,.08);
     --transition:.2s ease;
-    --w-acciones: 0px;          /* ancho visible de la columna Acciones */
+    --w-fijo-r: -100px;      /* ancho fijo de la columna Acciones */
   }
 
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -398,48 +433,36 @@ if (isset($_GET['del_usr'])){
   h1{font-size:1.65rem;margin:2.2rem 0 .8rem;text-align:center}
   h2{font-size:1.3rem;margin:2rem 0 1rem;color:var(--primary)}
 
-  /* ═══════════ 4. CONTENEDOR DE SECCIONES ═══════════ */
-
-  /* ░░░  Columna Acciones fija en viewport  ░░░ */
-  .tbl-scroll {
-    overflow-x: auto;          /* crea el scroll solo para la tabla */
-    position: relative;        /* referencia para el sticky */
-    padding-right:var(--w-acciones);
+  /* ═══════════ Columna Acciones fija a la derecha ═══════════ */
+  .tbl-scroll{
+    overflow-x:auto;      /* scroll solo cuando haga falta */
+    position:relative;
   }
 
+  /* la tabla crece lo necesario para abarcar todas las columnas,
+    pero nunca será menor al 100 % del contenedor */
   .tbl-scroll table{
-    min-width: 100%;           /* asegura necesidad de scroll */
+    width:max-content;          /* ancho natural = suma de columnas  */
+    min-width:100%;             /* …salvo que el padre sea más ancho */
   }
 
-  /* hace que la tabla “invada” el padding-right */
-  .tbl-scroll > table{
-      margin-right: calc(-1 * var(--w-acciones));
-  }
-
-  /* ---------- CELDA STICKY ------------------------------------ */
+  /* celda sticky */
   .tbl-scroll th:last-child,
   .tbl-scroll td:last-child{
     position:sticky;
-    right: -.5px;
-    width:var(--w-acciones);
-    min-width:var(--w-acciones);
-    background:#fff;
-    box-shadow:-4px 0 6px -4px rgba(0,0,0,.12);
-    z-index:5;
+    right:0;
+    width:var(--w-fijo-r);
+    min-width:var(--w-fijo-r);
+    background:inherit;   /* mantiene las franjas zebra */
+    z-index:2;
   }
 
-  /* ---------- CORTINA QUE TAPA EL DESBORDE -------------------- */
-  .tbl-scroll::after{
-    content:'';
-    position:absolute;
-    top:0;
-    right:0;
-    width:var(--w-acciones);      /* mismo ancho que la columna sticky   */
-    height:100%;
-    background:#fff;              /* mismo color que las celdas          */
-    pointer-events:none;          /* para no interceptar clics            */
-    z-index:4;                    /* por debajo de la celda sticky        */
-  }
+  /* mismo fondo zebra que el resto de la fila */
+  .tbl-scroll thead th:last-child               {background:#f8f9fe;}
+  .tbl-scroll tbody tr:nth-child(odd)  td:last-child{background:#fcfcff;}
+  .tbl-scroll tbody tr:nth-child(even) td:last-child{background:#fff;}
+  .tbl-scroll tfoot tr:nth-child(odd)  td:last-child{background:#fcfcff;}
+  .tbl-scroll tfoot tr:nth-child(even) td:last-child{background:#fff;}
 
   section{
     max-width:1200px;                  /* centrado y respiración */
@@ -468,6 +491,16 @@ if (isset($_GET['del_usr'])){
   th,td{padding:.75rem 1rem;text-align:left;white-space:nowrap}
   th{color:var(--gris);font-weight:600;border-bottom:2px solid #eef0f8}
   tbody tr:nth-child(odd){background:#fcfcff}
+  /* ─── cabecera sin texto para la columna QR ─── */
+  th.no-title{background:#f8f9fe;border-bottom:2px solid #eef0f8}
+
+  /* mismo fondo pegado para el <thead> de la columna sticky */
+  .tbl-scroll th:last-child{background:#f8f9fe}
+
+  /* pie de tabla (en caso de agregar <tfoot>) */
+  .tbl-scroll tfoot tr:nth-child(odd)  td:first-child{background:#fcfcff;}
+  .tbl-scroll tfoot tr:nth-child(even) td:first-child{background:#fff;}
+
   tbody tr:hover{background:#f2f4ff}
 
   /* columna de acciones pegada a la derecha */
@@ -578,6 +611,26 @@ if (isset($_GET['del_usr'])){
     top:50%; left:50%;
     transform:translate(-50%,-50%);
   }
+
+  /* evita que celdas ocultas creen patrones raros (bug de algunos navegadores) */
+  table.paginated tbody tr[style*="display: none"] td{
+    background:transparent!important;
+  }
+
+  /* mismo archivo <style> */
+  label{position:relative}
+  label small.err{
+    position:absolute;bottom:-1.3rem;left:.1rem;
+    color:var(--danger);font-size:.7rem;font-weight:600;opacity:0;
+    transition:opacity .15s;
+  }
+  label.error small.err{opacity:1}
+
+  /* ─── añade este bloque al final del <style> principal ─── */
+  form.inline-del{
+    display:inline-block;   /* o inline; ambas funcionan */
+    margin:0;
+  }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -649,7 +702,7 @@ $totalCupo = array_sum(array_column($tickets,'cupo_total'));
   <button id="btnAddTicket">➕ Añadir ticket</button>
 
   <div class="tbl-scroll">
-    <table>
+    <table id="tblTickets" class="paginated sortable" data-per-page="10">
       <thead>
         <tr>
           <th>Ticket</th>
@@ -673,39 +726,55 @@ $totalCupo = array_sum(array_column($tickets,'cupo_total'));
             <button class="edit-ticket" data-json='<?=json_encode($t,JSON_HEX_APOS)?>'>
               <i class="fa-solid fa-edit"></i> Editar
             </button>
-            <a  href="?evt=<?=$idEvento?>&del_ticket=<?=$t['id_evento_ticket']?>" 
-                onclick="return confirm('¿Eliminar ticket definitivamente?')">
-                <i class="fa-solid fa-trash"></i> Eliminar
-            </a>
+            <form method="post" action="?evt=<?=$idEvento?>" class="inline-del"
+                  onsubmit="return confirm('¿Eliminar ticket definitivamente?')">
+              <input type="hidden" name="del_ticket" value="<?=$t['id_evento_ticket']?>">
+              <button class="action-btn"><i class="fa-solid fa-trash"></i> Eliminar</button>
+            </form>
           </td>
         </tr>
       <?php endforeach ?>
       </tbody>
     </table>
+    <div id="pager-tblTickets" class="table-pager"></div>
   </div>
 </section>
 
 <!-- Modal CREAR / EDITAR ticket -->
 <dialog id="dlgTicket">
-  <form method="post" id="fTicket">
+  <form method="post" id="fTicket" novalidate>
     <h3 id="dlgTicketTitle"></h3>
     <input type="hidden" name="save_ticket" value="1">
     <input type="hidden" name="id_evento_ticket" id="t_id">
 
     <label>Nombre
-      <input name="nombre_ticket" id="t_nom" maxlength="100" required>
+      <input  name="nombre_ticket" id="t_nom"
+              maxlength="100" required
+              pattern="^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$"
+              title="Solo letras, números y . , # ¿ ¡ ! ? ( ) / -"
+              oninput="valTicket()">
+      <small class="err"></small>
     </label>
 
     <label>Descripción
-      <textarea name="descripcion" id="t_desc" rows="2"></textarea>
+      <textarea name="descripcion"  id="t_desc" rows="2"
+                maxlength="255"
+                pattern="^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$"
+                title="Solo letras, números y . , # ¿ ¡ ! ? ( ) / -"
+                oninput="valTicket()"></textarea>
+      <small class="err"></small>
     </label>
 
     <label>Precio CLP
-      <input type="number" name="precio_clp" id="t_prec" min="0">
+      <input type="number" name="precio_clp" id="t_prec"
+            min="0" step="1" required oninput="valTicket()">
+      <small class="err"></small>
     </label>
 
     <label>Cupo total
-      <input type="number" name="cupo_total" id="t_cupo" min="0" required>
+      <input type="number" name="cupo_total" id="t_cupo"
+            min="0" step="1" required oninput="valTicket()">
+      <small class="err"></small>
     </label>
 
     <label>Activo
@@ -766,7 +835,7 @@ $horarios = $horarios->fetchAll(PDO::FETCH_ASSOC);
   <button id="btnAddHor">➕ Añadir horario</button>
 
   <div class="tbl-scroll">
-    <table>
+    <table id="tblHorarios" class="paginated sortable" data-per-page="10">
       <thead><tr><th>Nombre</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
       <tbody>
       <?php foreach ($horarios as $h): ?>
@@ -787,11 +856,12 @@ $horarios = $horarios->fetchAll(PDO::FETCH_ASSOC);
       <?php endforeach ?>
       </tbody>
     </table>
+    <div id="pager-tblHorarios" class="table-pager"></div>
   </div>
 </section>
 
 <dialog id="dlgHor">
-  <form method="post" id="fHor">
+  <form method="post" id="fHor" novalidate>
     <h3 id="dlgHorTitle"></h3>
     <input type="hidden" name="save_hor" value="1">
     <input type="hidden" name="id_ticket_horario" id="h_id">
@@ -852,7 +922,7 @@ $admins = $admins->fetchAll(PDO::FETCH_ASSOC);
   <button id="btnAddAdm">➕ Añadir administrador</button>
 
   <div class="tbl-scroll">
-    <table>
+    <table id="tblAdmins" class="paginated sortable" data-per-page="10">
       <thead><tr><th>Nombre completo</th><th>RUT / DNI</th><th>País</th><th></th></tr></thead>
       <tbody>
       <?php foreach ($admins as $a): ?>
@@ -870,12 +940,13 @@ $admins = $admins->fetchAll(PDO::FETCH_ASSOC);
       <?php endforeach ?>
       </tbody>
     </table>
+    <div id="pager-tblAdmins" class="table-pager"></div>
   </div>
 </section>
 
 <!-- modal admin -->
 <dialog id="dlgAdm">
-  <form method="post" id="fAdm">
+  <form method="post" id="fAdm" novalidate>
     <h3>Nuevo administrador</h3>
     <input type="hidden" name="add_admin" value="1">
 
@@ -969,14 +1040,17 @@ function editTicket(t){
    <i class="fa-solid fa-file-zipper"></i> Descargar QRs
  </button>
   <div class="tbl-scroll">
-    <table>
+    <table id="tblInscritos" class="paginated sortable" data-per-page="50">
       <thead>
         <tr>
           <th>ID</th><th>Ticket</th><th>Nombre</th><th>Correo electrónico</th><th>Fecha y hora de inscripción</th>
           <th>Contacto</th><th>Edad</th><th>Alimentación</th><th>Hospedaje</th>
           <th>Enfermedades</th><th>Alergia</th><th>Medicamentos</th>
           <th>Alimentación especial</th><th>Contacto de emergencia</th>
-          <th>Credencial</th><th>Acompañantes</th><th>Extras</th><th>QR</th><th></th>
+          <th data-type="text">Credencial</th>
+          <th data-type="text">Acompañantes</th>
+          <th data-type="text">Extras</th>
+          <th></th>                      <!--  ← Acciones (sticky)-->
         </tr>
       </thead>
       <tbody>
@@ -1017,11 +1091,12 @@ function editTicket(t){
       <?php endforeach ?>
       </tbody>
     </table>
+    <div id="pager-tblInscritos" class="table-pager"></div>
   </div>
 </section>
 <!-- Modal CREAR / EDITAR inscripción -->
 <dialog id="dlgUsr">
-  <form method="post" id="fUsr">
+  <form method="post" id="fUsr" novalidate>
     <h3 id="dlgUsrTitle"></h3>
     <input type="hidden" name="save_usr" value="1">
     <input type="hidden" name="id_ticket_usuario" id="u_id">
@@ -1329,5 +1404,293 @@ document.getElementById('logout').addEventListener('click', async e => {
   }
 });
 </script>
+
+<script>
+/* ===========================================================
+   Paginar + ordenar tablas  (versión 2025-07-06)
+   =========================================================== */
+(() => {
+  /* evita doble inicialización */
+  if (window.__tblEnhancerInitV2) return;
+  window.__tblEnhancerInitV2 = true;
+
+  document.addEventListener('DOMContentLoaded', () => {
+
+    /* ══════════ 1)  P A G I N A C I Ó N ══════════ */
+    document.querySelectorAll('table.paginated').forEach(tbl=>{
+      const perPage = +tbl.dataset.perPage || 10;
+      const tbody   = tbl.tBodies[0];
+      if (!tbody) return;
+
+      /* contenedor de botones (1 sola vez) */
+      const pid   = 'pager-'+tbl.id;
+      let pager   = document.getElementById(pid);
+      if (!pager){
+        pager = document.createElement('div');
+        pager.id = pid;
+        pager.className = 'table-pager';
+        tbl.after(pager);
+      } else pager.innerHTML = '';
+
+      /* helpers dinámicos → siempre usan el orden actual del DOM */
+      const rowsAll   = () => Array.from(tbody.rows);
+      const pages     = Math.ceil(rowsAll().length / perPage);
+      let   current   = 1;
+
+      const mk = (txt,fn,cls='') => {
+        const b=document.createElement('button');
+        b.textContent=txt;
+        if(cls) b.classList.add(cls);
+        b.addEventListener('click',fn);
+        return b;
+      };
+
+      const prev = mk('‹',()=>show(current-1));
+      const next = mk('›',()=>show(current+1));
+      pager.append(prev);
+      for(let i=1;i<=pages;i++){ pager.append(mk(i,()=>show(i),'page')); }
+      pager.append(next);
+
+      function show(n){
+        current = n;
+        rowsAll().forEach((tr,i)=>{
+          tr.style.display = (i>= (n-1)*perPage && i< n*perPage)?'':'none';
+        });
+        pager.querySelectorAll('button.page').forEach((b,i)=>{
+          b.classList.toggle('active',i+1===n);
+        });
+        prev.disabled = (n===1);
+        next.disabled = (n===pages);
+      }
+      show(1);
+
+      /* API expuesta para el ordenamiento */
+      tbl._pager = { show, page:()=>current };
+    });
+
+    /* ══════════ 2)  O R D E N A M I E N T O ══════════ */
+    document.querySelectorAll('table.sortable thead th').forEach(th=>{
+      if(th.classList.contains('no-title')) return;   /* columna vacía */
+      th.style.cursor='pointer';
+      let dir = 1;                                    /* 1 asc  | -1 desc */
+
+      th.addEventListener('click',()=>{
+        const tbl  = th.closest('table');
+        const idx  = [...th.parentNode.children].indexOf(th);
+        const tb   = tbl.tBodies[0];
+        const type = th.dataset.type || guess(tb.rows[0].cells[idx].innerText);
+        const rows = [...tb.rows];
+
+        rows.sort((a,b)=>cmp(a.cells[idx].innerText,
+                             b.cells[idx].innerText,type)*dir)
+            .forEach(r=>tb.appendChild(r));
+
+        dir *= -1;
+        /* refresca la página visible si la tabla está paginada */
+        if(tbl._pager) tbl._pager.show(tbl._pager.page());
+      });
+    });
+
+    /* ---------- helpers ---------- */
+    const num   = v=>+v.replace(/[^0-9,.-]/g,'').replace(',','.');
+    const toISO = d=>d.replace(/(\d{2})-(\d{2})-(\d{4})/,'$3-$2-$1').replace(' ','T');
+    function cmp(a,b,t){
+      if(t==='number') return num(a)-num(b);
+      if(t==='date')   return new Date(toISO(a))-new Date(toISO(b));
+      return a.localeCompare(b,'es',{numeric:true,sensitivity:'base'});
+    }
+    function guess(v){
+      v=v.trim();
+      return /^-?\d+(?:[.,]\d+)?$/.test(v)?'number':
+             /^\d{2}-\d{2}-\d{4}/.test(v)?'date':'text';
+    }
+  });
+})();
+
+/* pega este bloque **después** de las otras funciones JS */
+function valTicket(){
+  const rules = [
+    {el:t_nom,  msg:'Solo letras, números y . , # ¿ ¡ ! ? ( ) / -'},
+    {el:t_desc,msg:'Solo letras, números y . , # ¿ ¡ ! ? ( ) / -'},
+    {el:t_prec,msg:'Debe ser un número ≥ 0'},
+    {el:t_cupo,msg:'Debe ser un número ≥ 0'}
+  ];
+  let ok = true;
+
+  rules.forEach(r=>{
+    const lbl = r.el.parentElement;
+    if(!r.el.checkValidity()){
+      lbl.classList.add('error'); lbl.querySelector('.err').textContent=r.msg;
+      ok=false;
+    }else{
+      lbl.classList.remove('error'); lbl.querySelector('.err').textContent='';
+    }
+  });
+
+  /* cupo ≥ ocupados (al editar) */
+  const used = +dlgTicket.dataset.ocupados||0;
+  if(+t_cupo.value < used){
+    const lbl = t_cupo.parentElement;
+    lbl.classList.add('error');
+    lbl.querySelector('.err').textContent = `No puede ser menor que ${used}`;
+    ok=false;
+  }
+
+  /* habilita / deshabilita el botón Guardar */
+  fTicket.querySelector('button[type="submit"]').disabled = !ok;
+}
+
+fTicket.addEventListener('submit', async e=>{
+  /* si el cliente aún ve errores puntualizamos arriba */
+  const btn = fTicket.querySelector('button[type="submit"]');
+  if(btn.disabled) return;          // validación de cliente ya bloqueó
+  e.preventDefault();
+
+  const fd  = new FormData(fTicket);
+  btn.disabled = true; btn.textContent = 'Guardando…';
+
+  try{
+      const res = await fetch(location.href, {
+          method: 'POST',
+          body  : fd,
+          headers:{'X-Requested-With':'XMLHttpRequest'}
+      });
+      const j = await res.json();
+
+      if(j.ok){
+         /* recarga normal para refrescar la tabla */
+         location.href = 'ticket_detalle.php?evt=<?=$idEvento?>';
+      }else{
+         showServerError(j.error || 'Error desconocido');
+      }
+  }catch(err){
+      console.error(err);
+      showServerError('Fallo de red');
+  }finally{
+      btn.disabled = false;
+      btn.textContent = 'Guardar';
+  }
+});
+
+function showServerError(msg){
+   let box = dlgTicket.querySelector('.form-error');
+   if(!box){
+       box = document.createElement('p');
+       box.className = 'form-error';
+       box.style.cssText =
+          'color:var(--danger);font-weight:600;margin:0 0 1rem;';
+       dlgTicket.querySelector('form').prepend(box);
+   }
+   box.textContent = msg;
+   /* scroll suave hasta el mensaje */
+   box.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+/* bloquea envío si el botón está deshabilitado */
+fTicket.addEventListener('submit', e => {
+  const btn = fTicket.querySelector('button[type="submit"]');
+
+  /* ➊  Solo se cancela el envío cuando el form aún tiene errores   */
+  if (btn.disabled) {
+      e.preventDefault();                       // ← evita recarga
+      const firstBad = fTicket.querySelector(
+         'label.error input, label.error textarea, label.error select');
+      if (firstBad) {
+          firstBad.focus({preventScroll:true});
+          firstBad.scrollIntoView({behavior:'smooth',block:'center'});
+      }
+  }
+});
+
+/* ─── botón “Añadir ticket” ───────────────────────── */
+btnAddTicket.onclick = () => {
+  dlgTicket.removeAttribute('data-ocupados');   // limpia dataset
+  fTicket.reset();                              // limpia campos
+  t_id.value = '';
+  dlgTicketTitle.textContent = 'Nuevo ticket';
+  setTimeout(valTicket);                        // recalcula validación
+  dlgTicket.showModal();                        // ⬅️ vuelve a abrir
+};
+
+/* ─── botones “Editar ticket” ─────────────────────── */
+document.querySelectorAll('.edit-ticket').forEach(btn => {
+  btn.onclick = () => {
+    const d = JSON.parse(btn.dataset.json);
+    dlgTicket.dataset.ocupados = d.ocupados;
+
+    /* rellena los campos del formulario */
+    t_id.value     = d.id_evento_ticket;
+    t_nom.value    = d.nombre_ticket;
+    t_desc.value   = d.descripcion || '';
+    t_prec.value   = d.precio_clp;
+    t_cupo.value   = d.cupo_total;
+    t_activo.value = d.activo;
+    dlgTicketTitle.textContent = 'Editar ticket';
+
+    setTimeout(valTicket);                      // recalcula validación
+    dlgTicket.showModal();                      // ⬅️ vuelve a abrir
+  };
+});
+</script>
+
+<!-- ══ VALIDACIÓN EN VIVO (genérica) ═════════════════════════ -->
+<script>
+(() => {
+  /* aplica a TODOS los formularios de diálogos, excepto #fTicket que ya
+     tiene reglas extra de cupo, etc. */
+  document.querySelectorAll('dialog form:not(#fTicket)').forEach(initLive);
+
+  function initLive(form){
+    const ctrls = [...form.querySelectorAll('input,textarea,select')];
+
+    /* crea <small class="err"> si falta (p.e. fHor, fUsr, fAdm) */
+    ctrls.forEach(c=>{
+      const lbl = c.parentElement;
+      if(!lbl.querySelector('.err')){
+        const s = document.createElement('small');
+        s.className='err'; lbl.appendChild(s);
+      }
+      ['input','change','blur'].forEach(ev =>
+        c.addEventListener(ev, ()=> validateCtrl(c,form)));
+    });
+
+    form.addEventListener('submit', e=>{
+      const firstBad = ctrls.find(c=> !validateCtrl(c,form));
+      if(firstBad){
+        e.preventDefault();
+        firstBad.focus({preventScroll:true});
+        firstBad.scrollIntoView({behavior:'smooth',block:'center'});
+      }
+    });
+
+    /* estado inicial por si el modal abre con datos */
+    toggleSubmit(form);
+  }
+
+  function validateCtrl(ctrl,form){
+    const ok  = ctrl.checkValidity();
+    const lbl = ctrl.parentElement;
+    const err = lbl.querySelector('.err');
+    if(ok){
+      lbl.classList.remove('error');
+      err.textContent = '';
+    }else{
+      lbl.classList.add('error');
+      /* usa title si lo hay; si no, el mensaje nativo del navegador */
+      err.textContent = ctrl.title || ctrl.validationMessage;
+    }
+    toggleSubmit(form);
+    return ok;
+  }
+
+  function toggleSubmit(form){
+    const btn = form.querySelector('button[type="submit"]');
+    if(btn) btn.disabled = !form.checkValidity();
+  }
+})();
+</script>
+
+<!-- ░░░░ Heartbeat automático cada 10 min ░░░░ -->
+<script src="heartbeat.js"></script>
 
 </body></html>
