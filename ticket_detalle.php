@@ -21,7 +21,7 @@ function abort(string $msg, int $http = 400): never {
 /* ─── NUEVO: verificación de GD ─────────────────────────────── */
 if (!extension_loaded('gd')) {
     http_response_code(500);          // error interno
-    die('La extensión GD no está habilitada. '
+    abort('La extensión GD no está habilitada. '
        .'Edite php.ini →  extension=gd  y reinicie Apache.');
 }
 
@@ -63,7 +63,7 @@ $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
 
 if (!$auth->fetchColumn()){
     http_response_code(403);
-    die('Acceso restringido');
+    abort('Acceso restringido');
 }
 
 $idTicket = (int)($_GET['id'] ?? 0);
@@ -80,12 +80,20 @@ if (!$idEvento && isset($_GET['id'])) {
     $tmp->execute([(int)$_GET['id']]);
     $idEvento = (int)$tmp->fetchColumn();
     if ($idEvento) {
+        /* ─── si vino vía AJAX devolvemos éxito ─── */
+        if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
         header("Location: ticket_detalle.php?evt=$idEvento");
         exit;
     }
 }
 
-if (!$idEvento) die('Evento no especificado');
+if (!$idEvento) abort('Evento no especificado');
 
 /* ─── Datos del evento (siempre existen) ──────────────────────── */
 $evtRow = $pdo->prepare("
@@ -96,7 +104,7 @@ $evtRow = $pdo->prepare("
          WHERE id_evento = ?
          LIMIT 1");
 $evtRow->execute([$idEvento]);
-$evtRow = $evtRow->fetch(PDO::FETCH_ASSOC) ?: die('Evento no encontrado');
+$evtRow = $evtRow->fetch(PDO::FETCH_ASSOC) ?: abort('Evento no encontrado');
 
 /* ─── Tickets del evento (puede estar vacío) ─────────────────── */
 $ticketStmt = $pdo->prepare("
@@ -151,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_usr'])) {
     list($cupoTotal,$usados) = $cap->fetch(PDO::FETCH_NUM);
 
     if ($idUsr==0 && $usados >= $cupoTotal){
-        die('No quedan cupos disponibles para este ticket.');
+        abort('No quedan cupos disponibles para este ticket.');
     }
     if (!$idTicketSel) $idTicketSel = $idTicket;   // respaldo
     $data  = [
@@ -162,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_usr'])) {
         'equipo' => trim($_POST['equipo'])
     ];
     if (!$data['email'] || $data['nombre']==='' || $data['cel']==='') {
-        die('Campos obligatorios vacíos');
+        abort('Campos obligatorios vacíos');
     }
 
     if ($idUsr) {                      /* ---- UPDATE ---- */
@@ -212,6 +220,14 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_usr'])) {
         ]);
     }
 
+    /* ─── si vino vía AJAX devolvemos éxito ─── */
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     header("Location: ticket_detalle.php?evt=$idEvento&tkt=$idTicketSel&ok=1");
     exit;
 }
@@ -222,6 +238,15 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['del_ticket'])){
         DELETE FROM eventos_tickets
          WHERE id_evento_ticket = ? AND id_evento = ?")
         ->execute([(int)$_POST['del_ticket'],$idEvento]);
+    
+    /* ─── si vino vía AJAX devolvemos éxito ─── */
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     header("Location: ticket_detalle.php?evt=$idEvento"); exit;
 }
 
@@ -291,7 +316,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_hor'])) {
     $ini   = $_POST['fecha_inicio'];
     $fin   = $_POST['fecha_fin'];
 
-    if ($nom===''||!$ini||!$fin) die('Datos de horario incompletos');
+    if ($nom===''||!$ini||!$fin) abort('Datos de horario incompletos');
 
     if ($idH) {                      // UPDATE
         $pdo->prepare("
@@ -305,6 +330,15 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_hor'])) {
            VALUES(?,?,?,?)")
            ->execute([$idEvento,$nom,$ini,$fin]);
     }
+
+    /* ─── si vino vía AJAX devolvemos éxito ─── */
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     header("Location: ticket_detalle.php?evt=$idEvento");
     exit;
 }
@@ -312,6 +346,15 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_hor'])) {
 if(isset($_GET['del_hor'])){
     $pdo->prepare("DELETE FROM ticket_horarios WHERE id_ticket_horario=?")
         ->execute([(int)$_GET['del_hor']]);
+
+    /* ─── si vino vía AJAX devolvemos éxito ─── */
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     header("Location: ticket_detalle.php?evt=$idEvento");
     exit;
 }
@@ -331,11 +374,19 @@ if (isset($_POST['add_admin'])) {
     $uidStmt->execute([$idPais, $rut]);
     $uid = (int)$uidStmt->fetchColumn();
 
-    if (!$uid) die('Usuario no encontrado');
+    if (!$uid) abort('Usuario no encontrado');
 
     $pdo->prepare("
         INSERT IGNORE INTO ticket_admins(id_evento,id_usuario)
         VALUES(?,?)")->execute([$idEvento,$uid]);
+
+    /* ─── si vino vía AJAX devolvemos éxito ─── */
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+        exit;
+    }
 
     header("Location: ticket_detalle.php?evt=$idEvento"); exit;
 
@@ -346,6 +397,15 @@ if (isset($_POST['add_admin'])) {
             VALUES(?,?)")
             ->execute([$t['id_evento_ticket'], $uid]);
     }
+
+    /* ─── si vino vía AJAX devolvemos éxito ─── */
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     header("Location: ticket_detalle.php?evt=$idEvento");
     exit;
 }
@@ -357,6 +417,14 @@ if (isset($_GET['del_admin'])) {
          WHERE id_evento = ? AND id_usuario = ?")
         ->execute([$idEvento,(int)$_GET['del_admin']]);
 
+    /* ─── si vino vía AJAX devolvemos éxito ─── */
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     header("Location: ticket_detalle.php?evt=$idEvento"); exit;
 }
 
@@ -365,6 +433,15 @@ if(isset($_GET['del_usr'])){
     $pdo->prepare("
         DELETE FROM ticket_usuario WHERE id_ticket_usuario=?")
         ->execute([(int)$_GET['del_usr']]);
+
+    /* ─── si vino vía AJAX devolvemos éxito ─── */
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     header("Location: ticket_detalle.php?evt=$idEvento");
     exit;
 }
@@ -378,6 +455,15 @@ if (isset($_GET['del_usr'])){
 
     $pdo->prepare("DELETE FROM ticket_usuario WHERE id_ticket_usuario=?")
         ->execute([(int)$_GET['del_usr']]);
+
+    /* ─── si vino vía AJAX devolvemos éxito ─── */
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     header("Location: ticket_detalle.php?evt=$idEvento");
     exit;
 }
@@ -631,6 +717,12 @@ if (isset($_GET['del_usr'])){
     display:inline-block;   /* o inline; ambas funcionan */
     margin:0;
   }
+
+  /* ─── MARK: inputs y textareas inválidos ─── */
+  label.error input,
+  label.error textarea {
+    border: 1px solid var(--danger);
+  }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -750,16 +842,16 @@ $totalCupo = array_sum(array_column($tickets,'cupo_total'));
     <label>Nombre
       <input  name="nombre_ticket" id="t_nom"
               maxlength="100" required
-              pattern="^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$"
+              pattern="^[A-Za-z0-9\u00C0-\u024F .,#¿¡!?()\/\-]+$"
               title="Solo letras, números y . , # ¿ ¡ ! ? ( ) / -"
               oninput="valTicket()">
       <small class="err"></small>
     </label>
 
     <label>Descripción
-      <textarea name="descripcion"  id="t_desc" rows="2"
+      <textarea name="descripcion" id="t_desc" rows="2"
                 maxlength="255"
-                pattern="^[\p{L}\p{N} .,#¿¡!?()\/\- \n\r]+$"
+                pattern="^[A-Za-z0-9\u00C0-\u024F .,#¿¡!?()\/\-]+$"
                 title="Solo letras, números y . , # ¿ ¡ ! ? ( ) / -"
                 oninput="valTicket()"></textarea>
       <small class="err"></small>
@@ -784,7 +876,7 @@ $totalCupo = array_sum(array_column($tickets,'cupo_total'));
     </label>
 
     <div class="dlg-btns">
-      <button>Guardar</button>
+      <button type="submit">Guardar</button>
       <button type="button" id="t_cancel">Cancelar</button>
     </div>
   </form>
@@ -797,6 +889,7 @@ btnAddTicket.onclick = () => {
   t_id.value = '';
   dlgTicketTitle.textContent = 'Nuevo ticket';
   dlgTicket.showModal();
+  setTimeout(valTicket, 0);    // <─ disparar validación al vuelo
 };
 // ===== tickets: abrir modal editar =====
 document.querySelectorAll('.edit-ticket').forEach(btn=>{
@@ -810,6 +903,7 @@ document.querySelectorAll('.edit-ticket').forEach(btn=>{
     t_cupo.value  = d.cupo_total;
     t_activo.value= d.activo;
     dlgTicket.showModal();
+    setTimeout(valTicket, 0);  // <─ disparar validación al vuelo
   };
 });
 // ===== cancelar =====
@@ -871,7 +965,7 @@ $horarios = $horarios->fetchAll(PDO::FETCH_ASSOC);
     <label>Fin     <input type="datetime-local" name="fecha_fin"    id="h_fin" required></label>
 
     <div class="dlg-btns">
-      <button>Guardar</button>
+      <button type="submit">Guardar</button>
       <button type="button" id="h_cancel">Cancelar</button>
     </div>
   </form>
@@ -969,7 +1063,7 @@ $admins = $admins->fetchAll(PDO::FETCH_ASSOC);
     <p id="a_preview" class="msg"></p>
 
     <div class="dlg-btns">
-      <button id="a_save" disabled>Guardar</button>
+      <button type="submit" id="a_save" disabled>Guardar</button>
       <button type="button" id="a_cancel">Cancelar</button>
     </div>
   </form>
@@ -1131,7 +1225,7 @@ function editTicket(t){
     <label>Extras                   <input type="text"  name="extras"          id="u_extras"maxlength="255"></label>
 
     <div class="dlg-btns">
-      <button>Guardar</button>
+      <button type="submit">Guardar</button>
       <button type="button" id="u_cancel">Cancelar</button>
     </div>
   </form>
@@ -1507,36 +1601,66 @@ document.getElementById('logout').addEventListener('click', async e => {
   });
 })();
 
+// ─── referencias globales a los inputs y al formulario ───
+const dlgTicket = document.getElementById('dlgTicket');
+const fTicket   = document.getElementById('fTicket');
+const t_nom     = document.getElementById('t_nom');
+const t_desc    = document.getElementById('t_desc');
+const t_prec    = document.getElementById('t_prec');
+const t_cupo    = document.getElementById('t_cupo');
+
 /* pega este bloque **después** de las otras funciones JS */
 function valTicket(){
+  // ── Defino todas las reglas de validación ──
   const rules = [
-    {el:t_nom,  msg:'Solo letras, números y . , # ¿ ¡ ! ? ( ) / -'},
-    {el:t_desc,msg:'Solo letras, números y . , # ¿ ¡ ! ? ( ) / -'},
-    {el:t_prec,msg:'Debe ser un número ≥ 0'},
-    {el:t_cupo,msg:'Debe ser un número ≥ 0'}
+    {
+      el: t_nom,
+      test: () => /^[A-Za-z0-9\u00C0-\u024F .,#¿¡!?()\/\-]+$/.test(t_nom.value),
+      msg: 'Solo letras, números y . , # ¿ ¡ ! ? ( ) / -'
+    },
+    {
+      el: t_desc,
+      test: () => t_desc.value === '' 
+                 || /^[A-Za-z0-9\u00C0-\u024F .,#¿¡!?()\/\-]+$/.test(t_desc.value),
+      msg: 'Solo letras, números y . , # ¿ ¡ ! ? ( ) / -'
+    },
+    {
+      el: t_prec,
+      test: () => t_prec.checkValidity(),  // type=number, min="0"
+      msg: 'Debe ser un número ≥ 0'
+    },
+    {
+      el: t_cupo,
+      test: () => t_cupo.checkValidity(),  // type=number, min="0"
+      msg: 'Debe ser un número ≥ 0'
+    }
   ];
+
   let ok = true;
 
-  rules.forEach(r=>{
-    const lbl = r.el.parentElement;
-    if(!r.el.checkValidity()){
-      lbl.classList.add('error'); lbl.querySelector('.err').textContent=r.msg;
-      ok=false;
-    }else{
-      lbl.classList.remove('error'); lbl.querySelector('.err').textContent='';
+  // ── Recorro cada regla y muestro/oculto error inline ──
+  rules.forEach(({el, test, msg})=>{
+    const lbl = el.parentElement;
+    if (!test()) {
+      lbl.classList.add('error');
+      lbl.querySelector('.err').textContent = msg;
+      ok = false;
+    } else {
+      lbl.classList.remove('error');
+      lbl.querySelector('.err').textContent = '';
     }
   });
 
-  /* cupo ≥ ocupados (al editar) */
-  const used = +dlgTicket.dataset.ocupados||0;
-  if(+t_cupo.value < used){
+  // ── Validación extra: cupo ≥ ocupados ──
+  const used = +dlgTicket.dataset.ocupados || 0;
+  if (+t_cupo.value < used) {
     const lbl = t_cupo.parentElement;
     lbl.classList.add('error');
     lbl.querySelector('.err').textContent = `No puede ser menor que ${used}`;
-    ok=false;
+    ok = false;
   }
 
-  /* habilita / deshabilita el botón Guardar */
+  // ── Activo/desactivo botón Guardar ──
   fTicket.querySelector('button[type="submit"]').disabled = !ok;
 }
 
@@ -1561,7 +1685,14 @@ fTicket.addEventListener('submit', async e=>{
          /* recarga normal para refrescar la tabla */
          location.href = 'ticket_detalle.php?evt=<?=$idEvento?>';
       }else{
-         showServerError(j.error || 'Error desconocido');
+         const msg = j.error || 'Error desconocido';
+         if (/nombre/i.test(msg)) {
+           showFieldError(t_nom, msg);
+         } else if (/descripción/i.test(msg)) {
+           showFieldError(t_desc, msg);
+         } else {
+           showFormError(msg);
+         }
       }
   }catch(err){
       console.error(err);
@@ -1584,6 +1715,14 @@ function showServerError(msg){
    box.textContent = msg;
    /* scroll suave hasta el mensaje */
    box.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+/* ─── nueva: resalta error bajo un control ────────────────── */
+function showFieldError(el, msg) {
+  const lbl = el.parentElement;
+  lbl.classList.add('error');
+  lbl.querySelector('.err').textContent = msg;
+  el.focus();
 }
 
 /* bloquea envío si el botón está deshabilitado */
@@ -1631,6 +1770,63 @@ document.querySelectorAll('.edit-ticket').forEach(btn => {
     dlgTicket.showModal();                      // ⬅️ vuelve a abrir
   };
 });
+</script>
+
+<script>
+/* ══════════ AJAX genérico para TODOS los diálogos ══════════ */
+['fHor','fUsr','fAdm'].forEach(initDlgAjax);
+
+function initDlgAjax(id){
+  const f   = document.getElementById(id);
+  if(!f) return;
+  const dlg = f.closest('dialog');
+
+  f.addEventListener('submit', async e => {
+    const btn = f.querySelector('button[type="submit"]');
+    if (btn.disabled) return;          // el live-validation ya bloqueó
+    e.preventDefault();
+
+    const fd  = new FormData(f);
+    btn.disabled = true;
+    const txtBtn = btn.textContent;
+    btn.textContent = 'Guardando…';
+
+    try{
+        const res = await fetch(location.href, {
+            method : 'POST',
+            body   : fd,
+            headers: {'X-Requested-With':'XMLHttpRequest'}
+        });
+        const j = await res.json();
+
+        if (j.ok){
+            location.reload();               // éxito → refresca tablas
+        }else{
+            showFormError(f, j.error || 'Error desconocido');
+        }
+    }catch(err){
+        console.error(err);
+        showFormError(f, 'Fallo de red');
+    }finally{
+        btn.disabled  = false;
+        btn.textContent = txtBtn;
+    }
+  });
+
+  /* helper reutilizable */
+  function showFormError(form, msg){
+      let box = form.querySelector('.form-error');
+      if(!box){
+          box = document.createElement('p');
+          box.className = 'form-error';
+          box.style.cssText =
+             'color:var(--danger);font-weight:600;margin:0 0 1rem;';
+          form.prepend(box);
+      }
+      box.textContent = msg;
+      box.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+}
 </script>
 
 <!-- ══ VALIDACIÓN EN VIVO (genérica) ═════════════════════════ -->
