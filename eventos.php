@@ -364,12 +364,6 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body {
-      font-family: sans-serif;
-      background: #f6f6f6;
-      margin: 0;
-      padding: 2rem;
-    }
     h1 {
       margin-top: 0;
     }
@@ -440,15 +434,6 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
     height: 16px;
     }
 
-    /* Scrollbar personalizado suave (WebKit) */
-    .table-responsive::-webkit-scrollbar {
-    height: 8px;
-    }
-    .table-responsive::-webkit-scrollbar-thumb {
-    background: rgba(0,0,0,0.2);
-    border-radius: 4px;
-    }
-
     /* botón transparente con padding uniforme */
     .actions .action-btn {
       background: none;
@@ -504,26 +489,6 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
     .modal-content dd {
       margin: .25rem 0 0 0;
       padding-left: .5rem;
-    }
-
-    .month-nav {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      margin: 1.5rem 0;
-      font-size: 1.1rem;
-    }
-    .month-nav .nav-arrow {
-      text-decoration: none;
-      color: #444;
-      font-weight: bold;
-      padding: 0 .75rem;
-      font-size: 1.4rem;
-    }
-    .month-nav .nav-title {
-      flex: 1;
-      text-align: center;
-      font-weight: bold;
     }
 
     /* Overlay semi-transparente */
@@ -664,12 +629,12 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
 
     .table-responsive th:nth-child(1),
     .table-responsive td:nth-child(1) { /* “Evento” es la 3ª columna */
-      width: 9%;
+      width: 9.5%;
     }
 
     .table-responsive th:nth-child(2),
     .table-responsive td:nth-child(2) {
-      width: 9%;
+      width: 9.5%;
     }
 
     .table-responsive th:nth-child(3),
@@ -689,7 +654,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
 
     .table-responsive th:nth-child(6),
     .table-responsive td:nth-child(6) {
-      width: 10%;
+      width: 9%;
     }
 
     .table-responsive th:nth-child(7),
@@ -699,7 +664,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
 
     .table-responsive th:nth-child(8),
     .table-responsive td:nth-child(8) {
-      width: 13.5%;
+      width: 12.5%;
     }
 
     /* ─── Formulario en modal ─── */
@@ -900,6 +865,1117 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
     .btn-warning.active{
       background:#e69500;
     }
+
+    /* === SCROLLBAR (copiado desde integrantes.php) === */
+    /* Chrome / Edge / WebKit */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #c5c9d6;
+      border-radius: 8px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #a9afc4;
+    }
+
+    /* Comportamiento de desplazamiento suave global (igual que integrantes.php) */
+    html {
+      scroll-behavior: smooth;
+    }
+
+    /* ====== LAYOUT ESTILO «integrantes» APLICADO A EVENTOS ====== */
+
+    /* Contenedor general (sidebar + contenido) */
+    .layout{
+      display:flex;
+    }
+
+    /* Sidebar fija (reutiliza variables globales de navegador.php) */
+    .sidebar{
+      position:fixed;
+      top:var(--nav-h);
+      left:0;
+      bottom:0;
+      width:240px;
+      background:var(--bg-sidebar);
+      color:#fff;
+      padding:1rem .75rem 2rem;
+      overflow-y:auto;
+      overflow-x:hidden;           /* ← evita scroll horizontal */
+      border-radius:0 var(--radius) var(--radius) 0;
+      box-shadow:var(--shadow);
+      scrollbar-gutter: stable;    /* opcional: evita “saltos” al aparecer scroll */
+    }
+
+    /* Botones de filtro (los <button> dentro de cada <form>) */
+    .sidebar form{
+      margin:0 0 .35rem;
+    }
+    .sidebar form button{
+      all:unset;
+      display:block;
+      width:100%;
+      padding:.55rem .85rem;
+      font:500 .9rem/1.25 "Poppins",sans-serif;
+      border-radius:8px;
+      cursor:pointer;
+      background:transparent;
+      color:#e5e7eb;
+      transition:background .18s,color .18s;
+      position:relative;
+      white-space:normal;          /* permite salto */
+      word-break:break-word;       /* rompe palabras largas */
+      overflow-wrap:anywhere;      /* soporte amplio */
+      max-width:100%;
+      box-sizing:border-box;
+    }
+    .sidebar form button:hover{
+      background:rgba(255,255,255,.12);
+      color:#fff;
+    }
+    .sidebar form button.active{
+      background:var(--primary);
+      color:#fff;
+      box-shadow:0 4px 12px rgba(0,0,0,.25);
+    }
+
+    /* Contenido principal (margen desplazado) */
+    #eventos-main{
+      margin-left:240px;
+      padding:2rem 2.2rem;
+      min-height:calc(100vh - var(--nav-h));
+      display:block;
+    }
+
+    /* Título principal */
+    #eventos-main h1{
+      margin:0 0 1rem;
+      font:600 1.55rem/1.2 "Poppins",sans-serif;
+      letter-spacing:.5px;
+      color:var(--negro);
+    }
+
+    /* Contenedor “card” para controles y tabla */
+    #eventos-card{
+      background:#fff;
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:1.25rem 1.4rem 1.8rem;
+      position:relative;
+      overflow:hidden;
+    }
+
+    /* Barra de acciones superior (buscador + fechas + etc.) */
+    #eventos-toolbar{
+      display:flex;
+      flex-wrap:wrap;
+      gap:.75rem 1rem;
+      align-items:flex-end;
+      margin-bottom:1.2rem;
+    }
+
+    #eventos-toolbar form,
+    #eventos-toolbar > div{
+      display:flex;
+      align-items:center;
+      gap:.5rem;
+    }
+
+    /* Inputs / selects coherentes */
+    #eventos-toolbar input[type="text"],
+    #eventos-toolbar input[type="month"],
+    #eventos-toolbar select{
+      padding:.5rem .7rem;
+      border:1px solid #d6d9e2;
+      border-radius:8px;
+      font:400 .85rem/1 "Poppins",sans-serif;
+      background:#fff;
+      min-width:150px;
+      transition:border-color .18s, box-shadow .18s;
+    }
+    #eventos-toolbar input:focus,
+    #eventos-toolbar select:focus{
+      outline:none;
+      border-color:var(--primary);
+      box-shadow:0 0 0 2px rgba(255,54,0,.25);
+    }
+
+    /* Botones genéricos tipo sistema */
+    .btn-sys{
+      border:0;
+      border-radius:8px;
+      font:500 .85rem/1 "Poppins",sans-serif;
+      cursor:pointer;
+      padding:.6rem 1rem;
+      display:inline-flex;
+      align-items:center;
+      gap:.35rem;
+      background:var(--primary);
+      color:#fff;
+      transition:background .2s, transform .15s;
+    }
+    .btn-sys:hover{background:var(--primary-dark);}
+    .btn-sys:active{transform:translateY(1px);}
+
+    /* Variante secundaria */
+    .btn-sec{
+      background:#e5e7eb;
+      color:#111827;
+    }
+    .btn-sec:hover{background:#d1d5db;}
+
+    /* Botón advertencia (Aprobar eventos) */
+    .btn-warning{
+      background:var(--amarillo);
+      color:#444;
+    }
+    .btn-warning:hover{background:#f7d600;}
+    .btn-warning.active{
+      background:#f4c400;
+      color:#222;
+    }
+
+    /* Badges numéricos dentro de botones */
+    .btn-sys .badge{
+      background:#d60000;
+      color:#fff;
+      border-radius:12px;
+      padding:2px 6px;
+      font-size:.65rem;
+      font-weight:600;
+      line-height:1;
+      position:relative;
+      top:-1px;
+    }
+
+    /* Month navigation alineada y estilizada */
+    .month-nav{
+      position:relative;
+      z-index:1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:1.25rem;
+      margin:0 0 1.4rem;
+      font:600 1rem/1 "Poppins",sans-serif;
+      color:var(--negro);
+    }
+
+    .month-nav .nav-title{
+      background:#ffffff;
+      border:1px solid #e3e6ec;
+      padding:.55rem 1.25rem;
+      border-radius:14px;
+      box-shadow:0 2px 4px rgba(0,0,0,.06);
+      letter-spacing:.5px;
+    }
+
+    .month-nav button.nav-arrow{
+      all:unset;
+      width:44px;
+      height:44px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:14px;
+      cursor:pointer;
+      background:linear-gradient(135deg,#f4f6f9,#e9edf3);
+      border:1px solid #d9dde3;
+      box-shadow:0 2px 4px rgba(0,0,0,.08), inset 0 0 0 1px #fff;
+      font-size:1.05rem;
+      color:#374151;
+      transition:box-shadow .25s, transform .18s, background .25s, color .25s;
+    }
+
+    .month-nav button.nav-arrow:hover{
+      background:#fff;
+      color:#111827;
+      box-shadow:0 4px 10px rgba(0,0,0,.12);
+    }
+
+    .month-nav button.nav-arrow:active{
+      transform:translateY(2px);
+      box-shadow:0 2px 5px rgba(0,0,0,.16);
+    }
+
+    @media (max-width:600px){
+      .month-nav{
+        gap:.75rem;
+      }
+      .month-nav button.nav-arrow{
+        width:40px;
+        height:40px;
+      }
+      .month-nav .nav-title{
+        padding:.5rem .9rem;
+        font-size:.9rem;
+      }
+    }
+
+    /* Tabla dentro del card */
+    #eventos-card .table-responsive{
+      border:1px solid #e6e8ef;
+      border-radius:10px;
+      overflow:auto;
+      box-shadow:inset 0 0 0 1px #fff;
+      background:#fff;
+      max-width:100%;
+    }
+
+    #eventos-card table{
+      width:100%;
+      border-collapse:collapse;
+      font:400 .8rem/1.4 "Poppins",sans-serif;
+      min-width:920px;
+    }
+
+    #eventos-card thead th{
+      background:#f9fafb;
+      color:#4b5563;
+      font:600 .72rem/1.2 "Poppins",sans-serif;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      position:sticky;
+      top:0;
+      z-index:10;
+      padding:.65rem .75rem;
+      border-bottom:1px solid #e5e7eb;
+    }
+
+    #eventos-card tbody td{
+      padding:.65rem .75rem;
+      border-bottom:1px solid #f0f2f5;
+      vertical-align:top;
+      background:#fff;
+    }
+
+    #eventos-card tbody tr:nth-child(odd) td{
+      background:#fcfdfe;
+    }
+
+    #eventos-card tbody tr:hover td{
+      background:#f2f7ff;
+    }
+
+    /* === Ajuste responsive para “Equipo o Proyecto” === */
+    .equipos-list{
+      margin:.2rem 0 0;
+      padding:0;
+      list-style:none;
+      counter-reset:eqnum;
+      display:flex;
+      flex-wrap:wrap;                 /* ahora las pills fluyen en varias filas */
+      gap:.35rem .45rem;
+      max-width:100%;                  /* nunca exceder la celda */
+    }
+
+    .equipos-list li{
+      position:relative;
+      counter-increment:eqnum;
+      font:500 .7rem/1.15 "Poppins",sans-serif;
+      background:linear-gradient(135deg,#f5f7fa,#eceff4);
+      border:1px solid #d9dee5;
+      padding:.4rem .55rem .4rem 2.1rem;
+      border-radius:10px;
+      color:#374151;
+      box-shadow:0 1px 2px rgba(0,0,0,.05);
+      white-space:normal;              /* permite varias líneas */
+      max-width:calc(100% - 0.25rem);  /* cada pill no excede ancho de la fila */
+      line-height:1.2;
+      word-break:break-word;
+      overflow:visible;                /* quitamos el corte forzado */
+      text-overflow:unset;
+    }
+
+    .equipos-list li::before{
+      content:counter(eqnum);
+      position:absolute;
+      left:.55rem;
+      top:50%;
+      transform:translateY(-50%);
+      width:1.1rem;
+      height:1.1rem;
+      border-radius:6px;
+      background:var(--primary);
+      color:#fff;
+      font:600 .65rem/1.1 "Poppins",sans-serif;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow:0 1px 2px rgba(0,0,0,.25);
+    }
+
+    /* Opcional: limitar altura de la celda de equipos y hacer scroll interno */
+    td:nth-child(4) .equipos-list{
+      max-height:80px;
+      overflow:auto;
+      scrollbar-width:thin;
+    }
+
+    /* Columna acciones */
+    .actions .action-btn{
+      background:transparent;
+      border:0;
+      cursor:pointer;
+      font-size:1rem;
+      padding:.35rem;
+      color:#6b7280;
+      border-radius:6px;
+      transition:background .18s,color .18s;
+    }
+    .actions .action-btn:hover{
+      background:#eef2ff;
+      color:#374151;
+    }
+
+    /* Ajustes de errores inline reutilizados */
+    .err-inline{
+      font:500 .65rem/1 "Poppins",sans-serif;
+      margin-top:.25rem;
+    }
+
+    /* Adaptar buscador (emoji) */
+    #form-search input[type="text"]{
+      min-width:180px;
+    }
+
+    /* Espacio antes de la tabla principal */
+    #eventos-main section{margin-top:0;}
+
+    /* ==== Zona de descarga agrupada ==== */
+    #form-download{
+      position:relative;
+      display:flex;
+      align-items:flex-end;
+      gap:.6rem;
+      background:#f8f9fb;
+      border:1px solid #e2e6ef;
+      padding:.65rem .8rem .8rem;
+      border-radius:10px;
+      box-shadow:0 1px 2px rgba(0,0,0,.04);
+    }
+
+    #form-download .range-group{
+      display:flex;
+      gap:.75rem;
+      align-items:flex-start;
+    }
+
+    #form-download .range-field{
+      display:flex;
+      flex-direction:column;
+      font:500 .65rem/1 "Poppins",sans-serif;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:#555;
+    }
+
+    #form-download .range-field label{
+      margin:0 0 .25rem;
+    }
+
+    #form-download select{
+      min-width:90px;
+    }
+
+    #form-download #btn-download{
+      align-self:flex-end;
+    }
+
+    @media (max-width:1050px){
+      #form-download{
+        flex-wrap:wrap;
+      }
+      #form-download .range-group{
+        width:100%;
+        justify-content:space-between;
+      }
+    }
+
+    /* ===== Modales unificados mejorados ===== */
+    .modal-overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(17,24,39,.55);
+      backdrop-filter:blur(3px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:1.5rem;
+      z-index:10000;
+      animation:fadeIn .25s ease;
+    }
+
+    @keyframes fadeIn{
+      from{opacity:0;}
+      to{opacity:1;}
+    }
+
+    .modal-content.card{
+      background:linear-gradient(145deg,#ffffff 0%,#f5f7fb 100%);
+      border:1px solid #e3e8ef;
+      border-radius:18px;
+      box-shadow:0 10px 30px -5px rgba(0,0,0,.25), 0 4px 10px -3px rgba(0,0,0,.15);
+      overflow:hidden;
+      animation:popIn .28s cubic-bezier(.16,.8,.3,1);
+    }
+
+    @keyframes popIn{
+      0%{transform:translateY(12px) scale(.96); opacity:0;}
+      100%{transform:translateY(0) scale(1); opacity:1;}
+    }
+
+    .card-header{
+      background:linear-gradient(90deg,var(--primary) 0%, #ff7a33 60%, #ff934d 100%);
+      color:#fff;
+      padding:1rem 1.25rem;
+      display:flex;
+      align-items:center;
+      gap:.75rem;
+      position:relative;
+    }
+
+    .card-header .card-title{
+      margin:0;
+      font:600 1.05rem/1.1 "Poppins",sans-serif;
+      letter-spacing:.5px;
+    }
+
+    .card-header .modal-close{
+      position:absolute;
+      top:50%;
+      right:1rem;
+      transform:translateY(-50%);
+      color:#fff;
+      background:rgba(255,255,255,.15);
+      width:34px;
+      height:34px;
+      border-radius:10px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border:0;
+      cursor:pointer;
+      transition:background .2s, transform .15s;
+    }
+    .card-header .modal-close:hover{
+      background:rgba(255,255,255,.28);
+    }
+    .card-header .modal-close:active{
+      transform:translateY(-50%) scale(.95);
+    }
+
+    .card-body{
+      padding:1.25rem 1.3rem 1.4rem;
+      overflow-y:auto;
+      max-height:70vh;
+    }
+
+    .card-footer{
+      padding:1rem 1.3rem 1.3rem;
+      background:#f1f4f9;
+      border-top:1px solid #e0e6ef;
+      display:flex;
+      justify-content:flex-end;
+      gap:.75rem;
+    }
+
+    /* Botones dentro de modales coherentes */
+    .card-footer .btn,
+    .modal-content.card button.btn-primary,
+    .modal-content.card button.btn-success{
+      background:var(--primary);
+      color:#fff;
+      border:0;
+      border-radius:10px;
+      padding:.7rem 1.1rem;
+      font:500 .85rem/1 "Poppins",sans-serif;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:.45rem;
+      transition:background .2s, transform .15s;
+    }
+
+    .card-footer .btn:hover,
+    .modal-content.card button.btn-primary:hover,
+    .modal-content.card button.btn-success:hover{
+      background:var(--primary-dark);
+    }
+
+    .card-footer .btn:active,
+    .modal-content.card button.btn-primary:active,
+    .modal-content.card button.btn-success:active{
+      transform:translateY(1px);
+    }
+
+    /* Inputs en modales mismos estilos (ya tenías base, se refuerza) */
+    .modal-content.card .form-group input,
+    .modal-content.card .form-group textarea,
+    .modal-content.card .form-group select{
+      background:#fff;
+      border:1px solid #d8dde5;
+      font:.8rem "Poppins",sans-serif;
+    }
+
+    .modal-content.card .form-group input:focus,
+    .modal-content.card .form-group textarea:focus,
+    .modal-content.card .form-group select:focus{
+      border-color:var(--primary);
+      box-shadow:0 0 0 2px rgba(255,86,20,.25);
+    }
+
+    /* Pills de checkboxes uniformes */
+    .modal-content.card .checkbox-item{
+      background:#eef1f6;
+      border-radius:24px;
+      font:.7rem/1 "Poppins",sans-serif;
+      padding:.45rem .75rem;
+      transition:background .18s, color .18s;
+    }
+    .modal-content.card .checkbox-item:hover{
+      background:#e2e6ed;
+    }
+    .modal-content.card .checkbox-item input:checked + span,
+    .modal-content.card .checkbox-item input:checked{
+      font-weight:600;
+      color:var(--primary);
+    }
+
+    /* Lista de detalles (modal ver) */
+    .vertical-list .detail-item{
+      border:1px solid #e5e9f0;
+      background:#fff;
+      padding:.7rem .85rem .6rem;
+      border-radius:10px;
+      margin:0 0 .8rem;
+      box-shadow:0 1px 2px rgba(0,0,0,.05);
+    }
+    .vertical-list .detail-item dt{
+      font:600 .7rem/1 "Poppins",sans-serif;
+      text-transform:uppercase;
+      letter-spacing:.7px;
+      margin:0 0 .35rem;
+      color:#374151;
+    }
+    .vertical-list .detail-item dd{
+      margin:0;
+      font:.78rem/1.35 "Poppins",sans-serif;
+      color:#4b5563;
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+
+    /* Botones de acción en celdas refinados */
+    .actions .action-btn{
+      border:0;
+      background:#f3f4f6;
+      width:28px;
+      height:28px;
+      border-radius:8px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      margin:0 .1rem;
+      font-size:.8rem;
+      color:#565e6b;
+      line-height:1;
+      padding:0;
+      box-shadow:0 1px 2px rgba(0,0,0,.05);
+      transition:background .18s, color .18s, transform .15s;
+    }
+    .actions .action-btn:hover{
+      background:#ffffff;
+      color:#111827;
+    }
+    .actions .action-btn:active{
+      transform:translateY(1px);
+    }
+
+    /* Ajuste móvil todavía menor si hace falta */
+    @media (max-width:900px){
+      .actions .action-btn{
+        width:26px;
+        height:26px;
+        font-size:.7rem;
+      }
+    }
+
+    /* Para mantener celdas limpias en móviles */
+    @media (max-width:900px){
+      .actions .action-btn{
+        width:30px;
+        height:30px;
+        font-size:.8rem;
+      }
+    }
+
+    /* ===== Reordenado vertical de la toolbar ===== */
+    #eventos-toolbar{
+      display:flex;
+      flex-direction:column;
+      align-items:stretch;
+      gap:1rem;
+      margin-bottom:1.4rem;
+    }
+
+    #form-download{
+      width:100%;
+      box-sizing:border-box;
+    }
+
+    #toolbar-actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:.75rem;
+    }
+
+    #toolbar-search-wrapper{
+      display:flex;
+      flex-direction:column;
+      width:100%;
+    }
+
+    #form-search{
+      display:flex;
+      gap:.5rem;
+      width:100%;
+    }
+
+    #form-search input[type="text"]{
+      flex:1;
+    }
+
+    #toolbar-search-wrapper #search-error{
+      margin-top:.3rem;
+    }
+
+    /* Altura mínima de la tabla para mantener layout consistente */
+    #eventos-card .table-responsive{
+      min-height:340px;              /* ajusta si quieres más/menos */
+      display:flex;
+      flex-direction:column;
+    }
+
+    #eventos-card .table-responsive table{
+      flex:1;
+    }
+
+    /* Fila vacía centrada */
+    .row-empty td.empty-cell{
+      padding:2.5rem 1rem;
+      text-align:center;
+      background:#f9fafb;
+      font:500 .9rem/1.4 "Poppins",sans-serif;
+      color:#555;
+    }
+
+    .row-empty .empty-msg{
+      display:inline-flex;
+      align-items:center;
+      gap:.6rem;
+      background:#fff;
+      border:1px dashed #d1d5db;
+      padding:.9rem 1.25rem;
+      border-radius:12px;
+      box-shadow:0 1px 2px rgba(0,0,0,.05);
+    }
+
+    .row-empty .empty-msg i{
+      font-size:1.15rem;
+      color:var(--primary);
+    }
+
+    /* ════════════════════════════════════════════════════════
+      MODAL ASISTENCIA – Mejora visual (solo CSS)
+      Sin cambiar JS / HTML existente.
+      Pegar al final del <style>.
+      ════════════════════════════════════════════════════════ */
+
+    #modal-asist .modal-content.card {
+      width: clamp(560px, 72vw, 780px);
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #modal-asist .card-body#asist-body {
+      padding: 1.05rem 1.2rem 1.4rem;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #c5c9d6 transparent;
+      background: linear-gradient(180deg,#ffffff 0%,#f7f9fc 100%);
+      border-top: 1px solid #f0f3f7;
+    }
+
+    /* Scrollbar WebKit */
+    #modal-asist .card-body#asist-body::-webkit-scrollbar {
+      width: 8px;
+    }
+    #modal-asist .card-body#asist-body::-webkit-scrollbar-thumb {
+      background:#c5c9d6;
+      border-radius:8px;
+    }
+    #modal-asist .card-body#asist-body::-webkit-scrollbar-thumb:hover {
+      background:#a9afc4;
+    }
+
+    /* Paleta / tokens */
+    #asist-body {
+      --asist-border: #e1e6ef;
+      --asist-border-hover: #d2d9e3;
+      --asist-bg: #fff;
+      --asist-bg-alt: #f6f8fb;
+      --asist-hover: #f1f6ff;
+      --asist-accent: #ff681e;
+      --asist-text: #1f2937;
+      --asist-muted: #5a6474;
+      --asist-pill-bg: linear-gradient(135deg,#f5f7fa,#edf1f6);
+      --asist-pill-border: #d3dae2;
+    }
+
+    /* =======================================================
+      1) MODO CON CLASES (ideal) 
+      Estructura esperada por fila:
+      <div class="asist-row">
+          <div class="asist-nombre">
+            (opcional <img class="avatar">) Nombre
+          </div>
+          <div class="asist-opciones">
+            <button class="pill active">Presente</button> ...
+          </div>
+      </div>
+      ======================================================= */
+    #asist-body .asist-row {
+      display: grid;
+      grid-template-columns: minmax(220px,1fr) minmax(260px,340px);
+      align-items: center;
+      gap: .9rem;
+      padding: .60rem .85rem .55rem;
+      background: var(--asist-bg);
+      border: 1px solid var(--asist-border);
+      border-radius: 14px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.05);
+      transition: background .18s, border-color .18s, box-shadow .18s;
+      position: relative;
+    }
+
+    #asist-body .asist-row:nth-child(odd) {
+      background: var(--asist-bg-alt);
+    }
+
+    #asist-body .asist-row:hover {
+      background: var(--asist-hover);
+      border-color: var(--asist-border-hover);
+      box-shadow: 0 3px 10px -2px rgba(0,0,0,.10);
+    }
+
+    #asist-body .asist-row:focus-within {
+      border-color: var(--asist-accent);
+      box-shadow: 0 0 0 2px rgba(255,104,30,.23);
+    }
+
+    #asist-body .asist-row .asist-nombre {
+      font: 600 .84rem/1.25 "Poppins",sans-serif;
+      color: var(--asist-text);
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      min-width: 0;
+      word-break: break-word;
+    }
+
+    #asist-body .asist-row .asist-nombre .avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.20);
+    }
+
+    #asist-body .asist-row .asist-opciones {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem .55rem;
+      align-items: center;
+      justify-content: flex-start;
+      padding:.15rem 0;
+    }
+
+    /* Botones / pills (pueden ser <button>, <span>, <label>, etc.) */
+    #asist-body .asist-row .asist-opciones .pill,
+    #asist-body .asist-row .asist-opciones button,
+    #asist-body .asist-row .asist-opciones label {
+      cursor: pointer;
+      user-select: none;
+      background: var(--asist-pill-bg);
+      border: 1px solid var(--asist-pill-border);
+      color: var(--asist-muted);
+      font: 500 .66rem/1 "Poppins",sans-serif;
+      letter-spacing:.4px;
+      padding: .50rem .85rem .45rem;
+      border-radius: 999px;
+      min-width: 70px;
+      text-align: center;
+      position: relative;
+      transition: background .18s, border-color .18s, color .18s, box-shadow .18s, transform .15s;
+    }
+
+    #asist-body .asist-row .asist-opciones .pill:hover,
+    #asist-body .asist-row .asist-opciones button:hover,
+    #asist-body .asist-row .asist-opciones label:hover {
+      background:#fff;
+      border-color:#c8d0da;
+      color:#374151;
+      box-shadow:0 2px 4px rgba(0,0,0,.08);
+    }
+
+    #asist-body .asist-row .asist-opciones .active,
+    #asist-body .asist-row .asist-opciones .pill.active {
+      background: var(--asist-accent);
+      border-color: var(--asist-accent);
+      color:#fff !important;
+      box-shadow:0 3px 10px -2px rgba(255,104,30,.55);
+    }
+
+    #asist-body .asist-row .asist-opciones .active::after {
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      border-radius:999px;
+      box-shadow:0 0 0 2px rgba(255,255,255,.55) inset;
+    }
+
+    #asist-body .asist-row .asist-opciones input[type="radio"],
+    #asist-body .asist-row .asist-opciones input[type="checkbox"] {
+      /* Si existen, los escondemos y usamos el label/pill */
+      position:absolute;
+      opacity:0;
+      width:0;
+      height:0;
+      pointer-events:none;
+    }
+
+    /* Estado seleccionado vía input + label */
+    #asist-body .asist-row .asist-opciones input:checked + .pill,
+    #asist-body .asist-row .asist-opciones input:checked + label {
+      background: var(--asist-accent);
+      border-color: var(--asist-accent);
+      color:#fff;
+      box-shadow:0 3px 10px -2px rgba(255,104,30,.55);
+    }
+
+    /* Etiqueta pequeña dentro del nombre (ej. rol) */
+    #asist-body .asist-row .asist-nombre .tag {
+      background:#ffe4d5;
+      color:#b44200;
+      font:600 .55rem/1 "Poppins",sans-serif;
+      padding:.25rem .45rem .22rem;
+      border-radius:6px;
+      letter-spacing:.5px;
+    }
+
+    /* =======================================================
+      2) MODO AUTOMÁTICO (fallback):
+      Si NO tienes clases, se asume que cada hijo directo de
+      #asist-body es una “fila” y dentro el primer hijo es
+      “nombre” y lo demás “opciones”.
+      ======================================================= */
+
+    /* Fila genérica */
+    #asist-body > div:not(.asist-row) {
+      display:grid;
+      grid-template-columns: minmax(220px,1fr) minmax(260px,340px);
+      align-items: center;
+      gap:.9rem;
+      padding:.58rem .8rem .53rem;
+      background: var(--asist-bg);
+      border:1px solid var(--asist-border);
+      border-radius:14px;
+      box-shadow:0 1px 2px rgba(0,0,0,.05);
+      transition: background .18s, border-color .18s, box-shadow .18s;
+      position:relative;
+    }
+
+    #asist-body > div:not(.asist-row):nth-child(odd){
+      background: var(--asist-bg-alt);
+    }
+
+    #asist-body > div:not(.asist-row):hover {
+      background: var(--asist-hover);
+      border-color: var(--asist-border-hover);
+      box-shadow:0 3px 10px -2px rgba(0,0,0,.10);
+    }
+
+    /* Primera “columna” (nombre) */
+    #asist-body > div:not(.asist-row) > :first-child {
+      font:600 .84rem/1.25 "Poppins",sans-serif;
+      color:var(--asist-text);
+      display:flex;
+      gap:.55rem;
+      align-items:center;
+      min-width:0;
+      word-break:break-word;
+    }
+
+    /* Opciones (resto de hijos) */
+    #asist-body > div:not(.asist-row) > :not(:first-child) {
+      display:flex;
+      flex-wrap:wrap;
+      gap:.5rem .55rem;
+      align-items:center;
+      justify-content:flex-start;
+      padding:.15rem 0;
+    }
+
+    /* Botoncitos genéricos dentro de las opciones */
+    #asist-body > div:not(.asist-row) > :not(:first-child) > * {
+      background: var(--asist-pill-bg);
+      border:1px solid var(--asist-pill-border);
+      border-radius:999px;
+      padding:.50rem .85rem .45rem;
+      font:500 .66rem/1 "Poppins",sans-serif;
+      letter-spacing:.4px;
+      color:var(--asist-muted);
+      min-width:70px;
+      text-align:center;
+      cursor:pointer;
+      user-select:none;
+      transition: background .18s, border-color .18s, color .18s, box-shadow .18s;
+    }
+
+    #asist-body > div:not(.asist-row) > :not(:first-child) > *:hover {
+      background:#fff;
+      border-color:#c8d0da;
+      color:#374151;
+      box-shadow:0 2px 4px rgba(0,0,0,.08);
+    }
+
+    /* Marcar activo si el JS aplica .active */
+    #asist-body > div:not(.asist-row) > :not(:first-child) > *.active {
+      background:var(--asist-accent);
+      border-color:var(--asist-accent);
+      color:#fff;
+      box-shadow:0 3px 10px -2px rgba(255,104,30,.55);
+      position:relative;
+    }
+    #asist-body > div:not(.asist-row) > :not(:first-child) > *.active::after {
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius:999px;
+      box-shadow:0 0 0 2px rgba(255,255,255,.5) inset;
+      pointer-events:none;
+    }
+
+    /* Si por alguna razón hay <select> */
+    #asist-body select {
+      font:500 .7rem/1 "Poppins",sans-serif;
+      border:1px solid #cfd5df;
+      border-radius:10px;
+      background:#fff;
+      padding:.45rem .65rem;
+      cursor:pointer;
+      transition:border-color .18s, box-shadow .18s;
+    }
+    #asist-body select:focus {
+      outline:none;
+      border-color:var(--asist-accent);
+      box-shadow:0 0 0 2px rgba(255,104,30,.25);
+    }
+
+    /* Estado de carga o mensaje vacío (si el JS agrega algo así) */
+    #asist-body .asist-empty,
+    #asist-body .asist-loading {
+      border:1px dashed #d5dae2;
+      background:#ffffff;
+      font:500 .75rem/1.3 "Poppins",sans-serif;
+      padding:1.5rem 1rem;
+      text-align:center;
+      border-radius:14px;
+      color:#5f6b7a;
+      letter-spacing:.4px;
+    }
+
+    /* Pequeño título de columna simulado opcional (si JS añade .asist-header) */
+    #asist-body .asist-header {
+      background:linear-gradient(90deg,#ffffff,#f0f4f9);
+      border:1px solid #d8dee7;
+      font:600 .62rem/1 "Poppins",sans-serif;
+      letter-spacing:1.1px;
+      text-transform:uppercase;
+      color:#4d5a67;
+      padding:.55rem .8rem;
+      border-radius:12px;
+      margin:0 0 .3rem;
+      display:grid;
+      grid-template-columns:minmax(220px,1fr) minmax(260px,340px);
+      gap:.9rem;
+    }
+
+    /* Responsivo */
+    @media (max-width: 640px) {
+      #modal-asist .modal-content.card {
+        width:90vw;
+      }
+      #asist-body .asist-row,
+      #asist-body > div:not(.asist-row),
+      #asist-body .asist-header {
+        grid-template-columns: 1fr;
+      }
+      #asist-body .asist-row .asist-opciones,
+      #asist-body > div:not(.asist-row) > :not(:first-child) {
+        padding-top:.35rem;
+      }
+    }
+
+    /* === Alinear opciones del modal asistencia totalmente a la derecha === */
+
+    /* Modo con clases (.asist-row / .asist-opciones) */
+    #asist-body .asist-row {
+      /* opcional: si quieres un poquito menos de padding derecho para que se vea más pegado */
+      --pad-x: .85rem;            /* valor actual */
+      padding-right: var(--pad-x);
+      position: relative;
+    }
+
+    #asist-body .asist-row .asist-opciones {
+      justify-content: flex-end;  /* empuja las pills a la derecha */
+      margin-left: auto;          /* asegura que todo el bloque se vaya a la derecha */
+      /* Quita espacio interno que las separa del borde si deseas pegarlas del todo: */
+      margin-right: calc(-1 * var(--pad-x));  /* “come” el padding derecho del row */
+      padding-right: 0;
+    }
+
+    /* Si quieres que cada línea (cuando hace wrap) también esté alineada a la derecha */
+    #asist-body .asist-row .asist-opciones {
+      text-align: right;
+    }
+
+    /* Modo fallback (cuando NO hay clases y cada hijo de #asist-body es una fila) */
+    #asist-body > div:not(.asist-row) {
+      --pad-x: .85rem;
+      padding-right: var(--pad-x);
+      position: relative;
+    }
+
+    #asist-body > div:not(.asist-row) > :not(:first-child) {
+      justify-content: flex-end;
+      margin-left: auto;
+      margin-right: calc(-1 * var(--pad-x));
+      padding-right: 0;
+      text-align: right;
+    }
+
+    /* (Opcional) Ajustar el gap para que visualmente se “pegue” más */
+    #asist-body .asist-row .asist-opciones,
+    #asist-body > div:not(.asist-row) > :not(:first-child) {
+      gap: .45rem .45rem;  /* reduce horizontal si quieres */
+    }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -942,47 +2018,36 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
   <!-- ░░░░ NAV ░░░░ -->
   <?php require_once 'navegador.php'; ?>
 
-  <!-- ░░░░ CONTENIDO PRINCIPAL ░░░░ -->
-  <main>
-    <div class="container" style="display:grid; grid-template-columns:200px 1fr; gap:1rem">
-    <!-- 4.1) Panel izquierdo -->
+  <!-- ░░░░ CONTENIDO PRINCIPAL (layout estilo integrantes) ░░░░ -->
+  <div class="layout">
+
+    <!-- ░░░░ SIDEBAR FILTROS ░░░░ -->
     <?php
-      // ─── Armar lista de filtros para el sidebar ───
+      // ─── Armar lista de filtros para el sidebar (igual que antes) ───
       $sidebarOpts = [
         'calendario' => 'Calendario',
         'general'    => 'Eventos Generales',
       ];
-
       if ($isLiderNacional) {
-          // Liderazgo nacional ve TODOS los proyectos
           $projectsForSidebar = $allProjects;
       } else {
-          // Usuarios “normales” solo ven sus equipos/proyectos
           $projectsForSidebar = $userTeams;
       }
-
-      // Convertir a [id => nombre]
       $sidebarOpts += array_column(
         $projectsForSidebar,
         'nombre_equipo_proyecto',
         'id_equipo_proyecto'
       );
     ?>
-    <aside style="background:#fafafa; padding:1rem; border-radius:6px">
+    <aside class="sidebar" id="sidebar-eventos">
       <?php foreach ($sidebarOpts as $key => $label): ?>
-        <form method="POST" style="margin:0 0 .5rem">
+        <form method="POST">
           <input type="hidden" name="mes"      value="<?=htmlspecialchars($mesParam)?>">
           <input type="hidden" name="busqueda" value="<?=htmlspecialchars($busqueda)?>">
           <button
             name="filtro"
             value="<?=htmlspecialchars($key)?>"
-            style="
-              width:100%;
-              text-align:left;
-              background:<?= $filtro===$key ? '#e0e0e0':'transparent'?>;
-              font-weight:<?= $filtro===$key ? 'bold':'normal'?>;
-              border:none; padding:.5rem; cursor:pointer;
-            "
+            class="<?= $filtro===$key ? 'active' : '' ?>"
           >
             <?=htmlspecialchars($label)?>
           </button>
@@ -990,293 +2055,264 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       <?php endforeach; ?>
     </aside>
 
-    <div>
-      <div class="d-flex justify-content-end mb-2">
-        <form class="d-flex me-auto" method="POST" action="eventos.php" id="form-search">
-          <input
-            type="text"
-            name="busqueda"
-            id="search-input"
-            maxlength="200"
-            placeholder="Buscar..."
-            value="<?= htmlspecialchars($busqueda) ?>"
-            style="padding:.4rem .6rem; border:1px solid #ccc; border-radius:4px;"
-          >
-          <button type="submit" id="btn-search" class="btn btn-outline-secondary ms-2">
-            🔍 Buscar
-          </button>
-        </form>
-        <small id="search-error" class="err-inline" style="display:none;">
-          * Solo letras, números, espacios, saltos de línea y . , # ¿ ¡ ! ? ( ) / -
-        </small>
+    <!-- ░░░░ MAIN ░░░░ -->
+    <main id="eventos-main">
+      <h1>Eventos</h1>
 
-        <?php
-          // Rango de meses por defecto: mismo mes en start y end
-          $mesStart = $_REQUEST['mesStart'] ?? $mesParam;
-          $mesEnd   = $_REQUEST['mesEnd']   ?? $mesParam;
-        ?>
+      <!-- Card global -->
+      <div id="eventos-card">
 
-        <form id="form-download" method="GET" action="export.php" class="d-flex align-items-center me-2">
-          <input type="hidden" name="filtro"    value="<?= htmlspecialchars($filtro) ?>">
-          <input type="hidden" name="busqueda"  value="<?= htmlspecialchars($busqueda) ?>">
-          <input type="hidden" name="aprobados" value="<?= $showAprob ? '1' : '0' ?>">
+        <!-- Barra / toolbar -->
+        <div id="eventos-toolbar">
 
-          <div style="position:relative; margin-right:.5rem">
-            <input 
-              type="month" 
-              name="mesStart" 
-              id="mesStart"
-              min="1970-01"
-              max="2037-12"
-              pattern="\d{4}-\d{2}"
-              title="AAAA-MM entre 1970-01 y 2037-12"
-              value="<?= htmlspecialchars($mesStart) ?>"
-              class="form-control form-control-sm"
-            >
-            <small id="mesStart-error" class="err-inline" style="display:none; position:absolute; top:100%; left:0;">
-              * Fecha de inicio requerida
+          <?php
+            $mesStart = $_REQUEST['mesStart'] ?? $mesParam;
+            $mesEnd   = $_REQUEST['mesEnd']   ?? $mesParam;
+          ?>
+
+          <!-- (Fila 1) Zona agrupada Descarga -->
+          <form id="form-download" method="GET" action="export.php">
+            <input type="hidden" name="filtro"    value="<?= htmlspecialchars($filtro) ?>">
+            <input type="hidden" name="busqueda"  value="<?= htmlspecialchars($busqueda) ?>">
+            <input type="hidden" name="aprobados" value="<?= $showAprob ? '1' : '0' ?>">
+
+            <div class="range-group">
+              <div class="range-field">
+                <label for="mesStart">Inicio</label>
+                <input
+                  type="month"
+                  name="mesStart"
+                  id="mesStart"
+                  min="1970-01" max="2037-12"
+                  pattern="\d{4}-\d{2}"
+                  value="<?= htmlspecialchars($mesStart) ?>">
+              </div>
+
+              <div class="range-field">
+                <label for="mesEnd">Fin</label>
+                <input
+                  type="month"
+                  name="mesEnd"
+                  id="mesEnd"
+                  min="1970-01" max="2037-12"
+                  pattern="\d{4}-\d{2}"
+                  value="<?= htmlspecialchars($mesEnd) ?>">
+              </div>
+
+              <div class="range-field">
+                <label for="format">Formato</label>
+                <select name="format" id="format">
+                  <option value="excel">Excel</option>
+                  <option value="pdf">PDF</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" id="btn-download" class="btn-sys btn-sec">
+              <i class="fa-solid fa-file-arrow-down"></i> Descargar
+            </button>
+          </form>
+
+          <!-- (Fila 2) Botones principales -->
+          <div id="toolbar-actions">
+            <?php if ($canCreate): ?>
+              <button id="btn-new-event" class="btn-sys">
+                <i class="fa-solid fa-calendar-plus"></i> Crear evento
+              </button>
+            <?php endif; ?>
+
+            <?php if ($canRequest): ?>
+              <button id="btn-request-event" class="btn-sys btn-sec">
+                <i class="fa-solid fa-paper-plane"></i> Solicitar evento
+              </button>
+            <?php endif; ?>
+
+            <?php if ($isLiderNacional): ?>
+              <button
+                id="btn-aprobar-eventos"
+                class="btn-sys btn-warning <?= $showAprob ? 'active' : '' ?>"
+                style="position:relative"
+              >
+                <i class="fa-solid fa-circle-check"></i> Aprobar
+                <?php if ($pendingCount > 0): ?>
+                  <span class="badge"><?= $pendingCount ?></span>
+                <?php endif; ?>
+              </button>
+            <?php endif; ?>
+          </div>
+
+          <!-- (Fila 3) Buscador -->
+          <div id="toolbar-search-wrapper">
+            <form method="POST" action="eventos.php" id="form-search">
+              <input
+                type="text"
+                name="busqueda"
+                id="search-input"
+                maxlength="200"
+                placeholder="Buscar..."
+                value="<?= htmlspecialchars($busqueda) ?>">
+              <input type="hidden" name="filtro" value="<?= htmlspecialchars($filtro) ?>">
+              <input type="hidden" name="mes"    value="<?= htmlspecialchars($mesParam) ?>">
+              <button type="submit" id="btn-search" class="btn-sys btn-sec">
+                <i class="fa-solid fa-magnifying-glass"></i> Buscar
+              </button>
+            </form>
+            <small id="search-error" class="err-inline" style="display:none;">
+              * Solo letras, números, espacios y . , # ¿ ¡ ! ? ( ) / -
             </small>
           </div>
 
-          <div style="position:relative; margin-right:.5rem">
-            <input 
-              type="month" 
-              name="mesEnd" 
-              id="mesEnd"
-              min="1970-01"
-              max="2037-12"
-              pattern="\d{4}-\d{2}"
-              title="AAAA-MM entre 1970-01 y 2037-12"
-              value="<?= htmlspecialchars($mesEnd) ?>"
-              class="form-control form-control-sm"
-            >
-            <small id="mesEnd-error" class="err-inline" style="display:none; position:absolute; top:100%; left:0;">
-              * Fecha de término requerida
-            </small>
-          </div>
+        </div>
 
-          <small id="dateOrder-error" class="err-inline me-2" style="display:none;">
-            * La fecha de término debe ser mayor o igual a la de inicio
-          </small>
-          <small id="dateRange-error" class="err-inline me-2" style="display:none;">
-            * El rango no puede exceder 2 años
-          </small>
-
-          <select name="format" class="form-select form-select-sm me-2">
-            <option value="excel">Excel</option>
-            <option value="pdf">PDF</option>
-          </select>
-
-          <button type="submit" id="btn-download" class="btn btn-success btn-sm">
-            ↓ Descargar
-          </button>
-        </form>
-
-        <?php if ($canCreate): ?>
-          <button id="btn-new-event" class="btn btn-success">
-            <i class="fas fa-plus"></i> Crear evento
-          </button>
-        <?php endif; ?>
-
-        <?php if ($canRequest): ?>
-          <button id="btn-request-event"
-                  class="btn btn-primary <?= $canCreate ? 'ms-2' : '' ?>">
-            <i class="fas fa-envelope-open-text"></i> Solicitar evento
-          </button>
-        <?php endif; ?>
-      </div>
-
-      <?php if ($isLiderNacional): ?>
-        <button
-          id="btn-aprobar-eventos"
-          class="btn btn-warning <?= $showAprob ? 'active' : '' ?>"
-          style="position: relative; margin-right: .5rem;"
-        >
-          Aprobar eventos
-          <?php if ($pendingCount > 0): ?>
-            <span
-              style="
-                position: absolute;
-                top: -6px; right: -6px;
-                background: red;
-                color: white;
-                border-radius: 50%;
-                padding: 2px 6px;
-                font-size: 0.75rem;
-              "
-            >
-              <?= $pendingCount ?>
-            </span>
+        <!-- Navegación de mes -->
+        <nav class="month-nav">
+          <?php if ($prevMonth !== null): ?>
+            <form method="POST" style="display:inline">
+              <input type="hidden" name="filtro"   value="<?= htmlspecialchars($filtro) ?>">
+              <input type="hidden" name="mes"      value="<?= $prevMonth ?>">
+              <input type="hidden" name="busqueda" value="<?= htmlspecialchars($busqueda) ?>">
+              <button type="submit" class="nav-arrow" aria-label="Mes anterior">
+                <i class="fa-solid fa-chevron-left"></i>
+              </button>
+            </form>
           <?php endif; ?>
-        </button>
-      <?php endif; ?>
 
-      <nav class="month-nav">
-        <?php if ($prevMonth !== null): ?>
-          <form method="POST" style="display:inline-block">
-            <input type="hidden" name="filtro"   value="<?= htmlspecialchars($filtro) ?>">
-            <input type="hidden" name="mes"      value="<?= $prevMonth ?>">
-            <input type="hidden" name="busqueda" value="<?= htmlspecialchars($busqueda) ?>">
-            <button type="submit" class="nav-arrow">&larr;</button>
-          </form>
-        <?php endif; ?>
+          <span class="nav-title"><?= $meses[$month] ?> <?= $year ?></span>
 
-        <span class="nav-title"><?= $meses[$month] ?> <?= $year ?></span>
+          <?php if ($nextMonth !== null): ?>
+            <form method="POST" style="display:inline">
+              <input type="hidden" name="filtro"   value="<?= htmlspecialchars($filtro) ?>">
+              <input type="hidden" name="mes"      value="<?= $nextMonth ?>">
+              <input type="hidden" name="busqueda" value="<?= htmlspecialchars($busqueda) ?>">
+              <button type="submit" class="nav-arrow" aria-label="Mes siguiente">
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
+            </form>
+          <?php endif; ?>
+        </nav>
 
-        <?php if ($nextMonth !== null): ?>
-          <form method="POST" style="display:inline-block">
-            <input type="hidden" name="filtro"   value="<?= htmlspecialchars($filtro) ?>">
-            <input type="hidden" name="mes"      value="<?= $nextMonth ?>">
-            <input type="hidden" name="busqueda" value="<?= htmlspecialchars($busqueda) ?>">
-            <button type="submit" class="nav-arrow">&rarr;</button>
-          </form>
-        <?php endif; ?>
-      </nav>
-
-      <!-- 4.2) Tabla de este mes -->
-      <section>
-        <?php if (empty($rows)): ?>
-          <p>No hay eventos en <?= $meses[$month] ?> <?= $year ?>.</p>
-        <?php else: ?>
+        <!-- Tabla / Resultados -->
+        <section>
           <div class="table-responsive">
             <table>
               <thead>
                 <tr>
                   <th>Inicio</th><th>Término</th><th>Evento</th>
-                  <th>Equipo/Proyecto</th><th>Estado previo</th>
-                  <th>Asist. previa</th><th>Estado final</th><th>Acciones</th>
+                  <th>Equipo o Proyecto</th><th>Estado previo</th>
+                  <th>Asistencia previa</th><th>Estado final</th><th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
+              <?php if (empty($rows)): ?>
+                <tr class="row-empty">
+                  <td colspan="8" class="empty-cell">
+                    <div class="empty-msg">
+                      <i class="fa-regular fa-calendar-xmark"></i>
+                      No hay eventos en <?= $meses[$month] ?> <?= $year ?>.
+                    </div>
+                  </td>
+                </tr>
+              <?php else: ?>
                 <?php foreach($rows as $e):
                   $si = strtotime($e['fecha_hora_inicio']);
                   $st = strtotime($e['fecha_hora_termino']);
-                ?>
-                <?php
-                  /* ── Puede gestionar (Editar / Duplicar / Eliminar) ── */
                   $canManage = $isLiderNacional;
                 ?>
-                <tr>
-                  <td>
-                    <?= $dias[date('w',$si)] . ' ' . date('d',$si) ?><br>
-                    <?= date('H.i',$si) . ' horas' ?>
-                  </td>
-                  <td>
-                    <?= $dias[date('w',$st)] . ' ' . date('d',$st) ?><br>
-                    <?= date('H.i',$st) . ' horas' ?>
-                  </td>
-                  <td><?= htmlspecialchars($e['nombre_evento']) ?></td>
-                  <td>
-                    <?php
-                      // 1) Preparamos siempre un array, sustituyendo cadena vacía por 'General'
-                      $raw   = $e['equipos'] ?: 'General';
-                      $teams = array_filter(array_map('trim', explode(',', $raw)));
-                    ?>
-                    <ul class="equipos-list">
-                      <?php foreach ($teams as $team): ?>
-                        <li><?= htmlspecialchars($team) ?></li>
-                      <?php endforeach; ?>
-                    </ul>
-                  </td>
-                  <td><?= htmlspecialchars($e['nombre_estado_previo']) ?></td>
-                  <td>
-                    <?= (int)$e['cnt_presente'] ?> de <?= (int)$e['total_integrantes'] ?>
-                  </td>
-                  <td><?= htmlspecialchars($e['nombre_estado_final']) ?></td>
-                  <td class="actions" style="white-space:nowrap">
-
-                    <!-- Ver detalles: siempre -->
-                    <button
-                      title="Ver detalles"
-                      class="action-btn detail-btn"
-                      data-fi="<?= $dias[date('w',$si)].' '.date('d',$si).' | '.date('H.i',$si).' horas' ?>"
-                      data-ft="<?= $dias[date('w',$st)].' '.date('d',$st).' | '.date('H.i',$st).' horas' ?>"
-                      data-nombre="<?= htmlspecialchars($e['nombre_evento']) ?>"
-                      data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
-                      data-encargado="<?= htmlspecialchars($e['encargado_nombre_completo'] ?? '') ?>"
-                      data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
-                      data-equipos="<?= htmlspecialchars($e['equipos'] ?: 'General') ?>"
-                      data-previo="<?= htmlspecialchars($e['nombre_estado_previo'] ?? '') ?>"
-                      data-tipo="<?= htmlspecialchars($e['nombre_tipo'] ?? '') ?>"
-                      data-asist="<?= (int)$e['cnt_presente'].' de '.(int)$e['total_integrantes'] ?>"
-                      data-observacion="<?= 
-                          htmlspecialchars($e['observacion'] ?? '', ENT_QUOTES)
-                      ?>"
-                      data-can-see-observacion="<?= $e['show_observacion'] ? '1' : '0' ?>"
-                      data-final="<?= htmlspecialchars($e['nombre_estado_final'] ?? '') ?>"
-                    >
-                      <i class="fas fa-eye"></i>
-                    </button>
-
-                    <!-- Asistencia -->
-                    <button
-                      title="Asistencia"
-                      class="action-btn assist-btn"
-                      data-id="<?= $e['id_evento'] ?>"
-                      data-start="<?= $e['fecha_hora_inicio'] ?>"
-                    >
-                      <i class="fas fa-user-check"></i>
-                    </button>
-
-                    <?php if ($canManage): ?>
-                      <!-- Editar -->
-                      <button
-                        title="Editar" class="action-btn edit-btn"
-                        data-id="<?= $e['id_evento'] ?>"
-                        data-nombre="<?= htmlspecialchars($e['nombre_evento'] ?? '') ?>"
+                  <tr>
+                    <td>
+                      <?= $dias[date('w',$si)] . ' ' . date('d',$si) ?><br>
+                      <?= date('H.i',$si) . ' horas' ?>
+                    </td>
+                    <td>
+                      <?= $dias[date('w',$st)] . ' ' . date('d',$st) ?><br>
+                      <?= date('H.i',$st) . ' horas' ?>
+                    </td>
+                    <td><?= htmlspecialchars($e['nombre_evento']) ?></td>
+                    <td>
+                      <?php
+                        $raw   = $e['equipos'] ?: 'General';
+                        $teams = array_filter(array_map('trim', explode(',', $raw)));
+                      ?>
+                      <ul class="equipos-list">
+                        <?php foreach ($teams as $team): ?>
+                          <li><?= htmlspecialchars($team) ?></li>
+                        <?php endforeach; ?>
+                      </ul>
+                    </td>
+                    <td><?= htmlspecialchars($e['nombre_estado_previo']) ?></td>
+                    <td><?= (int)$e['cnt_presente'] ?> de <?= (int)$e['total_integrantes'] ?></td>
+                    <td><?= htmlspecialchars($e['nombre_estado_final']) ?></td>
+                    <td class="actions" style="white-space:nowrap">
+                      <button title="Ver detalles" class="action-btn detail-btn"
+                        data-fi="<?= $dias[date('w',$si)].' '.date('d',$si).' | '.date('H.i',$si).' horas' ?>"
+                        data-ft="<?= $dias[date('w',$st)].' '.date('d',$st).' | '.date('H.i',$st).' horas' ?>"
+                        data-nombre="<?= htmlspecialchars($e['nombre_evento']) ?>"
                         data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
-                        data-encargado="<?= (int)$e['encargado_id'] ?>"
+                        data-encargado="<?= htmlspecialchars($e['encargado_nombre_completo'] ?? '') ?>"
                         data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
-                        data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
-                        data-start="<?= $e['fecha_hora_inicio'] ?>"
-                        data-end="<?= $e['fecha_hora_termino'] ?>"
-                        data-previo="<?= $e['id_estado_previo'] ?>"
-                        data-tipo="<?= $e['id_tipo'] ?>"
-                        data-final="<?= $e['id_estado_final'] ?>"
-                        data-equipos="<?= htmlspecialchars($e['equipo_ids']) ?>"
-                      >
-                        <i class="fas fa-pen"></i>
+                        data-equipos="<?= htmlspecialchars($e['equipos'] ?: 'General') ?>"
+                        data-previo="<?= htmlspecialchars($e['nombre_estado_previo'] ?? '') ?>"
+                        data-tipo="<?= htmlspecialchars($e['nombre_tipo'] ?? '') ?>"
+                        data-asist="<?= (int)$e['cnt_presente'].' de '.(int)$e['total_integrantes'] ?>"
+                        data-observacion="<?= htmlspecialchars($e['observacion'] ?? '', ENT_QUOTES) ?>"
+                        data-can-see-observacion="<?= $e['show_observacion'] ? '1' : '0' ?>"
+                        data-final="<?= htmlspecialchars($e['nombre_estado_final'] ?? '') ?>"
+                      ><i class="fas fa-circle-info"></i></button>
+
+                      <button title="Asistencia" class="action-btn assist-btn"
+                        data-id="<?= $e['id_evento'] ?>"
+                        data-start="<?= $e['fecha_hora_inicio'] ?>">
+                        <i class="fas fa-user-check"></i>
                       </button>
 
-                      <!-- 3) Duplicar -->
-                      <button
-                        title="Duplicar"
-                        class="action-btn copy-btn"
-                        data-id="<?= $e['id_evento'] ?>"
-                        data-nombre="<?= htmlspecialchars($e['nombre_evento'] ?? '') ?>"
-                        data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
-                        data-encargado="<?= (int)$e['encargado_id'] ?>"
-                        data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
-                        data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
-                        data-start="<?= $e['fecha_hora_inicio'] ?>"
-                        data-end="<?= $e['fecha_hora_termino'] ?>"
-                        data-previo="<?= $e['id_estado_previo'] ?>"
-                        data-tipo="<?= $e['id_tipo'] ?>"
-                        data-final="<?= $e['id_estado_final'] ?>"
-                        data-equipos="<?= htmlspecialchars($e['equipo_ids']) ?>"
-                      >
-                        <i class="fas fa-copy"></i>
-                      </button>
+                      <?php if ($canManage): ?>
+                        <button title="Editar" class="action-btn edit-btn"
+                          data-id="<?= $e['id_evento'] ?>"
+                          data-nombre="<?= htmlspecialchars($e['nombre_evento'] ?? '') ?>"
+                          data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
+                          data-encargado="<?= (int)$e['encargado_id'] ?>"
+                          data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
+                          data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
+                          data-start="<?= $e['fecha_hora_inicio'] ?>"
+                          data-end="<?= $e['fecha_hora_termino'] ?>"
+                          data-previo="<?= $e['id_estado_previo'] ?>"
+                          data-tipo="<?= $e['id_tipo'] ?>"
+                          data-final="<?= $e['id_estado_final'] ?>"
+                          data-equipos="<?= htmlspecialchars($e['equipo_ids']) ?>"
+                        ><i class="fas fa-pen-to-square"></i></button>
 
-                      <!-- 4) Eliminar -->
-                      <button
-                        class="action-btn delete-btn"
-                        data-id="<?= $e['id_evento'] ?>"
-                        title="Eliminar">
-                        <i class="fas fa-trash-alt"></i>
-                      </button>
-                    <?php endif; ?>
-                  </td>
-                </tr>
+                        <button title="Duplicar" class="action-btn copy-btn"
+                          data-id="<?= $e['id_evento'] ?>"
+                          data-nombre="<?= htmlspecialchars($e['nombre_evento'] ?? '') ?>"
+                          data-lugar="<?= htmlspecialchars($e['lugar'] ?? '') ?>"
+                          data-encargado="<?= (int)$e['encargado_id'] ?>"
+                          data-descripcion="<?= htmlspecialchars($e['descripcion'] ?? '') ?>"
+                          data-observacion="<?= htmlspecialchars($e['observacion'] ?? '') ?>"
+                          data-start="<?= $e['fecha_hora_inicio'] ?>"
+                          data-end="<?= $e['fecha_hora_termino'] ?>"
+                          data-previo="<?= $e['id_estado_previo'] ?>"
+                          data-tipo="<?= $e['id_tipo'] ?>"
+                          data-final="<?= $e['id_estado_final'] ?>"
+                          data-equipos="<?= htmlspecialchars($e['equipo_ids']) ?>"
+                        ><i class="fas fa-clone"></i></button>
+
+                        <button class="action-btn delete-btn"
+                          data-id="<?= $e['id_evento'] ?>"
+                          title="Eliminar">
+                          <i class="fas fa-trash-can"></i>
+                        </button>
+                      <?php endif; ?>
+                    </td>
+                  </tr>
                 <?php endforeach; ?>
+              <?php endif; ?>
               </tbody>
             </table>
           </div>
-        <?php endif; ?>
-      </section>
-    </div>
-    </div>
-  </main>
+        </section>
+      </div><!-- /eventos-card -->
+    </main>
+  </div><!-- /layout -->
 
   <!-- ═════════ utilidades ═════════ -->
   <script>

@@ -38,6 +38,23 @@ $fotoNav = trim((string)($user['foto_perfil'] ?? '')) ?: 'uploads/fotos/default.
 /* NUEVO – nombre del archivo que se está ejecutando */
 $curr = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
 ?>
+<!-- Favicon (se asegura que quede dentro de <head>) -->
+<link id="favicon-ec" rel="icon" type="image/png" sizes="32x32" href="images/LogoEC.png">
+<script>
+/* Reubica el favicon dentro de <head> si este archivo se cargó dentro del <body> */
+(() => {
+  const fav = document.getElementById('favicon-ec');
+  if (fav && document.head && !document.head.contains(fav)) {
+    document.head.appendChild(fav);
+  }
+  /* Evita duplicados si otro archivo ya puso un favicon */
+  const links = [...document.querySelectorAll("link[rel~='icon']")];
+  if (links.length > 1) {
+    // Conserva el primero (nuestro) y elimina los demás para no forzar múltiples requests
+    links.slice(1).forEach(l => l.parentNode.removeChild(l));
+  }
+})();
+</script>
 <!-- Font Awesome (solo si tu plantilla aún no lo incluye) -->
 <link rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">

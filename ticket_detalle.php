@@ -932,22 +932,29 @@ $horarios = $horarios->fetchAll(PDO::FETCH_ASSOC);
     <table id="tblHorarios" class="paginated sortable" data-per-page="10">
       <thead><tr><th>Nombre</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
       <tbody>
-      <?php foreach ($horarios as $h): ?>
-        <tr>
-          <td><?=htmlspecialchars($h['nombre_horario'])?></td>
-          <td><?=$h['fecha_inicio']?></td>
-          <td><?=$h['fecha_fin']?></td>
-          <td>
-            <button class="edit-hor" data-json='<?=json_encode($h,JSON_HEX_APOS)?>'>
-              <i class="fa-solid fa-edit"></i> Editar
-            </button>
-            <a href="?evt=<?=$idEvento?>&del_hor=<?=$h['id_ticket_horario']?>" 
-              onclick="return confirm('¿Eliminar horario?')">
-              <i class="fa-solid fa-trash"></i> Eliminar
-            </a>
-          </td>
-        </tr>
-      <?php endforeach ?>
+        <?php foreach ($horarios as $h): ?>
+          <tr>
+            <td><?=htmlspecialchars($h['nombre_horario'])?></td>
+
+            <!-- Muestra DD‑MM‑AAAA HH:MM (sin segundos) -->
+            <td><?=htmlspecialchars(
+                  date('d-m-Y H:i', strtotime($h['fecha_inicio']))
+                )?></td>
+            <td><?=htmlspecialchars(
+                  date('d-m-Y H:i', strtotime($h['fecha_fin']))
+                )?></td>
+
+            <td>
+              <button class="edit-hor" data-json='<?=json_encode($h,JSON_HEX_APOS)?>'>
+                <i class="fa-solid fa-edit"></i> Editar
+              </button>
+              <a href="?evt=<?=$idEvento?>&del_hor=<?=$h['id_ticket_horario']?>" 
+                onclick="return confirm('¿Eliminar horario?')">
+                <i class="fa-solid fa-trash"></i> Eliminar
+              </a>
+            </td>
+          </tr>
+        <?php endforeach ?>
       </tbody>
     </table>
     <div id="pager-tblHorarios" class="table-pager"></div>

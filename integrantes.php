@@ -121,8 +121,6 @@ if ($isSuper){                               // puede ver sección 0
   <!-- Teléfonos internacionales -->
   <link rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">
-  <!-- alternativa moderna en PNG -->
-  <link rel="icon" type="image/png" sizes="32x32" href="images/LogoEC.png">
   <link rel="preload" href="styles/poppins-v23-latin-400.woff2"
         as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="styles/poppins-v23-latin-500.woff2"

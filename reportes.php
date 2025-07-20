@@ -65,12 +65,6 @@ if ($isLN) {
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body {
-      font-family: sans-serif;
-      background: #f6f6f6;
-      margin: 0;
-      padding: 2rem;
-    }
     .container {
       max-width: 800px;
       margin: auto;
