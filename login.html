@@ -3,67 +3,223 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Iniciar sesión</title>
+  <title>Iniciar sesión | EC</title>
+  <!-- Favicon (se asegura que quede dentro de <head>) -->
+  <link id="favicon-ec" rel="icon" type="image/png" sizes="32x32" href="images/LogoEC.png">
+
+  <!-- Google Fonts + Iconos -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Font‑Awesome SIN CORS -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+        integrity="sha512-Avb2QiuDEEvB4bZJYdft2mNjVShBftLdPG8FJ0V7irTLQ8Uo0qcPxh4Plq7G5tGm0rU+1SPhVotteLpBERwTkw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <!-- Hoja global que ya tenías -->
   <link rel="stylesheet" href="styles/main.css">
+
   <style>
-    body {
-        background-image: url('images/Fondo-blanco.jpeg');
-        background-size: cover;
-        margin: 0;
-        font-family: Arial, sans-serif;
+    /* —— RESET BÁSICO —— */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font:400 0.95rem/1.5 "Poppins",sans-serif;background:#f3f4f8;color:#374151;}
+
+    /* —— FONDO CON TEXTURA SUAVE —— */
+    .bg{
+      position:fixed;inset:0;z-index:-2;
+      background:url('images/Fondo-blanco.jpeg') center/cover no-repeat;
     }
-    .login-container {
-        width: 100%;
-        max-width: 400px;
-        margin: 5rem auto;
-        background-color: #fff;
-        padding: 2rem;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        border-radius: 8px;
-        text-align: center;
-        box-sizing: border-box;
+
+    /* velo de color cálido encima del jpg — sin patrón.svg */
+    .bg::before{
+      content:"";position:absolute;inset:0;
+      background:linear-gradient(135deg,rgba(255,122,51,.15) 0%,rgba(255,86,20,.10) 100%);
+      backdrop-filter:blur(2px);
     }
-    .login-container img {
-        width: 90px;
-        margin-bottom: 1rem;
+
+    /* —— CONTENEDOR CENTRAL —— */
+    .login-wrapper{
+      min-height:100vh;display:flex;flex-direction:column;
+      justify-content:center;align-items:center;padding:2rem 1rem;
     }
-    .login-container form {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+
+    /* —— CARD —— */
+    .card{
+      width:100%;max-width:380px;padding:2.5rem 2rem;
+      background:#ffffff;border-radius:18px;
+      box-shadow:0 15px 35px rgba(0,0,0,.08);
+      text-align:center;
+      position:relative;overflow:hidden;
     }
-    .login-container input,
-    .login-container button {
-        width: 100%;
-        max-width: 320px;
-        box-sizing: border-box;
-        padding: 0.75rem;
-        margin-bottom: 1rem;
-        border-radius: 4px;
-        border: 1px solid #ccc;
+    /* ribete decorativo */
+    .card::before{
+      content:"";position:absolute;height:6px;left:0;top:0;right:0;
+      background:linear-gradient(90deg,#ff7a33 0%,#ff5614 100%);
     }
-    .login-container button {
-        background-color: #d90429;
-        border: none;
-        color: white;
-        font-weight: bold;
-        cursor: pointer;
+
+    /* ——— animación del ribete degradado ——— */
+    @keyframes borderRun{
+      0%  {background-position: 0   0;}
+      100%{background-position: 300% 0;}
     }
-    .login-container button:hover {
-        background-color: #a9031e;
+    .card::before{
+      background-size:300% 100%;
+      animation:borderRun 6s linear infinite;
     }
-    .login-container a {
-        font-size: 0.9rem;
-        color: #0066cc;
-        text-decoration: none;
-        margin-top: -0.5rem;
+
+    .card img{width:90px;margin-bottom:1.2rem;}
+
+    /* —— FORM —— */
+    .card form{display:flex;flex-direction:column;gap:1rem;margin-top:.5rem;}
+
+    .card input{
+      padding:.78rem .9rem;border:1px solid #d1d5db;border-radius:10px;
+      font-family:inherit;font-size:.95rem;color:#374151;
+      transition:border-color .18s,box-shadow .18s;
     }
-    .login-container a:hover {
-        text-decoration: underline;
+    .card input:focus{
+      outline:none;border-color:#ff5614;
+      box-shadow:0 0 0 3px rgba(255,86,20,.25);
+    }
+
+    .btn-primary{
+      padding:.8rem;border:none;border-radius:10px;
+      font:500 1rem/1 "Poppins",sans-serif;color:#fff;
+      background:linear-gradient(90deg,#ff7a33 0%,#ff5614 100%);
+      cursor:pointer;transition:transform .08s,box-shadow .2s;
+    }
+    .btn-primary:hover{box-shadow:0 8px 18px rgba(255,86,20,.25);}
+    .btn-primary:active{transform:scale(.96);}
+
+    /* —— ENLACES ———————————————————————————————— */
+    .links{display:flex;justify-content:space-between;font-size:.85rem;}
+    .links a{color:#ff5614;text-decoration:none;}
+    .links a:hover{text-decoration:underline;}
+
+    /* —— “Volver” flotante —— */
+    .back-btn{
+      position:fixed;top:1.2rem;left:1.2rem;display:flex;align-items:center;
+      gap:.4rem;background:#ffffffdd;border-radius:30px;padding:.45rem .9rem;
+      font:500 .9rem/1 "Poppins",sans-serif;color:#ff5614;
+      border:1px solid #ffe2d5;backdrop-filter:blur(4px);
+      box-shadow:0 4px 12px rgba(0,0,0,.08);text-decoration:none;
+      transition:background .18s,box-shadow .18s;
+      z-index:999;pointer-events:auto;
+    }
+    .back-btn:hover{background:#ffffff;box-shadow:0 6px 16px rgba(0,0,0,.12);}
+    .back-btn i{font-size:1rem;}
+
+    /* —— MENSAJE DE ERROR —— */
+    #resultado{color:#e11d48;margin-top:.5rem;min-height:1.1rem;}
+
+    /* ===== Animaciones adicionales ===== */
+
+    /* entrada del card: suavemente desde abajo */
+    @keyframes cardEnter{
+      0%   {opacity:0;transform:translateY(40px);}
+      100% {opacity:1;transform:translateY(0);}
+    }
+
+    /* leve desplazamiento del degradado de fondo */
+    @keyframes bgShift{
+      0%   {background-position:0   0;}
+      100% {background-position:600px 400px;}
+    }
+
+    /* flotación del logotipo */
+    @keyframes floatLogo{
+      0%,100%{transform:translateY(0);}
+      50%    {transform:translateY(-6px);}
+    }
+
+    /* “card” aplica la animación de entrada una sola vez */
+    .card{
+      animation:cardEnter .8s cubic-bezier(.25,.8,.25,1) both;
+    }
+
+    /* logo flotando constantemente */
+    .card img{
+      animation:floatLogo 6s ease-in-out infinite;
+    }
+
+    /* botón con elevación sutil al pasar el ratón */
+    .btn-primary{
+      transition:transform .2s,box-shadow .2s;
+    }
+    .btn-primary:hover{
+      transform:translateY(-2px) scale(1.03);
+      box-shadow:0 12px 22px rgba(255,86,20,.28);
+    }
+
+    /* ---------- efecto resplandor periódico del botón ---------- */
+    @keyframes pulseGlow{
+      0%,100%{box-shadow:0 8px 18px rgba(255,86,20,.28);}
+      50%    {box-shadow:0 12px 28px rgba(255,86,20,.45);}
+    }
+
+    /* resplandor periódico SOLO con hover */
+    .btn-primary:hover{
+      animation:pulseGlow 6s ease-in-out infinite;
+    }
+
+    /* ------------ base para el efecto tilt 3‑D -------------- */
+    .login-wrapper{             /* contenedor con perspectiva */
+      perspective:800px;
+    }
+    .card{
+      transform-style:preserve-3d;   /* permite rotar en X/Y */
+      will-change:transform;
+    }
+
+    /* ─── Mensaje creativo al pasar el cursor por el logo ─── */
+    .logo-box{position:relative;display:inline-block;}
+    .logo-box img{display:block;}
+
+    /* ---------- bubble ---------- */
+    .logo-box .bless{
+      position:absolute;left:50%;top:80%;          /* debajo del logo */
+      transform:translate(-50%,8px) scale(.9);
+      padding:.45rem 1.1rem;border-radius:30px;
+      background:#ffffffee;
+      color:#ff5614;font:600 .9rem/1 "Poppins",sans-serif;
+      white-space:nowrap;pointer-events:none;opacity:0;
+      box-shadow:0 4px 14px rgba(0,0,0,.08);
+    }
+    .logo-box .bless::after{                        /* colita */
+      content:"";position:absolute;left:50%;top:-6px;
+      transform:translateX(-50%);
+      border:6px solid transparent;
+      border-bottom-color:#ffffffee;
+    }
+
+    /* ---------- animación ---------- */
+    .logo-box:hover .bless{animation:blessIn .6s ease-out forwards;}
+
+    @keyframes blessIn{
+      0%  {opacity:0;transform:translate(-50%,20px) scale(.9);}
+      60% {opacity:1;transform:translate(-50%, -4px) scale(1.05);}
+      100%{opacity:1;transform:translate(-50%,  0 ) scale(1);}
+    }
+
+    /* ─── “Chispas” (halo) ─── */
+    .logo-box::after{
+      content:"";position:absolute;left:50%;top:50%;
+      width:140%;height:140%;border-radius:50%;
+      background:
+        radial-gradient(circle at 30% 30%,rgba(255,122,51,.25) 0 35%,transparent 55%),
+        radial-gradient(circle at 70% 20%,rgba(255,86,20,.18)  0 40%,transparent 60%),
+        radial-gradient(circle at 50% 80%,rgba(255,122,51,.10) 0 45%,transparent 65%);
+      transform:translate(-50%,-50%) scale(0);
+      opacity:0;pointer-events:none;
+      transition:transform .5s ease-out,opacity .5s ease-out;
+    }
+    .logo-box:hover::after{
+      transform:translate(-50%,-50%) scale(1);
+      opacity:1;
     }
   </style>
 
-  <!-- ───────── NUEVO:  redirección si ya hay token válido ───────── -->
+  <!-- ────────── Redirección si ya hay token válido ────────── -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const t = localStorage.getItem('token');
@@ -74,48 +230,84 @@
         .catch(()=>localStorage.clear());
     });
   </script>
-  <!-- ─────────────────────────────────────────────────────────────── -->
 
   <script>
-    function iniciarSesion(event) {
-        event.preventDefault();
+    function iniciarSesion(e){
+      e.preventDefault();
+      const correo=document.getElementById('correo').value.trim();
+      const clave =document.getElementById('clave').value;
 
-        const correo = document.getElementById('correo').value;
-        const clave  = document.getElementById('clave').value;
-
-        fetch('login.php', {
-            method : 'POST',
-            headers: {'Content-Type':'application/x-www-form-urlencoded'},
-            body   : `correo=${encodeURIComponent(correo)}&clave=${encodeURIComponent(clave)}`
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.token) {
-                localStorage.clear();
-                localStorage.setItem('token', data.token);
-                window.location.href = 'home.php';
-            } else {
-                document.getElementById('resultado').innerText = data.error;
-            }
-        })
-        .catch(()=>{document.getElementById('resultado').innerText='Error de red';});
+      fetch('login.php',{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:`correo=${encodeURIComponent(correo)}&clave=${encodeURIComponent(clave)}`
+      })
+      .then(r=>r.json())
+      .then(d=>{
+        if(d.token){
+          localStorage.clear();
+          localStorage.setItem('token',d.token);
+          location.replace('home.php');
+        }else{
+          document.getElementById('resultado').textContent=d.error||'Error';
+        }
+      })
+      .catch(()=>document.getElementById('resultado').textContent='Error de red');
     }
   </script>
 </head>
 
 <body>
-  <main class="login-container">
-    <img src="images/LogoEC.png" alt="Logo EC">
-    <h2>Iniciar sesión</h2>
+  <!-- degradado/patrón de fondo -->
+  <div class="bg"></div>
 
-    <form onsubmit="iniciarSesion(event)">
-      <input type="email"    id="correo" placeholder="Correo electrónico" required>
-      <input type="password" id="clave"  placeholder="Contraseña"        required>
-      <button type="submit">Entrar</button>
-      <a href="recuperar.html">¿Olvidaste tu contraseña?</a>
-    </form>
+  <!-- botón «Volver» -->
+  <a class="back-btn" href="index.html">
+    <i class="fas fa-arrow-left"></i> Volver
+  </a>
 
-    <div id="resultado" style="color: red; margin-top: 1rem;"></div>
-  </main>
+  <!-- login card -->
+  <div class="login-wrapper">
+    <section class="card">
+      <!-- logo + mensaje emergente -->
+      <div class="logo-box">
+        <img src="images/LogoEC.png" alt="Logo EC">
+        <span class="bless">¡Dios te bendiga!</span>
+      </div>
+      <h2 style="margin-bottom:.3rem;font-weight:600;">Iniciar sesión</h2>
+
+      <form onsubmit="iniciarSesion(event)">
+        <input type="email"    id="correo" placeholder="Correo electrónico" required>
+        <input type="password" id="clave"  placeholder="Contraseña"          required>
+        <button type="submit"  class="btn-primary">Entrar</button>
+
+        <div class="links">
+          <a href="recuperar.html">¿Olvidaste tu contraseña?</a>
+        </div>
+      </form>
+
+      <div id="resultado"></div>
+    </section>
+  </div>
+
+  <script>
+  /* ---------- Tilt 3‑D de la card ---------- */
+  const card = document.querySelector('.card');
+  if(card){
+    const damp = 25;                      // menor = inclinación mayor
+    card.addEventListener('mousemove', e=>{
+      const rect = card.getBoundingClientRect(),
+            x    = e.clientX - rect.left,
+            y    = e.clientY - rect.top,
+            dx   = x - rect.width  / 2,
+            dy   = y - rect.height / 2;
+      card.style.transform =
+        `rotateX(${ -dy/damp }deg) rotateY(${ dx/damp }deg)`;
+    });
+    card.addEventListener('mouseleave',()=>{
+      card.style.transform='rotateX(0) rotateY(0)';
+    });
+  }
+  </script>
 </body>
 </html>

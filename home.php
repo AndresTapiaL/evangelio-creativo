@@ -170,14 +170,6 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    .container {
-      max-width: 800px;
-      margin: auto;
-      background: #fff;
-      padding: 2rem;
-      border-radius: 10px;
-      box-shadow: 0 0 12px rgba(0,0,0,.1);
-    }
     h1 {
       margin-top: 0;
     }
@@ -292,11 +284,51 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
     /* Alinea a la izquierda la lista de equipos */
-    .equipos-list {
-      margin: 0;
-      padding-left: 1rem;
-      list-style: disc outside;
-      text-align: left; /* fuerza alineación izquierda */
+    /* === Diseño pill‑counter igual que eventos.php === */
+    .equipos-list{
+      margin:.2rem 0 0;
+      padding:0;
+      list-style:none;
+      counter-reset:eqnum;
+      display:flex;
+      flex-wrap:wrap;                 /* pills fluyen en varias filas   */
+      gap:.35rem .45rem;
+      max-width:100%;
+    }
+    .equipos-list li{
+      position:relative;
+      counter-increment:eqnum;
+      font:500 .7rem/1.15 "Poppins",sans-serif;
+      background:linear-gradient(135deg,#f5f7fa,#eceff4);
+      border:1px solid #d9dee5;
+      padding:.4rem .55rem .4rem 2.1rem;
+      border-radius:10px;
+      color:#374151;
+      box-shadow:0 1px 2px rgba(0,0,0,.05);
+      white-space:normal;
+      max-width:calc(100% - .25rem);
+      line-height:1.2;
+      word-break:break-word;
+    }
+    .equipos-list li::before{
+      content:counter(eqnum);
+      position:absolute;
+      left:.55rem;
+      top:50%;
+      transform:translateY(-50%);
+      width:1.1rem; height:1.1rem;
+      border-radius:6px;
+      background:var(--primary);
+      color:#fff;
+      font:600 .65rem/1.1 "Poppins",sans-serif;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 1px 2px rgba(0,0,0,.25);
+    }
+    /* alto máx. con scroll interno si la lista es muy larga */
+    td:nth-child(4) .equipos-list{        /* col. Equipo/Proyecto */
+      max-height:80px;
+      overflow:auto;
+      scrollbar-width:thin;
     }
 
     .past-attendance {
@@ -320,6 +352,192 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
       color: #E53935;
       font-size: 0.85rem;
       display: none;
+    }
+
+    /* ═════ DISEÑO UNIFICADO CON eventos.php ═════ */
+
+    /* ——— main desplazable y con mismo padding ——— */
+    #home-main{
+      padding:2rem 2.2rem;
+      min-height:calc(100vh - var(--nav-h));
+      display:block;
+    }
+
+    /* ——— “card” contenedor que envuelve las tablas ——— */
+    #home-card{
+      background:#fff;
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:1.25rem 1.4rem 1.8rem;
+      overflow:hidden;
+    }
+
+    /* ——— tabla responsiva, mismo estilo de eventos.php ——— */
+    #home-card .table-responsive{
+      border:1px solid #e6e8ef;
+      border-radius:10px;
+      overflow:auto;
+      box-shadow:inset 0 0 0 1px #fff;
+    }
+
+    /* cabecera fija y zebra‑stripes */
+    #home-card table{
+      width:100%;
+      min-width:920px;
+      border-collapse:collapse;
+      font:400 .8rem/1.4 "Poppins",sans-serif;
+    }
+
+    #home-card thead th{
+      position:sticky; top:0;
+      background:#f9fafb;
+      color:#4b5563;
+      font:600 .72rem/1.2 "Poppins",sans-serif;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      padding:.65rem .75rem;
+      border-bottom:1px solid #e5e7eb;
+      z-index:5;
+    }
+
+    #home-card tbody td{
+      padding:.65rem .75rem;
+      border-bottom:1px solid #f0f2f5;
+    }
+
+    #home-card tbody tr:nth-child(odd) td{
+      background:#fcfdfe;
+    }
+
+    #home-card tbody tr:hover td{
+      background:#ffffff;
+    }
+
+    /* scroll horizontal suave en móviles */
+    .table-responsive{
+      -webkit-overflow-scrolling:touch;
+    }
+
+    /* ===== Scrollbar igual que en eventos.php ===== */
+    ::-webkit-scrollbar{height:8px;width:8px;}
+    ::-webkit-scrollbar-thumb{background:#c5c9d6;border-radius:8px;}
+    ::-webkit-scrollbar-thumb:hover{background:#a9afc4;}
+
+    /* ——— Estilo unificado para selector de justificación e input “Otros” ——— */
+    .past-attendance .past-just,
+    .past-attendance .past-other{
+      padding:.45rem .65rem;
+      border:1px solid #d6d9e2;
+      border-radius:8px;
+      font:400 .8rem/1 "Poppins",sans-serif;
+      background:#ffffff;
+      transition:border-color .18s, box-shadow .18s;
+    }
+
+    .past-attendance .past-just:focus,
+    .past-attendance .past-other:focus{
+      outline:none;
+      border-color:var(--primary);
+      box-shadow:0 0 0 2px rgba(255,86,20,.25);
+    }
+
+    .past-attendance .past-other{          /* ancho cómodo del campo texto  */
+      max-width:220px;
+    }
+
+    .past-attendance .extras{
+      gap:.75rem;                          /* un poco más aire entre campos */
+    }
+
+    /* ——— Botón “ver detalles” redondo y con hover ——— */
+    .action-btn{
+      display:inline-flex;               /* centra el ícono             */
+      align-items:center;
+      justify-content:center;
+      width:34px;                        /* círculo de 34 px            */
+      height:34px;
+      border-radius:50%;
+      border:1px solid #d1d5db;
+      background:#f3f4f6;
+      color:#ff5614;                     /* tono primario               */
+      font-size:.9rem;
+      cursor:pointer;
+      transition:background .2s, box-shadow .2s, transform .08s;
+    }
+    .action-btn:hover{
+      background:#ffffff;
+      box-shadow:0 0 0 3px rgba(255,86,20,.15);
+    }
+    .action-btn:active{ transform:scale(.9); }
+
+    /* ——— Columna de asistencia “pegada” a la derecha en pantallas ≤768px ——— */
+    @media(max-width:768px){
+      th.sticky-col,
+      td.sticky-col{
+        position:sticky;
+        right:0;                         /* siempre visible al hacer scroll */
+        background:#ffffff;
+        z-index:6;
+        box-shadow:-2px 0 4px rgba(0,0,0,.05);
+      }
+      /* pills un poco más pequeñas para que quepan */
+      .attendance-options{ gap:.6rem; }
+      .att-item .pill{ padding:.25rem .55rem; font-size:.75rem; }
+    }
+
+    /* ░░░ Ajustes cuando la pantalla es chica ░░░ */
+    @media (max-width:768px){
+
+      /* ——— 1) Botones de asistencia apilados ——— */
+      .attendance-options{                 /* ambos módulos (próx. y pasados) */
+        flex-direction:column;             /* ✔ ancho mínimo (~80 px)         */
+        gap:.35rem;
+        align-items:flex-start;
+      }
+      .att-item .pill{                     /* mini‑píldoras                   */
+        padding:.25rem .55rem;
+        font-size:.75rem;
+        width:64px;                        /* ancho constante para alinear    */
+        text-align:center;
+      }
+
+      /* ——— 2) Contenedor “past‑attendance” más compacto ——— */
+      .past-attendance{
+        flex-direction:column;
+        align-items:flex-start;
+        gap:.6rem;
+      }
+      .past-attendance .extras{
+        flex-direction:column;             /* select y texto uno debajo del otro */
+        gap:.45rem;
+      }
+
+      /* limitamos el ancho para que la sticky‑col siga siendo angosta */
+      .past-attendance .past-just,
+      .past-attendance .past-other{
+        width:120px;
+        max-width:120px;
+      }
+
+      /* ——— 3) Aseguramos fondo sólo del ancho ocupado ——— */
+      th.sticky-col,
+      td.sticky-col{
+        min-width:94px;                    /* ≈64 px pill + padding           */
+        background:#ffffff;
+      }
+    }
+
+    /* === Cabecera del modal “Ver detalles” uniformada === */
+    #modal-detalles .card-header{
+      background:linear-gradient(90deg,var(--primary) 0%, #ff7a33 60%, #ff934d 100%);
+      color:#fff;
+    }
+    #modal-detalles .modal-close{
+      background:rgba(255,255,255,.15);
+      color:#fff;
+    }
+    #modal-detalles .modal-close:hover{
+      background:rgba(255,255,255,.28);
     }
   </style>
 
@@ -364,7 +582,8 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
   <?php require_once 'navegador.php'; ?>
 
   <!-- ░░░░ CONTENIDO PRINCIPAL ░░░░ -->
-  <main style="padding:2rem">
+  <main id="home-main">
+  <div id="home-card">
     <!-- ── Próximos eventos ── -->
     <section id="upcoming-attendance" style="margin-bottom:2rem">
       <h2>Próximos eventos</h2>
@@ -377,9 +596,9 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
             <thead>
               <tr>
                 <th>Inicio</th><th>Término</th><th>Evento</th>
-                <th>Equipo/Proyecto</th><th>Estado previo</th>
-                <th>Asist. previa</th><th>Estado final</th>
-                <th>¿Asistirás?</th><th>Acciones</th>
+                <th>Equipo / Proyecto</th><th>Estado previo</th>
+                <th>Asistencia previa</th><th>Estado final</th>
+                <th class="sticky-col">¿Asistirás?</th><th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -444,7 +663,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 <td><?= "{$cnt_pres} de {$cnt_tot}" ?></td>
                 <td><?= $final ?></td>
                 <!-- Asistencia interactiva -->
-                <td>
+                <td class="sticky-col">
                   <div class="attendance-options" data-event-id="<?= $ev['id_evento'] ?>">
                     <?php
                       $labels = [1=>'Sí', 2=>'No', 3=>'No sé'];
@@ -550,11 +769,12 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
       <?php if (empty($pastEvents)): ?>
         <p>No tienes eventos recientes para marcar.</p>
       <?php else: ?>
+        <div class="table-responsive">
         <table>
           <thead>
             <tr>
               <th>Inicio</th><th>Término</th><th>Evento</th>
-              <th>Equipo/Proyecto</th><th>Lugar</th><th>Asistencia</th>
+              <th>Equipo / Proyecto</th><th>Lugar</th><th class="sticky-col">Asistencia</th>
             </tr>
           </thead>
           <tbody>
@@ -595,7 +815,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 </ul>
               </td>
               <td><?= $lugar ?></td>
-              <td>
+              <td class="sticky-col">
                 <?php
                   // estado actual
                   $curState = $cur['id_estado_asistencia'] ?? 0;
@@ -664,6 +884,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
             <?php endforeach; ?>
           </tbody>
         </table>
+        </div><!-- /table‑responsive -->
       <?php endif; ?>
     </section>
 
@@ -751,6 +972,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
       if (!data.ok) alert(data.error || 'Error guardando asistencia');
     }
     </script>
+  </div><!-- /home-card -->
   </main>
 
   <!-- ═════════ utilidades ═════════ -->

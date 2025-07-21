@@ -1,76 +1,135 @@
+<!-- recuperar.html  (versión full match con login.html) -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Recuperar contraseña</title>
+  <title>Recuperar contraseña | EC</title>
+
+  <!-- ✦ Favicon ✦ -->
+  <link rel="icon" type="image/png" sizes="32x32" href="images/LogoEC.png">
+
+  <!-- ✦ Google Fonts + Font‑Awesome ✦ -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+        integrity="sha512-Avb2QiuDEEvB4bZJYdft2mNjVShBftLdPG8FJ0V7irTLQ8Uo0qcPxh4Plq7G5tGm0rU+1SPhVotteLpBERwTkw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <!-- hoja global existente -->
   <link rel="stylesheet" href="styles/main.css">
+
   <style>
-    body {
-        background-image: url('images/Fondo-blanco.jpeg');
-        background-size: cover;
-        margin: 0;
-        font-family: Arial, sans-serif;
+    /* ========== RESET ========== */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font:400 .95rem/1.5 "Poppins",sans-serif;color:#374151;}
+
+    /* ========== FONDO (idéntico al login) ========== */
+    .bg{
+      position:fixed;inset:0;z-index:-2;
+      background:url('images/Fondo-blanco.jpeg') center/cover no-repeat;
     }
-    .recuperar-container {
-        width: 100%;
-        max-width: 400px;
-        margin: 5rem auto;
-        background-color: #fff;
-        padding: 2rem;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        border-radius: 8px;
-        text-align: center;
-        box-sizing: border-box;
+    .bg::before{
+      content:"";position:absolute;inset:0;
+      background:linear-gradient(135deg,rgba(255,122,51,.15) 0%,rgba(255,86,20,.10) 100%);
+      backdrop-filter:blur(2px);
     }
-    .recuperar-container img {
-        width: 90px;
-        margin-bottom: 1rem;
+
+    /* ========== CONTENEDOR CENTRAL ========== */
+    .wrapper{min-height:100vh;display:flex;justify-content:center;align-items:center;padding:2rem 1rem;perspective:800px;}
+
+    /* ========== CARD ========== */
+    .card{
+      width:100%;max-width:380px;padding:2.5rem 2rem;
+      background:#fff;border-radius:18px;overflow:hidden;text-align:center;
+      box-shadow:0 15px 35px rgba(0,0,0,.08);
+      position:relative;transform-style:preserve-3d;will-change:transform;
+      animation:cardEnter .8s cubic-bezier(.25,.8,.25,1) both;
     }
-    .recuperar-container form {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+    .card::before{
+      content:"";position:absolute;left:0;top:0;right:0;height:6px;
+      background:linear-gradient(90deg,#ff7a33 0%,#ff5614 100%);
+      background-size:300% 100%;animation:borderRun 6s linear infinite;
     }
-    .recuperar-container input,
-    .recuperar-container button {
-        width: 100%;
-        max-width: 320px;
-        box-sizing: border-box;
-        padding: 0.75rem;
-        margin-bottom: 1rem;
-        border-radius: 4px;
-        border: 1px solid #ccc;
+
+    .card img{width:90px;margin-bottom:1.2rem;animation:floatLogo 6s ease-in-out infinite;}
+
+    /* formulario */
+    .card form{display:flex;flex-direction:column;gap:1rem;margin-top:.5rem;}
+
+    .card input{
+      padding:.78rem .9rem;border:1px solid #d1d5db;border-radius:10px;
+      font-size:.95rem;transition:border-color .18s,box-shadow .18s;
     }
-    .recuperar-container button {
-        background-color: #d90429;
-        border: none;
-        color: white;
-        font-weight: bold;
-        cursor: pointer;
+    .card input:focus{outline:none;border-color:#ff5614;box-shadow:0 0 0 3px rgba(255,86,20,.25);}
+
+    .btn-primary{
+      padding:.8rem;border:none;border-radius:10px;cursor:pointer;
+      background:linear-gradient(90deg,#ff7a33 0%,#ff5614 100%);
+      font:500 1rem/1 "Poppins",sans-serif;color:#fff;
+      transition:transform .08s,box-shadow .2s;
     }
-    .recuperar-container button:hover {
-        background-color: #a9031e;
+    .btn-primary:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 12px 22px rgba(255,86,20,.28);}
+    .btn-primary:active{transform:scale(.96);}
+
+    /* enlace inferior */
+    .links{margin-top:.2rem;font-size:.85rem;}
+    .links a{color:#ff5614;text-decoration:none;}
+    .links a:hover{text-decoration:underline;}
+
+    /* botón volver (mismo estilo) */
+    .back-btn{
+      position:fixed;top:1.2rem;left:1.2rem;display:flex;align-items:center;gap:.4rem;
+      background:#ffffffdd;border:1px solid #ffe2d5;border-radius:30px;padding:.45rem .9rem;
+      font:500 .9rem/1 "Poppins",sans-serif;color:#ff5614;text-decoration:none;
+      box-shadow:0 4px 12px rgba(0,0,0,.08);backdrop-filter:blur(4px);
+      transition:background .18s,box-shadow .18s;z-index:1500;
     }
-    .recuperar-container a {
-        font-size: 0.9rem;
-        color: #0066cc;
-        text-decoration: none;
-    }
-    .recuperar-container a:hover {
-        text-decoration: underline;
-    }
+    .back-btn:hover{background:#ffffff;box-shadow:0 6px 16px rgba(0,0,0,.12);}
+    .back-btn i{font-size:1rem;}
+
+    /* ========== ANIMACIONES ========== */
+    @keyframes cardEnter{0%{opacity:0;transform:translateY(40px);}100%{opacity:1;transform:translateY(0);}}
+    @keyframes borderRun{0%{background-position:0 0;}100%{background-position:300% 0;}}
+    @keyframes floatLogo{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
   </style>
 </head>
+
 <body>
-  <main class="recuperar-container">
-    <img src="images/LogoEC.png" alt="Logo EC">
-    <h2>Recuperar contraseña</h2>
-    <form action="recuperar_password.php" method="POST">
-      <input type="email" name="correo" placeholder="Correo electrónico" required>
-      <button type="submit">Enviar contraseña temporal</button>
-      <a href="login.html">Volver al login</a>
-    </form>
-  </main>
+  <!-- fondo -->
+  <div class="bg"></div>
+
+  <!-- volver -->
+  <a class="back-btn" href="login.html"><i class="fas fa-arrow-left"></i> Volver</a>
+
+  <!-- card -->
+  <div class="wrapper">
+    <section class="card">
+      <img src="images/LogoEC.png" alt="Logo EC">
+      <h2 style="margin-bottom:.3rem;font-weight:600;">Recuperar contraseña</h2>
+
+      <form action="recuperar_password.php" method="POST">
+        <input type="email" name="correo" placeholder="Correo electrónico" required>
+        <button type="submit" class="btn-primary">Enviar contraseña temporal</button>
+
+        <div class="links">
+          <a href="login.html">Volver al login</a>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <!-- tilt 3‑D idéntico al login (opcional) -->
+  <script>
+  const card=document.querySelector('.card');
+  if(card){
+    const damp=25;
+    card.addEventListener('mousemove',e=>{
+      const r=card.getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2;
+      card.style.transform=`rotateX(${-dy/damp}deg) rotateY(${dx/damp}deg)`;
+    });
+    card.addEventListener('mouseleave',()=>card.style.transform='rotateX(0) rotateY(0)');
+  }
+  </script>
 </body>
 </html>

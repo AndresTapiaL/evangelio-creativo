@@ -398,7 +398,7 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
     .table-responsive td {
       white-space: normal;        /* permite salto de línea */
       word-wrap: break-word;      /* rompe palabras largas */
-      overflow-wrap: anywhere;    /* apoyo en navegadores modernos */
+      overflow-wrap: break-word;  /* evita que se rompa cada carácter */
     }
 
     /* Zebra stripes para filas pares */
@@ -627,45 +627,29 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       width: 100%;
     }
 
+    /* ─── Anchos de columnas — versión revisada ─── */
     .table-responsive th:nth-child(1),
-    .table-responsive td:nth-child(1) { /* “Evento” es la 3ª columna */
-      width: 9.5%;
-    }
-
+    .table-responsive td:nth-child(1),          /* Inicio   */
     .table-responsive th:nth-child(2),
-    .table-responsive td:nth-child(2) {
-      width: 9.5%;
+    .table-responsive td:nth-child(2)           /* Término  */
+    {
+        min-width: 130px;           /* cabe “Jueves 17 | 17.15” sin romperse */
+        width:      14%;
+        white-space: nowrap;        /* una sola línea por celda */
     }
 
     .table-responsive th:nth-child(3),
-    .table-responsive td:nth-child(3) {
-      width: 14%;
-    }
-
+    .table-responsive td:nth-child(3) { width: 14%; }     /* Evento */
     .table-responsive th:nth-child(4),
-    .table-responsive td:nth-child(4) {
-      width: 12.5%;
-    }
-
+    .table-responsive td:nth-child(4) { width: 15%; }     /* Equipo / Proyecto */
     .table-responsive th:nth-child(5),
-    .table-responsive td:nth-child(5) {
-      width: 10.5%;
-    }
-
+    .table-responsive td:nth-child(5) { width: 11%; }     /* Estado previo */
     .table-responsive th:nth-child(6),
-    .table-responsive td:nth-child(6) {
-      width: 9%;
-    }
-
+    .table-responsive td:nth-child(6) { width: 11%; }     /* Asistencia previa */
     .table-responsive th:nth-child(7),
-    .table-responsive td:nth-child(7) {
-      width: 9%;
-    }
-
+    .table-responsive td:nth-child(7) { width: 10%; }     /* Estado final */
     .table-responsive th:nth-child(8),
-    .table-responsive td:nth-child(8) {
-      width: 12.5%;
-    }
+    .table-responsive td:nth-child(8) { width: 16%; }     /* Acciones */
 
     /* ─── Formulario en modal ─── */
     .modal-content .form-group {
@@ -1155,8 +1139,8 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       background:#fcfdfe;
     }
 
-    #eventos-card tbody tr:hover td{
-      background:#f2f7ff;
+    #eventos-card tbody tr:hover td{ /* sin tono celeste */
+      background:#ffffff; /* o #f7f8fa si prefieres un gris muy suave */
     }
 
     /* === Ajuste responsive para “Equipo o Proyecto” === */
@@ -1976,6 +1960,265 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
     #asist-body > div:not(.asist-row) > :not(:first-child) {
       gap: .45rem .45rem;  /* reduce horizontal si quieres */
     }
+
+    /* ----------  BOTÓN HAMBURGER (oculto por defecto) ---------- */
+    .btn-sidebar-toggle{
+      display:none;                 /* sólo se mostrará en el @media */
+    }
+
+    /* ----------  VISTA ≤ 768 px (teléfonos) ---------- */
+    @media (max-width:768px){
+
+      /* sidebar fuera de pantalla hasta que se abra */
+      .sidebar{
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        width:220px;
+        z-index:11000;
+      }
+      .sidebar.open{                /* se aplica vía JS */
+        transform:translateX(0);
+      }
+
+      /* botón visible y flotante */
+      .btn-sidebar-toggle{
+        display:inline-flex;
+        position:fixed;
+        top:calc(var(--nav-h) + .5rem);
+        left:.75rem;
+        padding:.55rem .75rem;
+        background:var(--primary);
+        color:#fff;
+        border-radius:8px;
+        box-shadow:0 4px 10px rgba(0,0,0,.15);
+        z-index:12000;
+      }
+
+      /* layout en columna y main sin margen izquierdo */
+      .layout{flex-direction:column;}
+      #eventos-main{
+        margin-left:0;
+        padding:1rem 1rem 2rem;
+      }
+
+      /* toolbar y buscador ocupan ancho completo */
+      #eventos-toolbar form,
+      #eventos-toolbar > div{
+        flex-wrap:wrap;
+        width:100%;
+      }
+
+      /* navegación de mes con salto de línea */
+      .month-nav{
+        flex-wrap:wrap;
+        gap:.6rem;
+      }
+
+      /* tabla: permitir scroll horizontal en pantallas pequeñas */
+      #eventos-card table{
+        min-width:600px;      /* ancho máximo que se verterá con scroll */
+      }
+    }
+
+    /*════════  AJUSTES EXTRA PARA ≤ 480 px  ════════*/
+    @media (max-width:480px){
+
+      /* 1. Card y separaciones más compactas */
+      #eventos-card{
+        padding:1rem .9rem 1.3rem;
+      }
+
+      /* 2. Toolbar 100 % de ancho, todo en columna */
+      #eventos-toolbar{
+        gap:1.1rem;
+      }
+      #eventos-toolbar form,
+      #eventos-toolbar > div{
+        width:100%;
+        flex-wrap:wrap;
+      }
+
+      /* 3. Botones principales ocupan toda la fila */
+      #toolbar-actions{
+        width:100%;
+        justify-content:stretch;
+      }
+      #toolbar-actions .btn-sys{
+        flex:1 1 100%;
+        justify-content:center;
+      }
+
+      /* 4. Agrupador de descarga pasa a columna */
+      #form-download{
+        flex-direction:column;
+        align-items:stretch;
+        gap:.9rem;
+      }
+      #form-download .range-group{
+        flex-direction:column;
+        gap:.6rem;
+      }
+      #form-download .range-field{
+        width:100%;
+      }
+      #form-download #btn-download{
+        width:100%;
+        justify-content:center;
+      }
+
+      /* 5. Navegación de mes: título arriba, flechas debajo */
+      .month-nav{
+        flex-direction:column;
+        gap:.55rem;
+      }
+
+      /* 6. Tabla: letra levemente menor y scroll horizontal asegurado */
+      #eventos-card table{
+        font-size:.75rem;
+        min-width:520px;          /* el usuario hará scroll si hace falta */
+      }
+
+      /* 7. Equipos / proyectos: pills a 100 % */
+      .equipos-list{
+        gap:.35rem .35rem;
+      }
+
+      /* 8. Dropdowns e inputs ocupan toda la línea cuando sea posible */
+      #eventos-toolbar input[type="text"],
+      #eventos-toolbar input[type="month"],
+      #eventos-toolbar select{
+        width:100%;
+        min-width:0;
+      }
+    }
+
+    /*════════  TABLA COMO TARJETAS  ≤ 600 px  ════════*/
+    @media (max-width:600px){
+
+      /* Ocultamos cabecera y eliminamos ancho mínimo */
+      #eventos-card thead{display:none;}
+      #eventos-card table{min-width:100%; border:0;}
+
+      /* Cada fila = tarjeta */
+      #eventos-card tbody tr{
+        display:block;
+        margin-bottom:1rem;
+        background:#fff;
+        border:1px solid #e5e7eb;
+        border-radius:12px;
+        box-shadow:0 2px 6px rgba(0,0,0,.05);
+        overflow:hidden;
+      }
+
+      /* Celdas en dos columnas: etiqueta + valor */
+      #eventos-card tbody td{
+        display:grid;
+        grid-template-columns:110px 1fr;
+        gap:.35rem .75rem;
+        padding:.75rem .95rem;
+        border:none;
+        border-top:1px solid #f4f4f6;
+        font-size:.80rem;
+        line-height:1.35;
+      }
+      #eventos-card tbody td:first-child{border-top:0;}
+
+      /* Etiqueta (“Inicio”, …) */
+      #eventos-card tbody td::before{
+        content:attr(data-label);
+        font-weight:600;
+        color:#374151;
+        text-transform:uppercase;
+        font-size:.68rem;
+        letter-spacing:.4px;
+      }
+
+      /* Columna Acciones: se muestra en una sola línea */
+      #eventos-card tbody td.actions{
+        display:flex;
+        align-items:center;
+        gap:.4rem;
+        justify-content:flex-start;
+      }
+      #eventos-card tbody td.actions::before{content:'';} /* sin etiqueta */
+
+      /* Pills de equipos: ajustamos márgenes cuando van en tarjetas */
+      #eventos-card tbody td:nth-child(4) .equipos-list{
+        margin:.3rem 0 0;
+      }
+
+      /* ======= Ajustes extra para optimizar la tarjeta móvil ======= */
+
+      /* (a) Etiqueta arriba y valor ocupando todo el ancho --------- */
+      #eventos-card tbody td{
+        /* pasamos de dos columnas fijas (110px 1fr) a una sola         */
+        grid-template-columns: 1fr !important;
+      }
+      #eventos-card tbody td::before{
+        grid-column: 1 / -1;          /* la etiqueta abarca la fila entera  */
+        margin-bottom: .25rem;        /* pequeño espacio bajo la etiqueta   */
+      }
+
+      /* (b) Lista de Equipos/Proyectos bien visible ----------------- */
+      #eventos-card tbody td[data-label="Equipo / Proyecto"] .equipos-list{
+        display: block;               /* pila vertical                      */
+      }
+      #eventos-card tbody td[data-label="Equipo / Proyecto"] .equipos-list li{
+        display: block;
+        width: 100%;
+        max-width: 100%;              /* aprovecha todo el ancho            */
+      }
+    }
+
+    /* ─── Mobile fix específico para “Inicio” y “Término” ─── */
+    @media (max-width:600px){
+      #eventos-card tbody td[data-label="Inicio"],
+      #eventos-card tbody td[data-label="Término"]{
+          white-space: nowrap;
+          word-break: normal;
+          overflow-wrap: normal;
+      }
+    }
+
+    /*════════  FIXES MÓVILES  (≤600 px)  ════════*/
+    @media (max-width:600px){
+
+      /* A) Cada tarjeta usa el 100 % del ancho disponible */
+      #eventos-card tbody tr{
+        width:100%;
+      }
+
+      /* B) Nos aseguramos de que no quede ningún fondo celeste */
+      #eventos-card tbody tr,
+      #eventos-card tbody td{
+        background:#fff !important;
+      }
+
+      /* C) Más separación entre los iconos de acción */
+      #eventos-card tbody td.actions{
+        gap:.6rem;                 /* flex‑gap > anterior .4 rem */
+      }
+      .actions .action-btn + .action-btn{
+        margin-left:0;             /* anula el –1 rem global     */
+      }
+    }
+
+    /* █████  RESET de anchos en versión “tarjeta”  █████ */
+    @media (max-width:600px){
+      /* 1) cada celda ocupa todo el ancho ¡y sin mínimos! */
+      #eventos-card tbody td{
+        width:100%       !important;
+        min-width:0      !important;
+        max-width:100%   !important;
+      }
+
+      /* 2) los anchos asignados por nth‑child ya no aplican */
+      .table-responsive td:nth-child(n),
+      .table-responsive th:nth-child(n){
+        width:auto       !important;
+        min-width:0      !important;
+      }
+    }
   </style>
 
   <!-- ═════════ Validación única al cargar la página ═════════ -->
@@ -2017,6 +2260,13 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
 <body>
   <!-- ░░░░ NAV ░░░░ -->
   <?php require_once 'navegador.php'; ?>
+
+  <!-- === BOTÓN TOGGLE SIDEBAR (solo se verá en móviles) === -->
+  <button id="toggle-sidebar"
+          class="btn-sys btn-sidebar-toggle"
+          aria-label="Menú">
+    <i class="fa-solid fa-bars"></i>
+  </button>
 
   <!-- ░░░░ CONTENIDO PRINCIPAL (layout estilo integrantes) ░░░░ -->
   <div class="layout">
@@ -2106,6 +2356,19 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
                   <option value="pdf">PDF</option>
                 </select>
               </div>
+            </div>
+
+            <div id="download-errors" style="display:flex;flex-direction:column;gap:.15rem;margin-top:.4rem">
+              <small id="mesStart-error"  class="err-inline">* Selecciona el mes de inicio.</small>
+              <small id="mesEnd-error"    class="err-inline">* Selecciona el mes de fin.</small>
+
+              <small id="dateOrder-error" class="err-inline">
+                * El mes de fin debe ser igual o posterior al de inicio.
+              </small>
+
+              <small id="dateRange-error" class="err-inline">
+                * El rango máximo permitido es de 24&nbsp;meses.
+              </small>
             </div>
 
             <button type="submit" id="btn-download" class="btn-sys btn-sec">
@@ -2219,16 +2482,16 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
                   $canManage = $isLiderNacional;
                 ?>
                   <tr>
-                    <td>
+                    <td data-label="Inicio">
                       <?= $dias[date('w',$si)] . ' ' . date('d',$si) ?><br>
                       <?= date('H.i',$si) . ' horas' ?>
                     </td>
-                    <td>
+                    <td data-label="Término">
                       <?= $dias[date('w',$st)] . ' ' . date('d',$st) ?><br>
                       <?= date('H.i',$st) . ' horas' ?>
                     </td>
-                    <td><?= htmlspecialchars($e['nombre_evento']) ?></td>
-                    <td>
+                    <td data-label="Evento"><?= htmlspecialchars($e['nombre_evento']) ?></td>
+                    <td data-label="Equipo / Proyecto">
                       <?php
                         $raw   = $e['equipos'] ?: 'General';
                         $teams = array_filter(array_map('trim', explode(',', $raw)));
@@ -2239,10 +2502,10 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
                         <?php endforeach; ?>
                       </ul>
                     </td>
-                    <td><?= htmlspecialchars($e['nombre_estado_previo']) ?></td>
-                    <td><?= (int)$e['cnt_presente'] ?> de <?= (int)$e['total_integrantes'] ?></td>
-                    <td><?= htmlspecialchars($e['nombre_estado_final']) ?></td>
-                    <td class="actions" style="white-space:nowrap">
+                    <td data-label="Estado previo"><?= htmlspecialchars($e['nombre_estado_previo']) ?></td>
+                    <td data-label="Asistencia"><?= (int)$e['cnt_presente'] ?> de <?= (int)$e['total_integrantes'] ?></td>
+                    <td data-label="Estado final"><?= htmlspecialchars($e['nombre_estado_final']) ?></td>
+                    <td class="actions" data-label="Acciones" style="white-space:nowrap">
                       <button title="Ver detalles" class="action-btn detail-btn"
                         data-fi="<?= $dias[date('w',$si)].' '.date('d',$si).' | '.date('H.i',$si).' horas' ?>"
                         data-ft="<?= $dias[date('w',$st)].' '.date('d',$st).' | '.date('H.i',$st).' horas' ?>"
@@ -2345,6 +2608,17 @@ $leaders = $ldrStmt->fetchAll(PDO::FETCH_ASSOC);
       location.replace('login.html');
     }
   });
+  </script>
+
+  <script>
+  /* === Toggle de sidebar en móviles === */
+  (function(){
+    const btn  = document.getElementById('toggle-sidebar');
+    const side = document.getElementById('sidebar-eventos');
+    if(btn && side){
+      btn.addEventListener('click', ()=> side.classList.toggle('open'));
+    }
+  })();
   </script>
 
   <!-- Modal Detalles Evento -->

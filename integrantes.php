@@ -637,6 +637,70 @@ if ($isSuper){                               // puede ver sección 0
     align-items:center;
     gap:.4rem;
   }
+
+  /* ——————————————————————————————
+    BOTÓN HAMBURGER – estado inicial
+    —————————————————————————————— */
+  .btn-sidebar-toggle{
+    display:none;                /* se mostrará con @media */
+    border:0;
+    cursor:pointer;
+    padding:.55rem .75rem;
+    background:var(--primary);
+    color:#fff;
+    border-radius:8px;
+    font-size:1rem;
+    box-shadow:0 4px 10px rgba(0,0,0,.15);
+    z-index:12000;
+  }
+
+  /* ——————————————————————————————
+    VISTA ≤ 768 px  (tablets y teléfonos)
+    —————————————————————————————— */
+  @media (max-width:768px){
+
+    /* sidebar fuera de pantalla hasta que se abra */
+    .sidebar{
+      transform:translateX(-100%);
+      transition:transform .3s ease;
+      width:220px;
+      z-index:11000;
+    }
+    .sidebar.open{               /* se aplica vía JS */
+      transform:translateX(0);
+    }
+
+    /* botón visible y flotante */
+    .btn-sidebar-toggle{
+      display:inline-flex;
+      position:fixed;
+      top:calc(var(--nav-h) + .5rem);
+      left:.75rem;
+    }
+
+    /* layout en columna y main sin margen izquierdo */
+    .layout{
+      flex-direction:column;
+      margin-left:0;
+    }
+    .layout > main{
+      padding:1rem 1rem 2rem;
+    }
+
+    /* tabla: permitir scroll horizontal en pantallas pequeñas */
+    #tbl-integrantes{
+      min-width:600px;           /* ancho mínimo antes de hacer scroll */
+    }
+  }
+
+  /* ——————————————————————————————
+    VISTA ≤ 480 px  (teléfonos pequeños)
+    —————————————————————————————— */
+  @media (max-width:480px){
+    .layout > main{
+      padding:1rem .8rem 2rem;
+    }
+  }
   </style>
 
   <script defer src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
@@ -686,6 +750,13 @@ if ($isSuper){                               // puede ver sección 0
 <body>
   <!-- ░░░░ NAV ░░░░ -->
   <?php require_once 'navegador.php'; ?>
+
+  <!-- Botón toggle del sidebar (solo visible en móviles) -->
+  <button id="toggle-sidebar"
+          class="btn-sidebar-toggle"
+          aria-label="Menú">
+    <i class="fa-solid fa-bars"></i>
+  </button>
 
   <!-- ░░░░ CONTENIDO PRINCIPAL ░░░░ -->
   <!-- contenedor de DOS columnas -->
@@ -1132,6 +1203,17 @@ if ($isSuper){                               // puede ver sección 0
       location.replace('login.html');
     }
   });
+  </script>
+
+  <script>
+  /* === Toggle de sidebar en móviles === */
+  (function(){
+    const btn  = document.getElementById('toggle-sidebar');
+    const side = document.getElementById('sidebar');
+    if(btn && side){
+      btn.addEventListener('click', () => side.classList.toggle('open'));
+    }
+  })();
   </script>
 
   <script src="integrantes.js"></script>
