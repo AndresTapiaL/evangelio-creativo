@@ -231,28 +231,62 @@
     });
   </script>
 
+  <!-- FingerprintJS (Pro / Open‑Source) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
+
   <script>
-    function iniciarSesion(e){
-      e.preventDefault();
+  const KEY_FP = 'fp_id';
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!localStorage.getItem(KEY_FP)) {
+      const fp = await FingerprintJS.load();
+      const { visitorId } = await fp.get();
+      localStorage.setItem(KEY_FP, visitorId);
+    }
+  });
+  </script>
+
+  <script>
+    const KEY_DEV   = 'device_id';
+    function iniciarSesion(ev){
+      ev.preventDefault();
       const correo=document.getElementById('correo').value.trim();
       const clave =document.getElementById('clave').value;
+      /* validaciones básicas de front */
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRe.test(correo)) {
+        document.getElementById('resultado').textContent = 'Formato de correo inválido.';
+        return;
+      }
+
+      let deviceId = localStorage.getItem(KEY_DEV);
+      if (!deviceId) {
+        deviceId = crypto.randomUUID();
+        localStorage.setItem(KEY_DEV, deviceId);
+      }
+
+      const enc = encodeURIComponent;
 
       fetch('login.php',{
         method:'POST',
         headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:`correo=${encodeURIComponent(correo)}&clave=${encodeURIComponent(clave)}`
+        body:`correo=${enc(correo)}&clave=${enc(clave)}&device=${enc(deviceId)}&fp=${enc(localStorage.getItem(KEY_FP)||'')}`
       })
-      .then(r=>r.json())
-      .then(d=>{
-        if(d.token){
-          localStorage.clear();
-          localStorage.setItem('token',d.token);
-          location.replace('home.php');
-        }else{
-          document.getElementById('resultado').textContent=d.error||'Error';
-        }
+      .then(async r => {
+          try { return await r.json(); } catch { return { error: 'Respuesta no válida' }; }
       })
-      .catch(()=>document.getElementById('resultado').textContent='Error de red');
+      .then(d => {
+          if (d.token) {                      // login OK
+              localStorage.clear();
+              localStorage.setItem('token', d.token);
+              location.replace('home.php');
+              return;
+          }
+          /* cualquier otro caso = error */
+          document.getElementById('resultado').textContent =
+              d.error || 'Error';
+      })
+      .catch(()=>document.getElementById('resultado').textContent='Falla de conexión');
     }
   </script>
 </head>

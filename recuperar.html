@@ -131,5 +131,15 @@
     card.addEventListener('mouseleave',()=>card.style.transform='rotateX(0) rotateY(0)');
   }
   </script>
+
+  <script>
+    const form = document.querySelector('form');
+    if(form){
+      form.addEventListener('submit', e=>{
+        const btn = form.querySelector('button[type="submit"]');
+        if(btn){ btn.disabled = true; btn.textContent = 'Enviando...'; }
+      });
+    }
+  </script>
 </body>
 </html>

@@ -2110,6 +2110,7 @@ $('#rein-ok').onclick = async ()=>{
       if (liTarget) selectTeam(targetId, liTarget, 1);  // recarga tabla (pág. 1)
    } else {
       toast(j.error || 'Error');
+      hide($('#modal-rein'));
    }
 };
 

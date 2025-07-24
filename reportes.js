@@ -11,6 +11,9 @@
     est:    document.getElementById('tab-eventos_estado')
   };
 
+  const main = document.getElementById('reportes-main');
+  const card = document.getElementById('reportes-card');
+
   /* Líder nacional  **o**  al menos un equipo con rol 4/6
     (→ `allowed.length > 0` porque el PHP solo llena ese array
         cuando el usuario tiene rol 4 u 6 en algún equipo)         */
@@ -330,20 +333,19 @@
     const botonActivo = document.querySelector(`#tab-${curType}`);
     if (botonActivo) botonActivo.classList.add('active');
 
-    // 6.b) Mostrar/Ocultar sidebar para “equipos” Y para “eventos_estado”
+    // 6.b) Mostrar/Ocultar sidebar y ocupar ancho total para "equipos" y "eventos_estado"
     const sidebar = document.querySelector('aside');
-    const section = document.querySelector('section');
+    // const section = document.querySelector('section');   // <- ya no lo usamos
 
     if (curType === 'equipos' || curType === 'eventos_estado') {
-      // —— ocultar sidebar y expandir el <section> a todo el ancho ——
       sidebar.style.display = 'none';
-      section.classList.add('ocupandoTodoElEspacio');
-      // Para ambos (equipos y eventos_estado) enviamos team=0
-      curTeam = 0;
+      main.classList.add('fullwidth');       // <— NUEVO
+      card.classList.add('fullwidth');       // <— NUEVO
+      curTeam = 0; // ambos envían team=0
     } else {
-      // —— mostrar sidebar y quitar la clase de expansión ——
       sidebar.style.display = '';
-      section.classList.remove('ocupandoTodoElEspacio');
+      main.classList.remove('fullwidth');    // <— NUEVO
+      card.classList.remove('fullwidth');    // <— NUEVO
     }
 
     // 6.c) Llamada al API de reportes
@@ -382,20 +384,26 @@
       host.innerHTML = '<em>Sin integrantes aún.</em>';
       return;
     }
+
     const jNames = [...new Set(rows.map(r => r.nombre_justificacion_inasistencia))];
     const tbl = htmlTable(['Nombre', ...jNames]);
+
+    // Pivot por usuario
     const byU = {};
     rows.forEach(r => {
       const u = (byU[r.id_usuario] ??= { nombre: r.nombre_completo, vals: {} });
       u.vals[r.nombre_justificacion_inasistencia] = r.porcentaje;
     });
+
     Object.values(byU).forEach(u => {
       tbl.tBodies[0].append(tr([
         u.nombre,
         ...jNames.map(j => `${u.vals[j] ?? 0}%`)
       ]));
     });
-    host.append(tbl);
+
+    // 1 columna fija (Nombre)
+    host.append(prettifyAndWrap(tbl, 1));
   }
 
   function renderEventos(rows, host) {
@@ -403,26 +411,37 @@
       host.innerHTML = `<em>${rows[0].mensaje}</em>`;
       return;
     }
+    if (rows.length === 0) {
+      host.innerHTML = '<em>Sin eventos aún.</em>';
+      return;
+    }
+
     const jNames = [...new Set(rows.map(r => r.nombre_justificacion_inasistencia))];
     const tbl = htmlTable(['Nombre evento', 'Fecha', ...jNames]);
+
+    // Pivot por evento
     const byE = {};
     rows.forEach(r => {
       const o = (byE[r.id_evento] ??= { nom: r.nombre_evento, f: r.fecha_evento, vals: {} });
       o.vals[r.nombre_justificacion_inasistencia] = r.porcentaje;
     });
+
     Object.values(byE).forEach(ev => {
       tbl.tBodies[0].append(tr([
         ev.nom, ev.f,
         ...jNames.map(j => `${ev.vals[j] ?? 0}%`)
       ]));
     });
-    host.append(tbl);
+
+    // 2 columnas fijas (Nombre evento + Fecha)
+    host.append(prettifyAndWrap(tbl, 2));
   }
 
   function renderEquipos(rows, host) {
     const hdr = ['Equipo', 'Integrantes', 'Activos', 'Semiactivos', 'Nuevos',
       'Inactivos', 'En espera', 'Retirados', 'Cambios', 'Sin estado'];
     const tbl = htmlTable(hdr);
+
     rows.forEach(r => {
       tbl.tBodies[0].append(tr([
         r.nombre_equipo_proyecto,
@@ -431,7 +450,8 @@
         r.inactivos, r.en_espera, r.retirados, r.cambios, r.sin_estado
       ]));
     });
-    host.append(tbl);
+
+    host.append(prettifyAndWrap(tbl, 1)); // fijamos 1 (Equipo) porque suele ser larga
   }
 
   /**
@@ -482,6 +502,7 @@
 
     // 2.a) Wrapper para Equipos
     const wrapperA = document.createElement('div');
+    wrapperA.className = 'chart-block';
     wrapperA.innerHTML =
       '<h3>Eventos aprobados por equipo y estado final</h3>' +
       '<h4 style="font-weight:normal;margin-top:0">Solo con estado previo = Aprobado</h4>';
@@ -489,6 +510,7 @@
 
     // 2.b) Wrapper para Proyectos
     const wrapperB = document.createElement('div');
+    wrapperB.className = 'chart-block';
     wrapperB.innerHTML =
       '<h3>Eventos aprobados por proyecto y estado final</h3>' +
       '<h4 style="font-weight:normal;margin-top:0">Solo con estado previo = Aprobado</h4>';
@@ -611,5 +633,53 @@
     document.head.append(s);
     await new Promise(r => s.onload = r);
   }
+
+  /* ========= helpers de look de tabla ========= */
+
+  /**
+   * Envuelve la tabla en un contenedor con scroll y aplica el “skin” .dt.
+   * Luego fija las primeras `count` columnas.
+   * Devuelve el wrapper para que lo insertes en el DOM.
+   */
+  function prettifyAndWrap(tbl, count){
+    tbl.classList.add('dt', '-compact');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'table-shell';
+    wrap.appendChild(tbl);
+
+    // Esperar al próximo frame para calcular anchos reales
+    requestAnimationFrame(() => lockFirstColumns(tbl, count));
+
+    return wrap;
+  }
+
+  /**
+   * Fija las primeras `count` columnas calculando el offset left acumulado.
+   * Similar a tu versión anterior, pero añade la clase .locked-col.
+   */
+  function lockFirstColumns(table, count){
+    const thead = table.tHead;
+    if (!thead) return;
+
+    const firstRowThs = Array.from(thead.rows[0].cells);
+    let accLeft = 0;
+
+    for (let c = 0; c < count; c++){
+      const th = firstRowThs[c];
+      if (!th) break;
+
+      const colWidth = th.getBoundingClientRect().width;
+
+      const selector = `thead th:nth-child(${c+1}), tbody td:nth-child(${c+1})`;
+      table.querySelectorAll(selector).forEach(cell => {
+        cell.classList.add('locked-col');
+        cell.style.left = accLeft + 'px';
+      });
+
+      accLeft += colWidth;
+    }
+  }
+  /* ========= /helpers de look de tabla ========= */
 
 })();  // /IIFE

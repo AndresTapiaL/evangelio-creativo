@@ -280,6 +280,122 @@ function notificarEquipo(string $tipo,int $eqId,array $userInfo,array $extra,PDO
   }
 }
 
+/* ─────────────────────────  Clave temporal + e‑mail  ───────────────────────── */
+function generarClaveTemporal(int $len = 8): string {
+    // A–Z y 0–9 sin caracteres confusos (O/0, I/1) si quieres: cámbialo
+    $alf = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $out = '';
+    $bytes = random_bytes($len);
+    for ($i = 0; $i < $len; $i++) {
+        $out .= $alf[ord($bytes[$i]) % strlen($alf)];
+    }
+    return $out;
+}
+
+/**
+ * Guarda la clave temporal hasheada, registra en password_reset_log
+ * y envía el correo al usuario.
+ *
+ * @param int    $uid    id_usuario
+ * @param int    $eqId   id_equipo_proyecto al que fue agregado
+ * @param string $eqNom  nombre del equipo/proyecto
+ * @param PDO    $pdo
+ */
+function setPassAndMail(int $uid, int $eqId, string $eqNom, PDO $pdo, bool $registrarLog = true): void {
+    // 1) correo + nombre
+    $st = $pdo->prepare("
+        SELECT u.nombres,
+               (SELECT correo_electronico FROM correos_electronicos
+                 WHERE id_usuario = u.id_usuario LIMIT 1) AS mail
+        FROM usuarios u
+        WHERE u.id_usuario = ?");
+    $st->execute([$uid]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$row || !$row['mail']) return; // nada que hacer
+
+    $clave = generarClaveTemporal(8);
+    $hash  = password_hash($clave, PASSWORD_DEFAULT);
+
+    // 2) actualiza password
+    $upd = $pdo->prepare("UPDATE usuarios SET password = :h WHERE id_usuario = :id");
+    $upd->execute([':h'=>$hash, ':id'=>$uid]);
+
+    // 3) log (si tienes trigger limitará 1/día)
+    if ($registrarLog) {
+        $ins = $pdo->prepare("
+            INSERT INTO password_reset_log (id_usuario, correo_electronico)
+            VALUES (:id, :mail)");
+        $ins->execute([':id'=>$uid, ':mail'=>$row['mail']]);
+    }
+
+    // 4) correo
+    $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+    try{
+        $mail->CharSet  = 'UTF-8';
+        $mail->Encoding = 'base64';
+        $mail->isSMTP();
+        $mail->Host       = 'smtp.gmail.com';
+        $mail->SMTPAuth   = true;
+        $mail->Username   = 'actividades.evangeliocreativo@gmail.com';
+        $mail->Password   = 'vwsgpbigmyqaknpc';
+        $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = 587;
+
+        $mail->setFrom('actividades.evangeliocreativo@gmail.com', 'Evangelio Creativo');
+        $mail->addAddress($row['mail'], $row['nombres']);
+        $mail->addEmbeddedImage(__DIR__.'/images/LogoEC.png', 'logoec', 'LogoEC.png');
+        $mail->isHTML(true);
+        $mail->Subject = 'Acceso a Intranet - Evangelio Creativo';
+        $mail->Body = '
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+        <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+        <style>
+        body{margin:0;background:#f3f4f8;font-family:Poppins,Arial,sans-serif;color:#374151;}
+        .wrapper{max-width:520px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;
+                 box-shadow:0 8px 24px rgba(0,0,0,.08);}
+        .bar{height:6px;background:linear-gradient(90deg,#ff7a33 0%,#ff5614 100%);}
+        .content{padding:28px 24px;}
+        h1{font-size:22px;margin:0 0 12px;color:#ff5614;font-weight:600;}
+        p{margin:0 0 14px;line-height:1.5;font-size:15px;}
+        .code{display:inline-block;padding:12px 18px;border-radius:10px;background:#ffe2d5;color:#d90429;
+              font-size:20px;font-weight:700;letter-spacing:2px;}
+        .small{font-size:12px;color:#6b7280;}
+        .logo{display:block;margin:0 auto 18px;width:84px;}
+        a.btn{display:inline-block;margin-top:14px;padding:12px 18px;border-radius:10px;
+              background:linear-gradient(90deg,#ff7a33 0%,#ff5614 100%);color:#fff;font-weight:600;
+              text-decoration:none;}
+        </style>
+        </head>
+        <body>
+        <div class="wrapper">
+          <div class="bar"></div>
+          <div class="content">
+            <img class="logo" src="cid:logoec" alt="Logo EC">
+            <h1>¡Bienvenido/a a Evangelio Creativo!</h1>
+            <p>Hola <strong>'.htmlspecialchars($row['nombres'],ENT_QUOTES,'UTF-8').'</strong>,</p>
+            <p>Desde ahora tienes acceso a la intranet de Evangelio Creativo.<br>
+               Fuiste agregado/a al equipo: <strong>'.htmlspecialchars($eqNom,ENT_QUOTES,'UTF-8').'</strong>.</p>
+            <p>Tu clave temporal es:</p>
+            <div class="code">'.$clave.'</div>
+            <p>Ingresa con ella y cámbiala inmediatamente desde tu perfil.</p>
+            <p><a class="btn" href="'.htmlspecialchars((isset($_SERVER['HTTPS'])?'https://':'http://').$_SERVER['HTTP_HOST'].'/PW%20EC_Antes/login.html',ENT_QUOTES,'UTF-8').'">Iniciar sesión</a></p>
+            <p class="small">Si no solicitaste este acceso, ignora este mensaje.</p>
+          </div>
+        </div>
+        </body></html>';
+        $mail->AltBody = "Hola {$row['nombres']},\n\n".
+                         "Fuiste agregado al equipo/proyecto: {$eqNom}.\n".
+                         "Tu clave temporal es: {$clave}\n\n".
+                         "Ingresa y cámbiala de inmediato: /login.html\n\nEvangelio Creativo";
+        $mail->send();
+    }catch(\PHPMailer\PHPMailer\Exception $e){
+        error_log('[MailTempPass] '.$mail->ErrorInfo);
+        // No lanzamos excepción para no romper el flujo principal
+    }
+}
+
 define('UPLOADS_FOTOS_DIR', realpath(__DIR__.'/uploads/fotos'));
 
 /* Privilegios solicitante ───────────────────── */
@@ -1861,6 +1977,9 @@ try {
         $pdo
     );
 
+    /* === Clave temporal + correo al usuario === */
+    setPassAndMail($id, $eq, $__mail_eqNombre['nombre_equipo_proyecto'], $pdo, false);
+
     echo json_encode(['ok'=>true]);
     break;
   }
@@ -1921,6 +2040,9 @@ try {
         ],
         $pdo
     );
+
+    /* === Clave temporal + correo al usuario === */
+    setPassAndMail($uid, $eq, $__mail_eqNombre['nombre_equipo_proyecto'], $pdo, false);
 
     echo json_encode(['ok'=>true]);
     break;
