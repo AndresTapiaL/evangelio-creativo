@@ -246,12 +246,24 @@ if ($isLN) {
     /* Cuando ocultamos el sidebar y queremos ocupar todo el ancho */
     #reportes-main.fullwidth{
       margin-left:0 !important;
+      width:100%;
     }
 
-    /* Para que el contenedor del reporte se pegue a los bordes cuando es fullwidth (opcional) */
+    /* El card ocupa todo el ancho disponible y se centra.
+      Le quitamos el padding para dárselo al interior (.pad-host). */
     #reportes-card.fullwidth{
-      padding-left:0;
-      padding-right:0;
+      width:100%;
+      margin:0 auto;
+      padding:0;                 /* el padding lo maneja .pad-host */
+    }
+
+    /* Cuando queremos que el contenido NO quede pegado a los bordes
+      (solo para Equipos y Eventos · Estados) */
+    #reportes-card.pad-host #reportes-toolbar{
+      padding:1.25rem 2rem 0;    /* padding separado para la toolbar */
+    }
+    #reportes-card.pad-host section{
+      padding:0 2rem 2rem;       /* padding para el contenido */
     }
 
     .chart-block{
@@ -373,9 +385,16 @@ if ($isLN) {
     .table-just td:first-child{
       min-width:220px;                 /* Nombre / Nombre evento */
     }
+    /* Fecha (2ª columna) – dale ancho fijo y evita cortes */
     .table-just th:nth-child(2),
     .table-just td:nth-child(2){
-      min-width:110px;                 /* Fecha (en Justificaciones · Eventos) */
+      min-width: 120px;
+      width: 120px;        /* fuerza el ancho calculado para el sticky */
+      max-width: 120px;
+      white-space: nowrap; /* no permitas que FE-CHA baje de línea */
+      hyphens: none;       /* desactiva guiones automáticos */
+      word-break: keep-all;
+      text-align: center;  /* opcional, para que la fecha quede centrada */
     }
 
     /* Mensaje cuando no hay datos pero queremos mantener la tabla (anchos) */
@@ -388,6 +407,370 @@ if ($isLN) {
     /* (opcional) mejora visual: fija el alto mínimo del header para que no “salte” */
     .table-just thead th{
       min-height:42px;
+    }
+
+    /* ====== OVERRIDES & EXTRAS (solo look & feel) ====== */
+
+    /* Altura máxima un poco más inteligente para que no tape la toolbar */
+    .table-shell{
+      max-height: calc(100vh - (var(--nav-h, 64px) + 220px));
+    }
+
+    /* Mejora la legibilidad y los espacios en tablas muy densas */
+    .dt.-compact thead th,
+    .dt.-compact tbody td{
+      font-size: .78rem;
+      line-height: 1.28;
+      padding: .5rem .6rem;
+    }
+
+    /* Quita el “salto duro” por caracteres poco usuales pero permite romper si es extremadamente largo */
+    .dt thead th,
+    .dt tbody td{
+      overflow-wrap: anywhere;
+      word-break: normal;
+    }
+
+    /* Sombras más suaves para las columnas bloqueadas (fijas) */
+    .locked-col{
+      background:#fff;
+      box-shadow: 1px 0 0 #e5e7eb, 6px 0 12px rgba(0,0,0,.025);
+    }
+
+    /* Hover un poco más notorio */
+    .dt tbody tr:hover{
+      background:#eef2f7;
+    }
+
+    /* ====== Barra visual para porcentajes ====== */
+    .pct{
+      --p: 0; /* 0–100 */
+      position: relative;
+      display:inline-block;
+      min-width: 46px;
+      padding: .05rem .35rem;
+      border-radius: 4px;
+      background:
+        linear-gradient(90deg,
+          var(--primary, #4f46e5) calc(var(--p)*1%),
+          #e5e7eb 0);
+      color:#111827;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+    .pct[data-low="1"]{
+      background:
+        linear-gradient(90deg,
+          #F44336 calc(var(--p)*1%),
+          #e5e7eb 0);
+      color:#fff;
+    }
+    .pct[data-mid="1"]{
+      background:
+        linear-gradient(90deg,
+          #FF9800 calc(var(--p)*1%),
+          #e5e7eb 0);
+      color:#111827;
+    }
+    .pct[data-high="1"]{
+      background:
+        linear-gradient(90deg,
+          #8BC34A calc(var(--p)*1%),
+          #e5e7eb 0);
+      color:#111827;
+    }
+
+    /* Ajuste del sticky del header dentro del wrapper con sombra */
+    .table-shell thead th{
+      top:0;               /* pegado al tope del contenedor con scroll */
+    }
+
+    /* Mensaje vacío centrado, manteniendo anchos */
+    .table-empty td{
+      text-align:center;
+      color:#6b7280;
+      font-style:italic;
+      padding: 2rem 0;
+    }
+
+    /* ====== HEADERS COMPACTOS (abreviatura + tooltip) ====== */
+    .dt thead th{
+      white-space:nowrap;                 /* no rompas en múltiples líneas */
+      text-overflow:ellipsis;
+      overflow:hidden;
+    }
+
+    .dt thead th[data-full]{
+      position:relative;
+      cursor:pointer;                     /* quitamos el “?” del cursor help */
+    }
+    .dt thead th[data-full]:hover{
+      overflow:visible;                   /* para que el tooltip no se corte */
+    }
+
+    /* el texto corto que se ve siempre */
+    .dt thead th .hshort{
+      display:block;
+      font-size:.72rem;
+      font-weight:600;
+      letter-spacing:.3px;
+      text-transform:uppercase;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    /* Reafirma el sticky del header dentro del wrapper con scroll */
+    .table-shell thead,
+    .table-shell thead th{
+      position: sticky;
+      top: 0;
+      z-index: 8;               /* por encima del contenido */
+      background:#f9fafb;       /* para tapar filas al hacer scroll */
+    }
+
+    /* Las columnas bloqueadas (locked) aún más arriba */
+    .table-shell thead th.locked-col{
+      z-index: 9;
+    }
+
+    /* No rompas el sticky por overflow del th */
+    .dt thead th{
+      overflow: hidden;         /* vuelve a hidden por defecto */
+    }
+    .dt thead th[data-full]:hover{
+      overflow: visible;        /* solo visible en hover para el tooltip */
+    }
+
+    /* ===== Tooltip global para headers (fuera de la tabla) ===== */
+    #th-tooltip{
+      position: fixed;
+      z-index: 999999;         /* por encima de todo */
+      max-width: 320px;
+      background: #111827;
+      color: #fff;
+      font: 500 .72rem/1.35 "Poppins",sans-serif;
+      padding: .5rem .65rem;
+      border-radius: 6px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      pointer-events: none;     /* no captura el mouse */
+      display: none;
+      text-align: left;
+      white-space: normal;
+    }
+    #th-tooltip strong{
+      display:block;
+      margin-bottom:.15rem;
+    }
+    #th-tooltip small{
+      opacity:.85;
+      font-weight:400;
+      display:block;
+      margin-top:.15rem;
+    }
+
+    /* Para que el sticky del header no se pierda */
+    .table-shell{
+      position: relative;   /* reafirma el contexto */
+    }
+    .table-shell thead,
+    .table-shell thead th{
+      position: sticky;
+      top: 0;
+      z-index: 8;
+      background:#f9fafb;
+    }
+    .table-shell thead th.locked-col{
+      z-index: 9;
+    }
+
+    /* ====== BEAUTY EXTRAS for Equipos & Eventos · Estados ====== */
+
+    /* KPIs (tarjetitas arriba de la tabla Equipos) */
+    .kpis-grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap:.75rem 1rem;
+      margin:.5rem 0 1.25rem;
+    }
+    .kpi-card{
+      background:#f9fafb;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      padding:.7rem .9rem .8rem;
+      box-shadow:0 1px 2px rgba(0,0,0,.03);
+    }
+    .kpi-card h4{
+      margin:0 0 .15rem;
+      font:600 .78rem/1.1 "Poppins",sans-serif;
+      color:#6b7280;
+    }
+    .kpi-card span{
+      display:block;
+      font:700 1.15rem/1 "Poppins",sans-serif;
+      color:#111827;
+    }
+
+    /* Chips de estado para leyendas */
+    .legend{
+      display:flex; flex-wrap:wrap; gap:.4rem .55rem; margin:.6rem 0 .2rem;
+    }
+    .legend-chip{
+      display:inline-flex; align-items:center; gap:.35rem;
+      font:500 .75rem/1 "Poppins",sans-serif; color:#111827;
+      background:#f3f4f6; border-radius:999px; padding:.18rem .5rem .18rem .18rem;
+      border:1px solid #e5e7eb;
+    }
+    .legend-dot{
+      width:.7rem; height:.7rem; border-radius:50%;
+    }
+
+    /* Cards + grid para gráficos de Eventos · Estados */
+    .chart-grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:1.25rem;
+    }
+    @media (min-width: 1024px){
+      .chart-grid{ grid-template-columns:1fr 1fr; }
+    }
+    .chart-card{
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:14px;
+      box-shadow:0 1px 3px rgba(0,0,0,.04);
+      padding:1rem 1.2rem 1.1rem;
+    }
+    .chart-card h3{
+      margin:.15rem 0 .25rem;
+      font:600 1rem/1.2 "Poppins",sans-serif;
+    }
+    .chart-sub{
+      margin:0 0 .9rem;
+      color:#6b7280;
+      font:400 .8rem/1.25 "Poppins",sans-serif;
+    }
+
+    /* Empty state bonito para esos dos reportes */
+    .empty-state{
+      display:flex; align-items:center; justify-content:center;
+      min-height:160px;
+      background:#fafafa;
+      border:1px dashed #d1d5db;
+      border-radius:12px;
+      color:#6b7280;
+      font:italic 500 .9rem/1.2 "Poppins",sans-serif;
+    }
+
+    /* === PERIOD BAR: año encima de los botones (solo Equipos / Eventos·Estados) === */
+    .period-bar.with-year-nav{
+      flex-direction: column;
+      gap: .4rem;
+      align-items: center;
+    }
+    .period-bar .year-nav{
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      margin-bottom: .15rem;
+    }
+    .period-bar .year-nav .anio-label{
+      font: 600 .9rem/1 "Poppins",sans-serif;
+      color:#111827;
+    }
+    .period-bar .periodos-del-anio{
+      display:flex;
+      flex-wrap:wrap;
+      gap:.4rem .5rem;
+      justify-content:center;
+    }
+
+    /* Botones de periodo un poco más compactos para que quepan mejor */
+    .period-bar.with-year-nav .btn-periodo{
+      padding:.35rem .7rem;
+      font-size:.78rem;
+    }
+
+    /* ====== Ajustes visuales para gráficos “más pequeños” ====== */
+    .chart-grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:1rem;
+    }
+    @media (min-width: 1024px){
+      .chart-grid{
+        grid-template-columns:1fr 1fr;
+      }
+    }
+    .chart-card{
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:14px;
+      box-shadow:0 1px 3px rgba(0,0,0,.04);
+      padding: .8rem 1rem 1rem;
+    }
+    .chart-card h3{
+      margin:.15rem 0 .2rem;
+      font:600 .95rem/1.2 "Poppins",sans-serif;
+    }
+    .chart-sub{
+      margin:0 0 .7rem;
+      color:#6b7280;
+      font:400 .78rem/1.25 "Poppins",sans-serif;
+    }
+
+    /* Altura/control de los canvas para que "quepan" mejor */
+    .chart-card canvas{
+      max-height: 280px;        /* altura “bonita” por defecto */
+    }
+
+    /* Leyenda abajo, más compacta */
+    .chart-legend-bottom{
+      margin-top:.4rem;
+      display:flex;
+      flex-wrap:wrap;
+      gap:.25rem .5rem;
+      justify-content:flex-start;
+    }
+    .chart-legend-bottom .legend-chip{
+      display:inline-flex; align-items:center; gap:.3rem;
+      font:500 .75rem/1 "Poppins",sans-serif; color:#111827;
+      background:#f3f4f6; border-radius:999px; padding:.12rem .45rem .12rem .32rem;
+      border:1px solid #e5e7eb;
+    }
+    .chart-legend-bottom .legend-dot{
+      width:.6rem; height:.6rem; border-radius:50%;
+    }
+
+    /* ====== PAGINACIÓN DE TABLAS ====== */
+    .pager{
+      display:flex;
+      flex-wrap:wrap;
+      gap:.35rem;
+      align-items:center;
+      justify-content:flex-end;
+      margin:.5rem 0 0;
+    }
+    .pager button{
+      border:1px solid #d1d5db;
+      background:#fff;
+      border-radius:6px;
+      padding:.25rem .55rem;
+      font:.8rem/1 "Poppins",sans-serif;
+      cursor:pointer;
+      transition:.15s;
+    }
+    .pager button:hover:not([disabled]){
+      background:#f3f4f6;
+    }
+    .pager button[disabled]{
+      opacity:.4;
+      cursor:default;
+    }
+    .pager .page-info{
+      font:.8rem/1 "Poppins",sans-serif;
+      color:#4b5563;
+      margin:0 .35rem;
     }
   </style>
 
@@ -523,5 +906,6 @@ if ($isLN) {
   <!-- Heartbeat + tu JS -->
   <script src="heartbeat.js"></script>
   <script defer src="reportes.js"></script>
+  <div id="th-tooltip" role="tooltip" aria-hidden="true"></div>
 </body>
 </html>

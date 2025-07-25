@@ -95,6 +95,13 @@
     // 1) Limpiamos cualquier botón de período previo:
     bar.innerHTML = '';
 
+    // Marcar/Desmarcar estilo de “year-nav” según el tipo
+    if (type === 'equipos' || type === 'eventos_estado') {
+      bar.classList.add('with-year-nav');
+    } else {
+      bar.classList.remove('with-year-nav');
+    }
+
     // 2) Elegir el endpoint adecuado:
     const endpoint = (type === 'equipos')
           ? 'periodos_equipos_api.php'
@@ -177,10 +184,13 @@
 
     // 2) Año que toca pintar:
     const anio = aniosUnicos[currentYearIndex]; // e.g. "2025"
-    const listaDeEseAnio = periodosPorAnio[anio]; 
-    // Ejemplo: [ { id_periodo:7, nombre_periodo:"Mayo-Abril 2025" }, … ]
+    const listaDeEseAnio = periodosPorAnio[anio];
 
-    // 3) Si NO estoy en el último índice, muestro flecha “←” (para bajar a años antiguos)
+    // === NUEVO: contenedor para flechas + año ===
+    const yearNav = document.createElement('div');
+    yearNav.className = 'year-nav';
+
+    // ← Flecha izquierda (años más antiguos)
     if (currentYearIndex < aniosUnicos.length - 1) {
       const btnLeft = document.createElement('button');
       btnLeft.textContent = '←';
@@ -190,16 +200,16 @@
         currentYearIndex++;
         renderPeriodoPorAnio();
       });
-      bar.appendChild(btnLeft);
+      yearNav.appendChild(btnLeft);
     }
 
-    // 4) Pongo la etiqueta con el año actual en el centro:
+    // Etiqueta del año
     const lblAnio = document.createElement('span');
     lblAnio.textContent = anio;
     lblAnio.className = 'anio-label';
-    bar.appendChild(lblAnio);
+    yearNav.appendChild(lblAnio);
 
-    // 5) Si currentYearIndex > 0, muestro flecha “→” (para subir a años más nuevos)
+    // → Flecha derecha (años más nuevos)
     if (currentYearIndex > 0) {
       const btnRight = document.createElement('button');
       btnRight.textContent = '→';
@@ -209,23 +219,26 @@
         currentYearIndex--;
         renderPeriodoPorAnio();
       });
-      bar.appendChild(btnRight);
+      yearNav.appendChild(btnRight);
     }
+
+    // Insertamos el year-nav arriba
+    bar.appendChild(yearNav);
 
     // 6) Contenedor para los botones de los CUATRIMESTRES (del año “anio”)
     const contBotones = document.createElement('div');
     contBotones.className = 'periodos-del-anio';
 
-    // 7) Por cada período de ese año, crear un <button class="btn-periodo">
+    // 7) Botones por período
     listaDeEseAnio.forEach(p => {
       const b = document.createElement('button');
-      b.textContent = p.nombre_periodo;  // e.g. "Mayo-Abril 2025"
-      b.dataset.pid = p.id_periodo;       // e.g. 7
+      b.textContent = p.nombre_periodo;
+      b.dataset.pid = p.id_periodo;
       b.className = 'btn-periodo';
       contBotones.appendChild(b);
     });
 
-    // 8) Insertar el contenedor de botones debajo de las flechas/año:
+    // 8) Insertar los botones debajo del year-nav
     bar.appendChild(contBotones);
   }
 
@@ -335,17 +348,20 @@
 
     // 6.b) Mostrar/Ocultar sidebar y ocupar ancho total para "equipos" y "eventos_estado"
     const sidebar = document.querySelector('aside');
-    // const section = document.querySelector('section');   // <- ya no lo usamos
 
-    if (curType === 'equipos' || curType === 'eventos_estado') {
+    const IS_WIDE = (curType === 'equipos' || curType === 'eventos_estado');
+
+    if (IS_WIDE) {
       sidebar.style.display = 'none';
-      main.classList.add('fullwidth');       // <— NUEVO
-      card.classList.add('fullwidth');       // <— NUEVO
+      main.classList.add('fullwidth');
+      card.classList.add('fullwidth');
+      card.classList.add('pad-host');   // << NUEVO: aplica padding interno diferenciado
       curTeam = 0; // ambos envían team=0
     } else {
       sidebar.style.display = '';
-      main.classList.remove('fullwidth');    // <— NUEVO
-      card.classList.remove('fullwidth');    // <— NUEVO
+      main.classList.remove('fullwidth');
+      card.classList.remove('fullwidth');
+      card.classList.remove('pad-host'); // << NUEVO
     }
 
     // 6.c) Llamada al API de reportes
@@ -381,7 +397,7 @@
       return;
     }
     if (rows.length === 0) {
-      host.innerHTML = '<em>Sin integrantes aún.</em>';
+      host.innerHTML = '<div class="table-shell"><table class="dt -compact table-empty"><tbody><tr><td>Sin integrantes aún.</td></tr></tbody></table></div>';
       return;
     }
 
@@ -403,21 +419,26 @@
     });
 
     // 1 columna fija (Nombre)
-    host.append(prettifyAndWrap(tbl, 1));
+    compactHeaders(tbl, 1);   // no tocar la 1a col. (“Nombre”)
+    const wrap = prettifyAndWrap(tbl, 1);
+    host.append(wrap);
+    decoratePercentages(wrap);
+    addPaginationIfNeeded(wrap, 50);
   }
 
   function renderEventos(rows, host) {
     if (rows[0] && rows[0].mensaje) {
-      host.innerHTML = `<em>${rows[0].mensaje}</em>`;
+      host.innerHTML = '<div class="table-shell"><table class="dt -compact table-empty"><tbody><tr><td>Sin eventos aún.</td></tr></tbody></table></div>';
       return;
     }
     if (rows.length === 0) {
-      host.innerHTML = '<em>Sin eventos aún.</em>';
+      host.innerHTML = '<div class="table-shell"><table class="dt -compact table-empty"><tbody><tr><td>Sin eventos aún.</td></tr></tbody></table></div>';
       return;
     }
 
     const jNames = [...new Set(rows.map(r => r.nombre_justificacion_inasistencia))];
     const tbl = htmlTable(['Nombre evento', 'Fecha', ...jNames]);
+    // ❌ tbl.classList.add('table-just');  <-- QUÍTALA
 
     // Pivot por evento
     const byE = {};
@@ -433,14 +454,23 @@
       ]));
     });
 
-    // 2 columnas fijas (Nombre evento + Fecha)
-    host.append(prettifyAndWrap(tbl, 2));
+    // 1 columna fija (como Integrantes)
+    compactHeaders(tbl, 1);
+    const wrap = prettifyAndWrap(tbl, 1);
+    host.append(wrap);
+    decoratePercentages(wrap);
+    addPaginationIfNeeded(wrap, 50);
   }
 
   function renderEquipos(rows, host) {
     const hdr = ['Equipo', 'Integrantes', 'Activos', 'Semiactivos', 'Nuevos',
       'Inactivos', 'En espera', 'Retirados', 'Cambios', 'Sin estado'];
     const tbl = htmlTable(hdr);
+
+    if (!rows || rows.length === 0) {
+      host.innerHTML = '<div class="table-shell"><table class="dt -compact table-empty"><tbody><tr><td>Sin datos.</td></tr></tbody></table></div>';
+      return;
+    }
 
     rows.forEach(r => {
       tbl.tBodies[0].append(tr([
@@ -451,7 +481,9 @@
       ]));
     });
 
-    host.append(prettifyAndWrap(tbl, 1)); // fijamos 1 (Equipo) porque suele ser larga
+    const wrap = prettifyAndWrap(tbl, 1); // fijamos 1 (Equipo) porque suele ser larga
+    host.append(wrap);
+    // (aquí no hay % que pintar, así que no llamamos decoratePercentages)
   }
 
   /**
@@ -496,117 +528,118 @@
     // 1) Limpiar contenedor
     host.innerHTML = '';
 
-    // 2) Creamos dos <canvas> para poner las dos gráficas
-    const canvasGen = document.createElement('canvas');
-    const canvasOtr = document.createElement('canvas');
+    // 2) Grid contenedor
+    const grid = document.createElement('div');
+    grid.className = 'chart-grid';
+    host.appendChild(grid);
 
-    // 2.a) Wrapper para Equipos
-    const wrapperA = document.createElement('div');
-    wrapperA.className = 'chart-block';
-    wrapperA.innerHTML =
-      '<h3>Eventos aprobados por equipo y estado final</h3>' +
-      '<h4 style="font-weight:normal;margin-top:0">Solo con estado previo = Aprobado</h4>';
-    wrapperA.appendChild(canvasGen);
-
-    // 2.b) Wrapper para Proyectos
-    const wrapperB = document.createElement('div');
-    wrapperB.className = 'chart-block';
-    wrapperB.innerHTML =
-      '<h3>Eventos aprobados por proyecto y estado final</h3>' +
-      '<h4 style="font-weight:normal;margin-top:0">Solo con estado previo = Aprobado</h4>';
-    wrapperB.appendChild(canvasOtr);
-
-    // 3) Insertar ambos wrappers
-    host.append(wrapperA, wrapperB);
-
-    // 4) Asegurarnos de que Chart.js está cargado
+    // 3) Asegurarnos de que Chart.js está cargado
     await loadChartJs();
 
     /* Preset para que la escala Y sólo muestre enteros */
     const yEnteros = {
       beginAtZero : true,
       ticks : {
-        stepSize  : 1,   // cada tick vale 1
-        precision : 0    // nunca decimales
+        stepSize  : 1,
+        precision : 0
       }
     };
 
-    // ─── PARTE A: “general” (Equipos, es_equipo = 1) ───
-    // 4.a) Extraer lista única de nombres de equipos (por si no viene ordenada)
-    const equiposGen = Array.from(
-      new Set(data.general.map(r => r.nombre_equipo_proyecto))
-    );
+    // Helper: crea card+canvas
+    function createChartCard(title, subtitle){
+      const card = document.createElement('div');
+      card.className = 'chart-card';
 
-    // 4.b) Extraer lista única y ordenada de nombres de estados
-    //      Como sabemos que “data.general” ya trae todas las combinaciones (equipo×estado),
-    //      basta con tomar todos los “nombre_estado_final” que aparezcan allí:
-    const estadosGen = Array.from(
-      new Set(data.general.map(r => r.nombre_estado_final))
-    );
-    estadosGen.sort(); // opcional: queda alfabético; si quieres otro orden, ajústalo
+      const h3 = document.createElement('h3');
+      h3.textContent = title;
 
-    // 4.c) Construir un array de dataset por cada estado, usando su nombre real:
+      const sub = document.createElement('p');
+      sub.className = 'chart-sub';
+      sub.textContent = subtitle || '';
+
+      const canvas = document.createElement('canvas');
+      canvas.height = 280;     // más pequeño
+
+      card.append(h3, sub, canvas);
+      grid.appendChild(card);
+      return { card, canvas };
+    }
+
+    /* ====== PARTE A: general (Equipos) ====== */
+    const equiposGen = Array.from(new Set(data.general.map(r => r.nombre_equipo_proyecto)));
+    const estadosGen = Array.from(new Set(data.general.map(r => r.nombre_estado_final))).sort();
+
     const datasetsGen = estadosGen.map(nombreEstado => ({
       label : nombreEstado,
       backgroundColor : COLOR_BY_STATE[nombreEstado] || pickExtraColor(),
+      maxBarThickness : 28,
       data  : equiposGen.map(eq => {
-                const fila = data.general.find(r =>
-                  r.nombre_equipo_proyecto === eq &&
-                  r.nombre_estado_final    === nombreEstado
-                );
-                return fila ? fila.total : 0;
-              })
+        const fila = data.general.find(r =>
+          r.nombre_equipo_proyecto === eq &&
+          r.nombre_estado_final    === nombreEstado
+        );
+        return fila ? fila.total : 0;
+      })
     }));
 
-    // 4.d) Crear la gráfica de barras
-    new Chart(canvasGen, {
+    const { canvas: c1 } = createChartCard(
+      'Eventos aprobados por equipo y estado final',
+      'Solo con estado previo = Aprobado'
+    );
+
+    new Chart(c1, {
       type : 'bar',
       data : { labels : equiposGen, datasets : datasetsGen },
       options : {
         responsive : true,
-        plugins    : { legend : { position : 'top' } },
-        scales     : {
-          x : { stacked : false },
+        maintainAspectRatio : false,
+        layout : { padding : { top: 8, right: 8, bottom: 0, left: 8 } },
+        plugins : {
+          legend : { position : 'bottom', labels: { boxWidth: 12, boxHeight: 12 } },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales : {
+          x : { stacked : false, ticks:{ autoSkip:false, maxRotation:45, minRotation:0 }},
           y : yEnteros
         }
       }
     });
 
-    // ─── PARTE B: “otros” (Proyectos, es_equipo = 0) ───
-    // 5.a) Lista única de nombres de proyectos
-    const equiposOtr = Array.from(
-      new Set(data.otros.map(r => r.nombre_equipo_proyecto))
-    );
+    /* ====== PARTE B: otros (Proyectos) ====== */
+    const equiposOtr = Array.from(new Set(data.otros.map(r => r.nombre_equipo_proyecto)));
+    const estadosOtr = Array.from(new Set(data.otros.map(r => r.nombre_estado_final))).sort();
 
-    // 5.b) Lista única de nombres de estados (la mayoría será la misma que en “estadosGen”,
-    // pero por si hubiera un estado que solo aparece en proyectos, la sacamos de “data.otros”)
-    const estadosOtr = Array.from(
-      new Set(data.otros.map(r => r.nombre_estado_final))
-    );
-    estadosOtr.sort(); // opcional
-
-    // 5.c) Construir datasets para “otros”
     const datasetsOtr = estadosOtr.map(nombreEstado => ({
       label : nombreEstado,
       backgroundColor : COLOR_BY_STATE[nombreEstado] || pickExtraColor(),
+      maxBarThickness : 28,
       data  : equiposOtr.map(eq => {
-                const fila = data.otros.find(r =>
-                  r.nombre_equipo_proyecto === eq &&
-                  r.nombre_estado_final    === nombreEstado
-                );
-                return fila ? fila.total : 0;
-              })
+        const fila = data.otros.find(r =>
+          r.nombre_equipo_proyecto === eq &&
+          r.nombre_estado_final    === nombreEstado
+        );
+        return fila ? fila.total : 0;
+      })
     }));
 
-    // 5.d) Crear la gráfica de barras para “otros”
-    new Chart(canvasOtr, {
+    const { canvas: c2 } = createChartCard(
+      'Eventos aprobados por proyecto y estado final',
+      'Solo con estado previo = Aprobado'
+    );
+
+    new Chart(c2, {
       type : 'bar',
       data : { labels : equiposOtr, datasets : datasetsOtr },
       options : {
         responsive : true,
-        plugins    : { legend : { position : 'top' } },
-        scales     : {
-          x : { stacked : false },
+        maintainAspectRatio : false,
+        layout : { padding : { top: 8, right: 8, bottom: 0, left: 8 } },
+        plugins : {
+          legend : { position : 'bottom', labels: { boxWidth: 12, boxHeight: 12 } },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales : {
+          x : { stacked : false, ticks:{ autoSkip:false, maxRotation:45, minRotation:0 }},
           y : yEnteros
         }
       }
@@ -634,7 +667,265 @@
     await new Promise(r => s.onload = r);
   }
 
+  /* ========= helpers de paginación ========= */
+  const DEFAULT_PAGE_SIZE = 50;
+
+  /**
+   * Agrega paginación a la tabla dentro de `wrap` si supera `pageSize` filas.
+   * - No altera headers ni estilos sticky.
+   * - Valida límites de página en frontend.
+   */
+  function addPaginationIfNeeded(wrap, pageSize = DEFAULT_PAGE_SIZE){
+    const table = wrap.querySelector('table');
+    if (!table || !table.tBodies[0]) return;
+
+    const tbody = table.tBodies[0];
+    const rows  = Array.from(tbody.rows);
+    const totalRows = rows.length;
+
+    if (totalRows <= pageSize) return; // nada que paginar
+
+    let currentPage = 1;
+    const totalPages = Math.ceil(totalRows / pageSize);
+
+    // Crea controles
+    const pager = document.createElement('div');
+    pager.className = 'pager';
+
+    const btnFirst = document.createElement('button');
+    btnFirst.textContent = '« Primero';
+
+    const btnPrev = document.createElement('button');
+    btnPrev.textContent = '‹ Anterior';
+
+    const info = document.createElement('span');
+    info.className = 'page-info';
+
+    const btnNext = document.createElement('button');
+    btnNext.textContent = 'Siguiente ›';
+
+    const btnLast = document.createElement('button');
+    btnLast.textContent = 'Último »';
+
+    pager.append(btnFirst, btnPrev, info, btnNext, btnLast);
+
+    function clampPage(p){
+      if (isNaN(p) || p < 1) return 1;
+      if (p > totalPages) return totalPages;
+      return p;
+    }
+
+    function renderPage(p){
+      currentPage = clampPage(p);
+      const start = (currentPage - 1) * pageSize;
+      const end   = start + pageSize;
+
+      rows.forEach((tr, idx) => {
+        tr.style.display = (idx >= start && idx < end) ? '' : 'none';
+      });
+
+      info.textContent = `Página ${currentPage} / ${totalPages}`;
+
+      btnFirst.disabled = btnPrev.disabled = (currentPage === 1);
+      btnLast.disabled  = btnNext.disabled = (currentPage === totalPages);
+    }
+
+    btnFirst.addEventListener('click', () => renderPage(1));
+    btnPrev .addEventListener('click', () => renderPage(currentPage - 1));
+    btnNext .addEventListener('click', () => renderPage(currentPage + 1));
+    btnLast .addEventListener('click', () => renderPage(totalPages));
+
+    // Insertar controles DESPUÉS del wrapper de la tabla
+    wrap.after(pager);
+
+    // Pintar primera página
+    renderPage(1);
+  }
+
   /* ========= helpers de look de tabla ========= */
+
+  /**
+   * Reemplaza los valores "N%" por un span .pct con una barrita de progreso.
+   * - Baja:   0–33  → rojo
+   * - Media: 34–66  → naranjo
+   * - Alta:  67–100 → verde
+   */
+  function decoratePercentages(root){
+    const tds = root.querySelectorAll('td');
+    tds.forEach(td => {
+      const txt = td.textContent.trim();
+      const m = txt.match(/^(\d+(?:\.\d+)?)%$/);
+      if(!m) return;
+      const p = parseFloat(m[1]);
+      const span = document.createElement('span');
+      span.className = 'pct';
+      span.style.setProperty('--p', p);
+      if (p <= 33)  span.dataset.low  = '1';
+      else if (p <= 66) span.dataset.mid  = '1';
+      else span.dataset.high = '1';
+      span.textContent = `${Math.round(p)}%`;
+      td.innerHTML = '';
+      td.appendChild(span);
+    });
+  }
+
+  // ── Tooltip global para los <th> ─────────────────────────────
+  const TH_TIP = document.getElementById('th-tooltip');
+  function showThTip(html, x, y){
+    if(!TH_TIP) return;
+    TH_TIP.innerHTML = html;
+    TH_TIP.style.left = (x + 14) + 'px';   // un poco a la derecha del cursor
+    TH_TIP.style.top  = (y + 14) + 'px';   // un poco abajo del cursor
+    TH_TIP.style.display = 'block';
+    TH_TIP.setAttribute('aria-hidden','false');
+  }
+  function hideThTip(){
+    if(!TH_TIP) return;
+    TH_TIP.style.display = 'none';
+    TH_TIP.setAttribute('aria-hidden','true');
+  }
+
+  // === Overrides opcionales por columna (clave = header original “normalizado”) ===
+  // OJO: la clave va **sin tildes, en MAYÚSCULAS y normalizada** exactamente como
+  // la genera tu función `normalize()`.
+  const HEADER_OVERRIDES = {
+    'SALUD': {
+      short: 'SALUD',
+      full : 'Salud',
+      desc : 'Problemas de salud propios o de un familiar directo.'
+    },
+    'LABORAL': {
+      short: 'LABORAL',
+      full : 'Laboral',
+      desc : 'Incompatibilidad con horarios o exigencias del trabajo.'
+    },
+    'ECONOMICO': {
+      short: 'ECON.',
+      full : 'Económico',
+      desc : 'Dificultades económicas que impiden la participación.'
+    },
+    'NO SABIA': {
+      short: 'NO SABÍA',
+      full : 'No sabía',
+      desc : 'El integrante indica que desconocía la actividad o la cita.'
+    },
+    'SE AVISO CON POCA ANTERIORIDAD': {
+      short: 'A. tarde',
+      full : 'Se avisó con poca anterioridad',
+      desc : 'El integrante indica que se le informó con poca anterioridad.'
+    },
+    'ACADEMICO': {
+      short: 'ACAD.',
+      full : 'Académico',
+      desc : 'Compromisos académicos (clases, evaluaciones, etc.).'
+    },
+    'COMPROMISO IMPORTANTE': {
+      short: 'C. IMP.',
+      full : 'Compromiso importante',
+      desc : 'Motivo declarado como de alta prioridad personal o familiar.'
+    },
+    'LEJANIA': {
+      short: 'LEJANÍA',
+      full : 'Lejanía',
+      desc : 'Distancia geográfica o dificultades de traslado.'
+    },
+    'OTROS': {
+      short: 'OTROS',
+      full : 'Otros',
+      desc : 'Motivos no categorizados en las opciones anteriores.'
+    },
+    'SI PARTICIPO': {
+      short: 'SÍ PART.',
+      full : 'Sí participó',
+      desc : 'El integrante asistió/participó efectivamente.'
+    },
+    'NO PARTICIPO': {
+      short: 'NO PART.',
+      full : 'No participó',
+      desc : 'El integrante no asistió/participó.'
+    },
+  };
+
+  /**
+   * Compacta los encabezados de una tabla:
+   * – Reemplaza el texto largo por una abreviatura corta y deja el completo en un tooltip custom global.
+   * – skipFirstCols: cuántas primeras columnas NO tocar (porque son “Nombre”, “Fecha”, etc.).
+   */
+  function compactHeaders(tbl, skipFirstCols = 1){
+    const DICT = {
+      'SALUD'                         : 'SALUD',
+      'LABORAL'                       : 'LABORAL',
+      'ECONÓMICO'                     : 'ECON.',
+      'ECONOMICO'                     : 'ECON.',
+      'NO SABÍA'                      : 'NO SABÍA',
+      'NO SABIA'                      : 'NO SABÍA',
+      'SE AVISÓ CON POCA ANTERIORIDAD': 'AVISO TARDE',
+      'SE AVISO CON POCA ANTERIORIDAD': 'AVISO TARDE',
+      'ACADÉMICO'                     : 'ACAD.',
+      'ACADEMICO'                     : 'ACAD.',
+      'COMPROMISO IMPORTANTE'         : 'COMP. IMP.',
+      'LEJANÍA'                       : 'LEJANÍA',
+      'LEJANIA'                       : 'LEJANÍA',
+      'OTROS'                         : 'OTROS',
+      'SI PARTICIPÓ'                  : 'SÍ PARTICIPÓ',
+      'SI PARTICIPO'                  : 'SÍ PARTICIPÓ',
+      'NO PARTICIPÓ'                  : 'NO PARTICIPÓ',
+      'NO PARTICIPO'                  : 'NO PARTICIPÓ',
+      'HISTÓRICO'                     : 'HISTÓRICO',
+      'HISTORICO'                     : 'HISTÓRICO'
+    };
+
+    const normalize = s => s
+      .toUpperCase()
+      .normalize('NFD').replace(/\p{Diacritic}/gu,'')
+      .replace(/\s+/g,' ')
+      .trim();
+
+    const ths = Array.from(tbl.tHead.rows[0].cells).slice(skipFirstCols);
+    ths.forEach(th => {
+      const fullOriginal = th.textContent.trim();
+      const key          = normalize(fullOriginal);
+
+      // 1) Buscar override
+      const ov   = HEADER_OVERRIDES[key];
+      let short  = ov?.short ?? DICT[key];
+      const full = ov?.full  ?? fullOriginal;
+      const desc = ov?.desc  ?? '';
+
+      if (!short){
+        // fallback: acrónimo (primeras letras de cada palabra) máx 6 chars
+        const words = fullOriginal.split(/\s+/);
+        if (words.length === 1){
+          short = (words[0].length > 8 ? words[0].slice(0,6) + '.' : words[0]);
+        } else {
+          short = words.map(w => w[0]).join('').slice(0,6).toUpperCase();
+        }
+      }
+
+      // 2) Guardar en data-* (por si quieres reutilizar)
+      th.dataset.full = full;
+      if (desc) th.dataset.desc = desc;
+
+      // 3) Quitar el tooltip nativo
+      th.removeAttribute('title');
+
+      // 4) HTML interno (abreviatura visible)
+      th.innerHTML = `<span class="hshort">${short}</span>`;
+
+      // 5) Tooltip custom (global) – listeners
+      const htmlTip = `
+        <strong>${full}</strong>
+        ${desc ? `<small>${desc}</small>` : ''}
+      `;
+      th.addEventListener('mouseenter', e => {
+        showThTip(htmlTip, e.clientX, e.clientY);
+      });
+      th.addEventListener('mousemove', e => {
+        showThTip(htmlTip, e.clientX, e.clientY);
+      });
+      th.addEventListener('mouseleave', hideThTip);
+    });
+  }
 
   /**
    * Envuelve la tabla en un contenedor con scroll y aplica el “skin” .dt.

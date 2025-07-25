@@ -247,6 +247,24 @@
   </script>
 
   <script>
+  /* Polyfill muy pequeño para navegadores móviles sin crypto.randomUUID */
+  (function(){
+    function uuidv4_fallback(){
+      // RFC4122 v4 compliant-ish
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+    if (!window.crypto) window.crypto = {};
+    if (typeof crypto.randomUUID !== 'function') {
+      crypto.randomUUID = uuidv4_fallback;
+    }
+  })();
+  </script>
+
+  <script>
     const KEY_DEV   = 'device_id';
     function iniciarSesion(ev){
       ev.preventDefault();
@@ -261,7 +279,13 @@
 
       let deviceId = localStorage.getItem(KEY_DEV);
       if (!deviceId) {
-        deviceId = crypto.randomUUID();
+        try {
+          deviceId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+            ? crypto.randomUUID()
+            : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10)); // fallback extra
+        } catch(e){
+          deviceId = (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+        }
         localStorage.setItem(KEY_DEV, deviceId);
       }
 
